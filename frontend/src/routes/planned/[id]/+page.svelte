@@ -211,7 +211,7 @@
       <div class="modal-body" style="display:flex; flex-direction:column; gap:10px; overflow:hidden;">
         <div class="search-wrap">
           <span class="search-icon">⊞</span>
-          <input bind:value={swapSearch} placeholder="Search..." autofocus />
+          <input bind:value={swapSearch} placeholder="Search..." />
         </div>
         <div class="filter-chips">
           <button class="chip" class:active={swapFilter === ''} on:click={() => (swapFilter = '')}>All</button>

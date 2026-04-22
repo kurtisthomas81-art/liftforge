@@ -181,19 +181,18 @@
 
     <!-- Volume progression chart -->
     {#if volumeData && meso.weeks.length > 0}
+      {@const numWeeks = meso.weeks.length}
+      {@const chartW = Math.max(400, numWeeks * 80)}
+      {@const chartH = 160}
+      {@const padL = 32}
+      {@const padB = 24}
+      {@const padR = 16}
+      {@const padT = 16}
+      {@const iW = chartW - padL - padR}
+      {@const iH = chartH - padT - padB}
       <div class="card">
         <div class="section-title mb-4">Volume Progression</div>
         <div style="position:relative; overflow-x:auto;">
-          <!-- Simple SVG line chart -->
-          {@const numWeeks = meso.weeks.length}
-          {@const chartW = Math.max(400, numWeeks * 80)}
-          {@const chartH = 160}
-          {@const padL = 32}
-          {@const padB = 24}
-          {@const padR = 16}
-          {@const padT = 16}
-          {@const iW = chartW - padL - padR}
-          {@const iH = chartH - padT - padB}
 
           <svg viewBox="0 0 {chartW} {chartH}" style="width:100%; min-width:{chartW}px; height:{chartH}px; display:block;">
             <!-- Grid lines -->
