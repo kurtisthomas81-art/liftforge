@@ -7,10 +7,16 @@
   let unitPreference = 'lbs';
   let experienceLevel = 'intermediate';
   let equipment = new Set();
+  let defaultRestSeconds = 90;
   let saving = false;
   let savingEquip = false;
   let saved = false;
   let savedEquip = false;
+
+  // Landmarks
+  let landmarks = [];
+  let savingLandmarks = false;
+  let savedLandmarks = false;
 
   const EQUIPMENT_GROUPS = [
     {
@@ -50,18 +56,38 @@
     },
   ];
 
+  const REST_PRESETS = [
+    { label: '60s',  value: 60 },
+    { label: '90s',  value: 90 },
+    { label: '2min', value: 120 },
+    { label: '3min', value: 180 },
+  ];
+
   onMount(async () => {
     const p = await api.profile.get();
     displayName = p.display_name;
     unitPreference = p.unit_preference;
     experienceLevel = p.experience_level;
+    defaultRestSeconds = p.default_rest_seconds ?? 90;
     equipment = new Set(p.equipment || []);
+
+    try {
+      landmarks = await api.landmarks.get();
+      landmarks = landmarks.map(lm => ({ ...lm }));
+    } catch (e) {
+      console.error('Failed to load landmarks', e);
+    }
   });
 
   async function saveProfile() {
     saving = true;
     try {
-      await api.profile.update({ display_name: displayName, unit_preference: unitPreference, experience_level: experienceLevel });
+      await api.profile.update({
+        display_name: displayName,
+        unit_preference: unitPreference,
+        experience_level: experienceLevel,
+        default_rest_seconds: defaultRestSeconds,
+      });
       await refreshProfile();
       saved = true;
       setTimeout(() => (saved = false), 2500);
@@ -89,13 +115,31 @@
     } else {
       equipment.add(key);
     }
-    equipment = new Set(equipment); // trigger reactivity
+    equipment = new Set(equipment);
+  }
+
+  async function saveLandmarks() {
+    savingLandmarks = true;
+    try {
+      await api.landmarks.update(landmarks.map(lm => ({
+        muscle: lm.muscle,
+        mev: Number(lm.mev),
+        mav_low: Number(lm.mav_low),
+        mav_high: Number(lm.mav_high),
+        mrv: Number(lm.mrv),
+      })));
+      savedLandmarks = true;
+      setTimeout(() => (savedLandmarks = false), 2500);
+    } catch (e) {
+      console.error(e);
+    }
+    savingLandmarks = false;
   }
 </script>
 
 <svelte:head><title>Settings — LiftForge</title></svelte:head>
 
-<div style="max-width:600px;">
+<div style="max-width:640px;">
   <h2 style="font-size:20px; font-weight:700; margin-bottom:24px;">Settings</h2>
 
   <!-- Profile -->
@@ -136,11 +180,53 @@
     </div>
   </div>
 
+  <!-- Rest Timer Default -->
+  <div class="card mb-4">
+    <div class="section-title mb-3">Rest Timer Default</div>
+    <p style="color:var(--text-muted); font-size:13px; margin-bottom:14px; line-height:1.6;">
+      Default rest period shown after logging a set.
+    </p>
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+      {#each REST_PRESETS as preset}
+        <button
+          on:click={() => (defaultRestSeconds = preset.value)}
+          style="padding:8px 16px; border-radius:4px; border:2px solid {defaultRestSeconds === preset.value ? 'var(--primary)' : 'var(--border)'}; background:{defaultRestSeconds === preset.value ? 'rgba(232,160,64,0.12)' : 'var(--surface-2)'}; color:{defaultRestSeconds === preset.value ? 'var(--primary)' : 'var(--text)'}; font-size:13px; font-weight:{defaultRestSeconds === preset.value ? '700' : '400'}; cursor:pointer; transition:all 0.15s;"
+        >
+          {preset.label}
+        </button>
+      {/each}
+    </div>
+
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+      <label for="restSeconds" style="font-size:13px; color:var(--text-muted);">Custom:</label>
+      <input
+        id="restSeconds"
+        type="number"
+        min="10"
+        max="600"
+        step="5"
+        bind:value={defaultRestSeconds}
+        style="width:90px;"
+      />
+      <span style="font-size:13px; color:var(--text-muted);">seconds</span>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button class="btn-primary" on:click={saveProfile} disabled={saving}>
+        {saving ? 'Saving...' : 'Save'}
+      </button>
+      {#if saved}
+        <span style="color:var(--success); font-size:13px;">Saved!</span>
+      {/if}
+    </div>
+  </div>
+
   <!-- Equipment -->
-  <div class="card">
+  <div class="card mb-4">
     <div class="section-title mb-3">Available Equipment</div>
     <p style="color:var(--text-muted); font-size:13px; margin-bottom:16px; line-height:1.6;">
-      Mark what you have access to. This helps the AI coach give relevant suggestions.
+      Mark what you have access to. This determines which exercises are suggested in your programs.
     </p>
 
     {#each EQUIPMENT_GROUPS as group}
@@ -175,4 +261,56 @@
       {/if}
     </div>
   </div>
+
+  <!-- Volume Landmarks -->
+  {#if landmarks.length > 0}
+    <div class="card">
+      <div class="section-title mb-1">Volume Landmarks</div>
+      <p style="color:var(--text-muted); font-size:12px; margin-bottom:14px; line-height:1.6;">
+        MEV = Minimum Effective Volume · MAV = Maximum Adaptive Volume · MRV = Maximum Recoverable Volume (sets/week)
+      </p>
+
+      <div style="overflow-x:auto;">
+        <table style="width:100%; font-size:12px;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding:6px 8px; color:var(--text-muted); font-weight:600; min-width:90px;">Muscle</th>
+              <th style="padding:6px 8px; color:var(--text-muted); font-weight:600;">MEV</th>
+              <th style="padding:6px 8px; color:var(--text-muted); font-weight:600;">MAV Low</th>
+              <th style="padding:6px 8px; color:var(--text-muted); font-weight:600;">MAV High</th>
+              <th style="padding:6px 8px; color:var(--text-muted); font-weight:600;">MRV</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each landmarks as lm}
+              <tr style="border-top:1px solid var(--border);">
+                <td style="padding:7px 8px; color:var(--text); text-transform:capitalize; font-weight:500;">{lm.muscle}</td>
+                {#each ['mev', 'mav_low', 'mav_high', 'mrv'] as field}
+                  <td style="padding:4px 8px;">
+                    <input
+                      type="number"
+                      min="0"
+                      max="60"
+                      step="1"
+                      bind:value={lm[field]}
+                      style="width:52px; text-align:center;"
+                    />
+                  </td>
+                {/each}
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex items-center gap-3 mt-4">
+        <button class="btn-primary" on:click={saveLandmarks} disabled={savingLandmarks}>
+          {savingLandmarks ? 'Saving...' : 'Save Landmarks'}
+        </button>
+        {#if savedLandmarks}
+          <span style="color:var(--success); font-size:13px;">Saved!</span>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </div>

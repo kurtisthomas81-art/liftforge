@@ -140,7 +140,9 @@ def last_session_for_exercise(exercise_id: int, session: Session = Depends(get_s
                 "weight": ws.weight,
                 "reps": ws.reps,
                 "rir": ws.rir,
+                "set_type": ws.set_type,
             }
             for ws in session_sets
+            if ws.set_type != "warmup"  # exclude warm-up sets from reference
         ],
     }

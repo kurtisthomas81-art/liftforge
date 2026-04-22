@@ -24,6 +24,7 @@
 
   const navLinks = [
     { href: '/',           label: 'Dashboard',  icon: '◈' },
+    { href: '/program',    label: 'Program',    icon: '▦' },
     { href: '/log',        label: 'Log Workout', icon: '✦' },
     { href: '/history',    label: 'History',     icon: '◎' },
     { href: '/exercises',  label: 'Exercises',   icon: '⊞' },

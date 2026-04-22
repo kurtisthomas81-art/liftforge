@@ -15,11 +15,13 @@ USER_ID = 1
 class SessionCreate(BaseModel):
     name: Optional[str] = None
     notes: Optional[str] = None
+    readiness_rating: Optional[int] = None
 
 
 class SessionUpdate(BaseModel):
     name: Optional[str] = None
     notes: Optional[str] = None
+    readiness_rating: Optional[int] = None
 
 
 class SetCreate(BaseModel):
@@ -29,6 +31,7 @@ class SetCreate(BaseModel):
     reps: int = 0
     rir: Optional[int] = None
     notes: Optional[str] = None
+    set_type: str = "straight"
 
 
 class SetUpdate(BaseModel):
@@ -38,6 +41,7 @@ class SetUpdate(BaseModel):
     reps: Optional[int] = None
     rir: Optional[int] = None
     notes: Optional[str] = None
+    set_type: Optional[str] = None
 
 
 def _serialize_set(ws: WorkoutSet) -> dict:
@@ -50,6 +54,7 @@ def _serialize_set(ws: WorkoutSet) -> dict:
         "reps": ws.reps,
         "rir": ws.rir,
         "notes": ws.notes,
+        "set_type": ws.set_type,
     }
 
 
@@ -61,6 +66,7 @@ def _serialize_session(wk: WorkoutSession) -> dict:
         "notes": wk.notes,
         "started_at": wk.started_at.isoformat() if wk.started_at else None,
         "completed_at": wk.completed_at.isoformat() if wk.completed_at else None,
+        "readiness_rating": wk.readiness_rating,
     }
 
 
@@ -103,6 +109,7 @@ def create_session(payload: SessionCreate, session: Session = Depends(get_sessio
         name=payload.name,
         notes=payload.notes,
         started_at=datetime.utcnow(),
+        readiness_rating=payload.readiness_rating,
     )
     session.add(wk)
     session.commit()
@@ -123,6 +130,8 @@ def update_session(
         wk.name = payload.name
     if payload.notes is not None:
         wk.notes = payload.notes
+    if payload.readiness_rating is not None:
+        wk.readiness_rating = payload.readiness_rating
     session.add(wk)
     session.commit()
     session.refresh(wk)
@@ -189,6 +198,7 @@ def add_set(
         reps=payload.reps,
         rir=payload.rir,
         notes=payload.notes,
+        set_type=payload.set_type,
     )
     session.add(ws)
     session.commit()
@@ -218,6 +228,8 @@ def update_set(
         ws.rir = payload.rir
     if payload.notes is not None:
         ws.notes = payload.notes
+    if payload.set_type is not None:
+        ws.set_type = payload.set_type
     session.add(ws)
     session.commit()
     session.refresh(ws)

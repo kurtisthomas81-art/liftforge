@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from sqlmodel import Session, select
 from database import engine, create_db_and_tables
-from models import Exercise
+from models import Exercise, SplitTemplate, SplitDay, MuscleVolumeLandmark
 
 
 # fmt: off
@@ -1336,6 +1336,220 @@ EXERCISES = [
 ]
 # fmt: on
 
+ALL_MUSCLES = ["chest", "back", "quads", "hamstrings", "glutes", "shoulders",
+               "biceps", "triceps", "calves", "abs", "lats", "traps"]
+
+# fmt: off
+SPLITS = [
+    {
+        "name": "Full Body 2x",
+        "slug": "full_body_2",
+        "days_per_week": 2,
+        "split_type": "full_body",
+        "description": "Two full-body sessions per week, perfect for beginners or those with limited time. Each session hits every major muscle group.",
+        "frequency_note": "1x/week per muscle — good starting point for beginners",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Full Body A", "muscle_focus": ["chest", "back", "quads", "hamstrings", "glutes", "shoulders", "biceps", "triceps"]},
+            {"day_number": 2, "name": "Full Body B", "muscle_focus": ["chest", "back", "quads", "hamstrings", "glutes", "shoulders", "biceps", "triceps"]},
+        ],
+    },
+    {
+        "name": "Upper / Lower 2x",
+        "slug": "upper_lower_2",
+        "days_per_week": 2,
+        "split_type": "upper_lower",
+        "description": "A simple two-day split alternating upper and lower body. Ideal when you can only train twice per week.",
+        "frequency_note": "1x/week per muscle — minimal but functional",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Upper", "muscle_focus": ["chest", "back", "shoulders", "biceps", "triceps"]},
+            {"day_number": 2, "name": "Lower", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+        ],
+    },
+    {
+        "name": "Full Body 3x",
+        "slug": "full_body_3",
+        "days_per_week": 3,
+        "split_type": "full_body",
+        "description": "Three full-body sessions per week with slight variation per day. Popular for intermediate trainees and those prioritising strength.",
+        "frequency_note": "3x/week per muscle — high frequency, good for skill development",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Full Body A", "muscle_focus": ALL_MUSCLES},
+            {"day_number": 2, "name": "Full Body B", "muscle_focus": ALL_MUSCLES},
+            {"day_number": 3, "name": "Full Body C", "muscle_focus": ALL_MUSCLES},
+        ],
+    },
+    {
+        "name": "Push / Pull / Legs 3x",
+        "slug": "ppl_3",
+        "days_per_week": 3,
+        "split_type": "ppl",
+        "description": "Classic PPL run once per week. Each session focuses on either pushing muscles, pulling muscles, or legs for clean separation.",
+        "frequency_note": "1x/week per muscle — low frequency PPL",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Push", "muscle_focus": ["chest", "shoulders", "triceps"]},
+            {"day_number": 2, "name": "Pull", "muscle_focus": ["back", "lats", "biceps", "traps"]},
+            {"day_number": 3, "name": "Legs", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+        ],
+    },
+    {
+        "name": "Arnold 3x",
+        "slug": "arnold_3",
+        "days_per_week": 3,
+        "split_type": "bro",
+        "description": "Arnold Schwarzenegger's classic 3-day split pairing opposing muscle groups. A timeless approach used by golden-era bodybuilders.",
+        "frequency_note": "1x/week per muscle — classic bodybuilding structure",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Chest & Back", "muscle_focus": ["chest", "back", "lats"]},
+            {"day_number": 2, "name": "Shoulders & Arms", "muscle_focus": ["shoulders", "biceps", "triceps"]},
+            {"day_number": 3, "name": "Legs", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+        ],
+    },
+    {
+        "name": "Upper / Lower / Full Body 3x",
+        "slug": "upper_lower_fb_3",
+        "days_per_week": 3,
+        "split_type": "hybrid",
+        "description": "Combines an upper day, lower day, and full-body day for flexible weekly structure. Good for 3-day schedules wanting more variety.",
+        "frequency_note": "1-2x/week per muscle — hybrid approach",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Upper", "muscle_focus": ["chest", "back", "shoulders", "biceps", "triceps"]},
+            {"day_number": 2, "name": "Lower", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+            {"day_number": 3, "name": "Full Body", "muscle_focus": ALL_MUSCLES},
+        ],
+    },
+    {
+        "name": "Upper / Lower 4x",
+        "slug": "upper_lower_4",
+        "days_per_week": 4,
+        "split_type": "upper_lower",
+        "description": "The gold standard for hypertrophy. Each muscle group trained twice per week with strength-focused A sessions and volume-focused B sessions.",
+        "frequency_note": "2x/week per muscle — gold standard for hypertrophy",
+        "is_recommended": True,
+        "days": [
+            {"day_number": 1, "name": "Upper A", "muscle_focus": ["chest", "back", "shoulders", "biceps", "triceps"]},
+            {"day_number": 2, "name": "Lower A", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+            {"day_number": 3, "name": "Upper B", "muscle_focus": ["chest", "back", "shoulders", "biceps", "triceps"]},
+            {"day_number": 4, "name": "Lower B", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+        ],
+    },
+    {
+        "name": "PHUL 4x",
+        "slug": "phul_4",
+        "days_per_week": 4,
+        "split_type": "phul",
+        "description": "Power Hypertrophy Upper Lower — two power days for strength and two hypertrophy days for size. Great for intermediate lifters wanting both.",
+        "frequency_note": "2x/week per muscle — power + hypertrophy blend",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Upper Power", "muscle_focus": ["chest", "back", "shoulders", "biceps", "triceps"]},
+            {"day_number": 2, "name": "Lower Power", "muscle_focus": ["quads", "hamstrings", "glutes"]},
+            {"day_number": 3, "name": "Upper Hypertrophy", "muscle_focus": ["chest", "back", "shoulders", "biceps", "triceps"]},
+            {"day_number": 4, "name": "Lower Hypertrophy", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+        ],
+    },
+    {
+        "name": "PPL + Full Body 4x",
+        "slug": "ppl_fb_4",
+        "days_per_week": 4,
+        "split_type": "hybrid",
+        "description": "Standard PPL with a bonus full-body day. Good for those who want push/pull/legs structure with extra overall frequency.",
+        "frequency_note": "1-2x/week per muscle — PPL with added full-body day",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Push", "muscle_focus": ["chest", "shoulders", "triceps"]},
+            {"day_number": 2, "name": "Pull", "muscle_focus": ["back", "lats", "biceps"]},
+            {"day_number": 3, "name": "Legs", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+            {"day_number": 4, "name": "Full Body", "muscle_focus": ALL_MUSCLES},
+        ],
+    },
+    {
+        "name": "Bro Split 4x",
+        "slug": "bro_4",
+        "days_per_week": 4,
+        "split_type": "bro",
+        "description": "Classic bodybuilder split dedicating each day to one or two muscle groups. Low frequency but high per-session volume.",
+        "frequency_note": "1x/week per muscle — traditional bodybuilding bro split",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Chest & Triceps", "muscle_focus": ["chest", "triceps"]},
+            {"day_number": 2, "name": "Back & Biceps", "muscle_focus": ["back", "lats", "biceps"]},
+            {"day_number": 3, "name": "Shoulders", "muscle_focus": ["shoulders", "traps"]},
+            {"day_number": 4, "name": "Legs", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+        ],
+    },
+    {
+        "name": "UL / PPL 5x",
+        "slug": "ulppl_5",
+        "days_per_week": 5,
+        "split_type": "hybrid",
+        "description": "A hybrid of upper/lower and PPL across 5 days. Provides excellent muscle frequency with manageable per-session volume.",
+        "frequency_note": "2x/week per muscle — excellent frequency/volume balance",
+        "is_recommended": True,
+        "days": [
+            {"day_number": 1, "name": "Upper", "muscle_focus": ["chest", "back", "shoulders", "biceps", "triceps"]},
+            {"day_number": 2, "name": "Lower", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+            {"day_number": 3, "name": "Push", "muscle_focus": ["chest", "shoulders", "triceps"]},
+            {"day_number": 4, "name": "Pull", "muscle_focus": ["back", "lats", "biceps"]},
+            {"day_number": 5, "name": "Legs", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+        ],
+    },
+    {
+        "name": "PHAT 5x",
+        "slug": "phat_5",
+        "days_per_week": 5,
+        "split_type": "phat",
+        "description": "Power Hypertrophy Adaptive Training by Layne Norton. Two power days followed by three hypertrophy days for optimal strength and size.",
+        "frequency_note": "2x/week per muscle — advanced power/hypertrophy integration",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Upper Power", "muscle_focus": ["chest", "back", "shoulders", "biceps", "triceps"]},
+            {"day_number": 2, "name": "Lower Power", "muscle_focus": ["quads", "hamstrings", "glutes"]},
+            {"day_number": 3, "name": "Back & Shoulders Hyp", "muscle_focus": ["back", "lats", "shoulders", "traps"]},
+            {"day_number": 4, "name": "Lower Hypertrophy", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+            {"day_number": 5, "name": "Chest & Arms Hyp", "muscle_focus": ["chest", "biceps", "triceps"]},
+        ],
+    },
+    {
+        "name": "Bro Split 5x",
+        "slug": "bro_5",
+        "days_per_week": 5,
+        "split_type": "bro",
+        "description": "Five-day bodybuilder split with each muscle group getting its own dedicated day. Maximum per-session volume for each muscle.",
+        "frequency_note": "1x/week per muscle — high volume, low frequency classic bro split",
+        "is_recommended": False,
+        "days": [
+            {"day_number": 1, "name": "Chest", "muscle_focus": ["chest", "triceps"]},
+            {"day_number": 2, "name": "Back", "muscle_focus": ["back", "lats", "biceps"]},
+            {"day_number": 3, "name": "Shoulders", "muscle_focus": ["shoulders", "traps"]},
+            {"day_number": 4, "name": "Arms", "muscle_focus": ["biceps", "triceps", "forearms"]},
+            {"day_number": 5, "name": "Legs", "muscle_focus": ["quads", "hamstrings", "glutes", "calves"]},
+        ],
+    },
+]
+
+LANDMARKS = [
+    # (muscle, mev, mav_low, mav_high, mrv)
+    ("chest",       8,  12, 20, 22),
+    ("back",        10, 14, 22, 25),
+    ("quads",       8,  12, 20, 20),
+    ("hamstrings",  6,  10, 16, 20),
+    ("glutes",      0,  4,  12, 16),
+    ("shoulders",   8,  16, 22, 26),
+    ("biceps",      8,  14, 20, 26),
+    ("triceps",     6,  10, 14, 18),
+    ("calves",      8,  12, 16, 20),
+    ("abs",         0,  6,  16, 20),
+    ("lats",        10, 14, 22, 25),
+    ("traps",       8,  12, 20, 22),
+]
+# fmt: on
+
 
 def _build_substitution_map(exercises: list[dict]) -> dict[str, list[int]]:
     """
@@ -1383,6 +1597,49 @@ def seed(session: Session) -> None:
     print(f"Seeded {len(EXERCISES)} exercises.")
 
 
+def seed_splits(session: Session) -> None:
+    for split_data in SPLITS:
+        template = SplitTemplate(
+            name=split_data["name"],
+            slug=split_data["slug"],
+            days_per_week=split_data["days_per_week"],
+            split_type=split_data["split_type"],
+            description=split_data["description"],
+            frequency_note=split_data["frequency_note"],
+            is_builtin=True,
+            is_recommended=split_data.get("is_recommended", False),
+        )
+        session.add(template)
+        session.commit()
+        session.refresh(template)
+
+        for day_data in split_data["days"]:
+            day = SplitDay(
+                template_id=template.id,
+                day_number=day_data["day_number"],
+                name=day_data["name"],
+                muscle_focus=json.dumps(day_data["muscle_focus"]),
+            )
+            session.add(day)
+        session.commit()
+    print(f"Seeded {len(SPLITS)} split templates.")
+
+
+def seed_landmarks(session: Session) -> None:
+    for muscle, mev, mav_low, mav_high, mrv in LANDMARKS:
+        landmark = MuscleVolumeLandmark(
+            user_id=1,
+            muscle=muscle,
+            mev=mev,
+            mav_low=mav_low,
+            mav_high=mav_high,
+            mrv=mrv,
+        )
+        session.add(landmark)
+    session.commit()
+    print(f"Seeded {len(LANDMARKS)} volume landmarks.")
+
+
 if __name__ == "__main__":
     create_db_and_tables()
     from sqlmodel import Session, select
@@ -1393,3 +1650,15 @@ if __name__ == "__main__":
             print("Exercises already seeded.")
         else:
             seed(s)
+
+        split_count = s.exec(select(SplitTemplate)).all()
+        if split_count:
+            print("Splits already seeded.")
+        else:
+            seed_splits(s)
+
+        landmark_count = s.exec(select(MuscleVolumeLandmark)).all()
+        if landmark_count:
+            print("Landmarks already seeded.")
+        else:
+            seed_landmarks(s)

@@ -26,6 +26,7 @@ class WorkoutSession(SQLModel, table=True):
     notes: Optional[str] = Field(default=None)
     started_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = Field(default=None)
+    readiness_rating: Optional[int] = Field(default=None)  # 1-5 scale
 
 
 class WorkoutSet(SQLModel, table=True):
@@ -37,6 +38,7 @@ class WorkoutSet(SQLModel, table=True):
     reps: int = Field(default=0)
     rir: Optional[int] = Field(default=None)        # 0-4, nullable
     notes: Optional[str] = Field(default=None)
+    set_type: str = Field(default="straight")       # straight|warmup|drop|rest_pause
 
 
 class UserProfile(SQLModel, table=True):
@@ -45,6 +47,7 @@ class UserProfile(SQLModel, table=True):
     display_name: str = Field(default="Lifter")
     unit_preference: str = Field(default="lbs")    # lbs|kg
     experience_level: str = Field(default="intermediate")  # beginner|intermediate|advanced
+    default_rest_seconds: int = Field(default=90)
 
 
 class UserEquipment(SQLModel, table=True):
@@ -52,3 +55,86 @@ class UserEquipment(SQLModel, table=True):
     user_id: int = Field(default=1, index=True)
     equipment: str = Field(default="")
     available: bool = Field(default=True)
+
+
+class PersonalRecord(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(default=1, index=True)
+    exercise_id: int = Field(foreign_key="exercise.id", index=True)
+    pr_type: str  # "e1rm"|"weight"|"reps"
+    value: float
+    achieved_at: datetime = Field(default_factory=datetime.utcnow)
+    session_id: int = Field(foreign_key="workoutsession.id")
+
+
+# ── Program / Mesocycle tables ─────────────────────────────────────────────────
+
+class SplitTemplate(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    slug: str = Field(unique=True)
+    days_per_week: int
+    split_type: str  # "full_body"|"upper_lower"|"ppl"|"bro"|"phul"|"phat"|"hybrid"|"custom"
+    description: str = Field(default="")
+    frequency_note: str = Field(default="")
+    is_builtin: bool = Field(default=True)
+    is_recommended: bool = Field(default=False)
+
+
+class SplitDay(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    template_id: int = Field(foreign_key="splittemplate.id")
+    day_number: int  # 1-based
+    name: str
+    muscle_focus: str = Field(default="[]")  # JSON list of muscles
+
+
+class MuscleVolumeLandmark(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(default=1, index=True)
+    muscle: str
+    mev: int
+    mav_low: int
+    mav_high: int
+    mrv: int
+
+
+class Mesocycle(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(default=1, index=True)
+    name: str
+    split_template_id: Optional[int] = Field(default=None, foreign_key="splittemplate.id")
+    weeks_total: int = Field(default=5)
+    current_week: int = Field(default=1)
+    status: str = Field(default="active")  # active|completed|abandoned
+    goal: str = Field(default="hypertrophy")  # hypertrophy|strength|recomp
+    start_date: Optional[str] = Field(default=None)  # ISO date string
+    deload_week: int = Field(default=5)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class MesocycleWeek(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    mesocycle_id: int = Field(foreign_key="mesocycle.id")
+    week_number: int
+    is_deload: bool = Field(default=False)
+
+
+class PlannedSession(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    mesocycle_week_id: int = Field(foreign_key="mesocycleweek.id")
+    split_day_id: Optional[int] = Field(default=None, foreign_key="splitday.id")
+    day_of_week: int  # 0=Mon, 6=Sun
+    session_id: Optional[int] = Field(default=None, foreign_key="workoutsession.id")
+
+
+class PlannedExercise(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    planned_session_id: int = Field(foreign_key="plannedsession.id")
+    exercise_id: int = Field(foreign_key="exercise.id")
+    order_in_session: int = Field(default=1)
+    target_sets: int
+    target_reps_min: int
+    target_reps_max: int
+    target_rir: int = Field(default=2)
+    notes: str = Field(default="")

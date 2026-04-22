@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import create_db_and_tables, engine
-from models import Exercise
+from models import Exercise, SplitTemplate, MuscleVolumeLandmark
 from sqlmodel import Session, select
 from routers import exercises, sessions, history, profile, ollama
+from routers import programs, landmarks, volume, prs
 
-app = FastAPI(title="LiftForge API", version="1.0.0")
+app = FastAPI(title="LiftForge API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,17 +21,33 @@ app.include_router(sessions.router)
 app.include_router(history.router)
 app.include_router(profile.router)
 app.include_router(ollama.router)
+app.include_router(programs.router)
+app.include_router(landmarks.router)
+app.include_router(volume.router)
+app.include_router(prs.router)
 
 
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
-    # Seed exercises if table is empty
     with Session(engine) as session:
-        count = session.exec(select(Exercise)).all()
-        if not count:
+        # Seed exercises if table is empty
+        exercise_count = session.exec(select(Exercise)).all()
+        if not exercise_count:
             from seed_data import seed
             seed(session)
+
+        # Seed splits if table is empty
+        split_count = session.exec(select(SplitTemplate)).all()
+        if not split_count:
+            from seed_data import seed_splits
+            seed_splits(session)
+
+        # Seed landmarks if table is empty
+        landmark_count = session.exec(select(MuscleVolumeLandmark)).all()
+        if not landmark_count:
+            from seed_data import seed_landmarks
+            seed_landmarks(session)
 
 
 @app.get("/api/health")

@@ -61,4 +61,37 @@ export const api = {
     send: (message, context_type = 'general') =>
       request('POST', '/chat', { message, context_type }),
   },
+
+  programs: {
+    getSplits: () => request('GET', '/programs/splits'),
+    getSplit: (slug) => request('GET', `/programs/splits/${slug}`),
+    createMesocycle: (data) => request('POST', '/programs/mesocycles', data),
+    listMesocycles: () => request('GET', '/programs/mesocycles'),
+    getActiveMesocycle: () => request('GET', '/programs/mesocycles/active'),
+    getMesocycle: (id) => request('GET', `/programs/mesocycles/${id}`),
+    updateMesocycle: (id, data) => request('PATCH', `/programs/mesocycles/${id}`, data),
+    advanceMesocycle: (id) => request('POST', `/programs/mesocycles/${id}/advance`),
+    getPlannedSession: (id) => request('GET', `/programs/planned/${id}`),
+    updatePlannedExercises: (id, exercises) =>
+      request('PUT', `/programs/planned/${id}/exercises`, exercises),
+    startPlannedSession: (id) => request('POST', `/programs/planned/${id}/start`),
+  },
+
+  landmarks: {
+    get: () => request('GET', '/landmarks'),
+    update: (data) => request('PUT', '/landmarks', data),
+  },
+
+  volume: {
+    forSession: (sessionId) => request('GET', `/volume/session/${sessionId}`),
+    forWeek: (date) => request('GET', `/volume/week${date ? '?date=' + date : ''}`),
+    forMesocycle: (id) => request('GET', `/volume/mesocycle/${id}`),
+    allTime: (weeks = 52) => request('GET', `/volume/alltime?weeks=${weeks}`),
+  },
+
+  prs: {
+    getAll: () => request('GET', '/prs'),
+    forExercise: (exerciseId) => request('GET', `/prs/exercise/${exerciseId}`),
+    checkSession: (sessionId) => request('POST', `/prs/check/${sessionId}`),
+  },
 };

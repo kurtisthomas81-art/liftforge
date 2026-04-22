@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 from database import get_session
 from models import UserProfile, UserEquipment
+from typing import Optional
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
@@ -10,9 +11,10 @@ USER_ID = 1
 
 
 class ProfileUpdate(BaseModel):
-    display_name: str | None = None
-    unit_preference: str | None = None
-    experience_level: str | None = None
+    display_name: Optional[str] = None
+    unit_preference: Optional[str] = None
+    experience_level: Optional[str] = None
+    default_rest_seconds: Optional[int] = None
 
 
 class EquipmentUpdate(BaseModel):
@@ -37,6 +39,7 @@ def _serialize_profile(p: UserProfile) -> dict:
         "display_name": p.display_name,
         "unit_preference": p.unit_preference,
         "experience_level": p.experience_level,
+        "default_rest_seconds": p.default_rest_seconds,
     }
 
 
@@ -61,6 +64,8 @@ def update_profile(payload: ProfileUpdate, session: Session = Depends(get_sessio
         profile.unit_preference = payload.unit_preference
     if payload.experience_level is not None:
         profile.experience_level = payload.experience_level
+    if payload.default_rest_seconds is not None:
+        profile.default_rest_seconds = payload.default_rest_seconds
     session.add(profile)
     session.commit()
     session.refresh(profile)
