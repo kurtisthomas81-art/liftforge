@@ -44,6 +44,11 @@
   let readinessRating = null;
   let pendingSessionCreate = false;
 
+  // Save as template
+  let showSaveTemplateModal = false;
+  let saveTemplateName = '';
+  let savingTemplate = false;
+
   onMount(async () => {
     await refreshActiveSession();
     session = $activeSession;
@@ -227,6 +232,21 @@
     goto('/');
   }
 
+  async function openSaveTemplate() {
+    saveTemplateName = session?.name || '';
+    showSaveTemplateModal = true;
+  }
+
+  async function confirmSaveTemplate() {
+    if (!saveTemplateName.trim() || !session) return;
+    savingTemplate = true;
+    try {
+      await api.templates.saveFromSession(session.id, saveTemplateName.trim());
+    } catch (e) { /* graceful */ }
+    savingTemplate = false;
+    showSaveTemplateModal = false;
+  }
+
   async function saveName() {
     if (!session) return;
     await api.sessions.update(session.id, { name: sessionName });
@@ -344,6 +364,52 @@
   }
 
   const MUSCLES = ['chest','back','shoulders','biceps','triceps','quads','hamstrings','glutes','calves','abs'];
+
+  // Inline plate calculator
+  let plateCalcSetId = null;
+  let plateCalcWeight = '';
+  let plateCalcUnit = 'lbs';
+  let plateCalcBar = 45;
+
+  const PLATES_LBS = [45, 35, 25, 10, 5, 2.5, 1.25];
+  const PLATES_KG  = [20, 15, 10, 5, 2.5, 1.25, 0.5];
+  const PLATE_COLORS = {45:'#c0392b',35:'#f39c12',25:'#27ae60',10:'#dddddd',5:'#2980b9',2.5:'#333333',1.25:'#999999',20:'#c0392b',15:'#f39c12',0.5:'#999999'};
+
+  function openPlateCalc(setId, currentWeight) {
+    plateCalcSetId = setId;
+    plateCalcWeight = currentWeight || '';
+    // Load unit from profile (already loaded in defaultRestSeconds path, use lbs as fallback)
+  }
+
+  function closePlateCalc() {
+    plateCalcSetId = null;
+  }
+
+  function usePlateWeight() {
+    if (!plateCalcSetId || !plateCalcWeight) return;
+    updateSetField(plateCalcSetId, 'weight', plateCalcWeight);
+    closePlateCalc();
+  }
+
+  function calcPlateResult(target, bar, unit) {
+    if (!target || target <= bar) return null;
+    const plates = unit === 'kg' ? PLATES_KG : PLATES_LBS;
+    const perSide = (target - bar) / 2;
+    let rem = perSide;
+    const used = [];
+    for (const p of plates) {
+      while (rem >= p - 0.001) {
+        used.push(p);
+        rem -= p;
+        rem = Math.round(rem * 1000) / 1000;
+      }
+    }
+    return { used, remainder: rem, perSide };
+  }
+
+  $: plateResult = plateCalcSetId
+    ? calcPlateResult(parseFloat(plateCalcWeight), plateCalcBar, plateCalcUnit)
+    : null;
 </script>
 
 <svelte:head><title>Log Workout — LiftForge</title></svelte:head>
@@ -406,6 +472,7 @@
       </div>
       <div class="flex gap-2">
         <button class="btn-secondary" on:click={openExerciseModal}>+ Add Exercise</button>
+        <button class="btn-ghost btn-sm" on:click={openSaveTemplate} title="Save as Template">◫ Template</button>
         <button class="btn-danger" on:click={finishSession} disabled={finishing}
           style="background:transparent; color:var(--danger); border:1px solid var(--danger); padding:7px 14px; border-radius:4px;">
           {finishing ? 'Finishing...' : 'Finish'}
@@ -500,15 +567,23 @@
                   {/if}
                 </td>
                 <td>
-                  <input
-                    type="number"
-                    min="0"
-                    step="2.5"
-                    value={s.weight ?? ''}
-                    placeholder="BW"
-                    style="width:70px;"
-                    on:change={e => updateSetField(s.id, 'weight', e.target.value)}
-                  />
+                  <div class="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="0"
+                      step="2.5"
+                      value={s.weight ?? ''}
+                      placeholder="BW"
+                      style="width:64px;"
+                      on:change={e => updateSetField(s.id, 'weight', e.target.value)}
+                    />
+                    <button
+                      class="btn-ghost btn-sm"
+                      title="Plate calculator"
+                      on:click={() => openPlateCalc(s.id, s.weight)}
+                      style="padding:3px 5px; font-size:11px; line-height:1;"
+                    >⊙</button>
+                  </div>
                 </td>
                 <td>
                   <input
@@ -621,6 +696,103 @@
             Start Workout
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Inline Plate Calculator modal -->
+{#if plateCalcSetId !== null}
+  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+  <div class="modal-overlay" on:click|self={closePlateCalc}>
+    <div class="modal" style="max-width:380px;">
+      <div class="modal-header">
+        <h3>Plate Calculator</h3>
+        <button class="btn-ghost btn-sm" on:click={closePlateCalc}>✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:12px;">
+        <div class="flex gap-3 flex-wrap">
+          <div style="flex:1; min-width:120px;">
+            <label for="pcWeight">Target Weight</label>
+            <input id="pcWeight" type="number" min="0" step="2.5" bind:value={plateCalcWeight} placeholder="e.g. 185" autofocus />
+          </div>
+          <div style="flex:1; min-width:120px;">
+            <label for="pcBar">Bar</label>
+            <select id="pcBar" bind:value={plateCalcBar}>
+              {#each [45, 35, 25, 15] as b}
+                <option value={b}>{b} lbs</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+
+        {#if plateResult}
+          {#if plateResult.remainder < 0.001}
+            <div style="background:var(--surface-2); border-radius:var(--radius); padding:12px;">
+              <div style="font-size:13px; color:var(--text-muted); margin-bottom:6px;">
+                {plateResult.perSide} lbs per side
+              </div>
+              <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                {#each plateResult.used as p}
+                  <div style="
+                    width:36px; height:36px; border-radius:50%;
+                    background:{PLATE_COLORS[p] || '#555'};
+                    color:{p === 10 ? '#333' : '#fff'};
+                    font-size:10px; font-weight:700;
+                    display:flex; align-items:center; justify-content:center;
+                    border:2px solid rgba(255,255,255,0.1);
+                  ">{p}</div>
+                {/each}
+              </div>
+            </div>
+          {:else}
+            <div style="color:var(--text-muted); font-size:13px;">
+              Can't hit this weight exactly — adjust target or bar.
+            </div>
+          {/if}
+        {:else if plateCalcWeight && parseFloat(plateCalcWeight) <= plateCalcBar}
+          <div style="color:var(--text-muted); font-size:13px;">
+            Target must be greater than bar weight.
+          </div>
+        {/if}
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" on:click={closePlateCalc}>Cancel</button>
+        <button class="btn-primary" on:click={usePlateWeight} disabled={!plateCalcWeight}>
+          Use {plateCalcWeight || '?'} lbs
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Save as Template modal -->
+{#if showSaveTemplateModal}
+  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+  <div class="modal-overlay" on:click|self={() => (showSaveTemplateModal = false)}>
+    <div class="modal" style="max-width:380px;">
+      <div class="modal-header">
+        <h3>Save as Template</h3>
+        <button class="btn-ghost btn-sm" on:click={() => (showSaveTemplateModal = false)}>✕</button>
+      </div>
+      <div class="modal-body">
+        <label for="tplSaveName">Template Name</label>
+        <input
+          id="tplSaveName"
+          bind:value={saveTemplateName}
+          placeholder="e.g. Chest Day"
+          autofocus
+          on:keydown={e => e.key === 'Enter' && confirmSaveTemplate()}
+        />
+        <p style="color:var(--text-muted); font-size:12px; margin-top:8px; line-height:1.6;">
+          This will save all exercises from this session as a reusable template.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" on:click={() => (showSaveTemplateModal = false)}>Cancel</button>
+        <button class="btn-primary" on:click={confirmSaveTemplate} disabled={savingTemplate || !saveTemplateName.trim()}>
+          {savingTemplate ? 'Saving...' : 'Save Template'}
+        </button>
       </div>
     </div>
   </div>

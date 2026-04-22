@@ -1,8 +1,9 @@
 import json
-from fastapi import APIRouter, Depends
+from datetime import date, timedelta
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 from database import get_session
-from models import WorkoutSession, WorkoutSet, Exercise
+from models import WorkoutSession, WorkoutSet, Exercise, Mesocycle, MesocycleWeek, PlannedSession, SplitDay
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 
@@ -100,6 +101,113 @@ def exercise_progression(exercise_id: int, session: Session = Depends(get_sessio
     # Sort chronologically
     result.sort(key=lambda x: x["date"] or "")
     return result
+
+
+@router.get("/calendar")
+def calendar_data(
+    year: int = Query(..., description="Calendar year"),
+    month: int = Query(..., description="Calendar month (1-12)"),
+    session: Session = Depends(get_session),
+):
+    """Sessions and planned sessions for a given month."""
+    # Compute month boundaries
+    month_start = date(year, month, 1)
+    if month == 12:
+        month_end = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        month_end = date(year, month + 1, 1) - timedelta(days=1)
+
+    start_str = month_start.isoformat()
+    end_str = month_end.isoformat() + "T23:59:59"
+
+    # Completed sessions this month
+    stmt = (
+        select(WorkoutSession)
+        .where(WorkoutSession.user_id == USER_ID)
+        .where(WorkoutSession.completed_at != None)
+        .where(WorkoutSession.started_at >= start_str)
+        .where(WorkoutSession.started_at <= end_str)
+        .order_by(WorkoutSession.started_at.asc())
+    )
+    sessions_in_month = session.exec(stmt).all()
+
+    sessions_out = []
+    for wk in sessions_in_month:
+        sets_stmt = select(WorkoutSet).where(WorkoutSet.session_id == wk.id)
+        sets = session.exec(sets_stmt).all()
+        muscle_set: set = set()
+        for ws in sets:
+            ex = session.get(Exercise, ws.exercise_id)
+            if ex:
+                for m in json.loads(ex.primary_muscles):
+                    muscle_set.add(m)
+
+        sessions_out.append({
+            "date": wk.started_at.date().isoformat() if wk.started_at else None,
+            "session_id": wk.id,
+            "session_name": wk.name or "Unnamed Session",
+            "muscles": sorted(muscle_set),
+            "planned_session_id": None,
+        })
+
+    # Planned sessions for the month (from active mesocycles)
+    planned_out = []
+    active_meso_stmt = (
+        select(Mesocycle)
+        .where(Mesocycle.user_id == USER_ID)
+        .where(Mesocycle.status == "active")
+        .where(Mesocycle.start_date != None)
+    )
+    active_mesos = session.exec(active_meso_stmt).all()
+
+    for meso in active_mesos:
+        try:
+            meso_start = date.fromisoformat(meso.start_date)
+        except Exception:
+            continue
+
+        weeks_stmt = select(MesocycleWeek).where(
+            MesocycleWeek.mesocycle_id == meso.id
+        ).order_by(MesocycleWeek.week_number)
+        weeks = session.exec(weeks_stmt).all()
+
+        for week in weeks:
+            week_monday = meso_start + timedelta(weeks=week.week_number - 1)
+            ps_stmt = select(PlannedSession).where(
+                PlannedSession.mesocycle_week_id == week.id
+            )
+            planned_sessions = session.exec(ps_stmt).all()
+
+            for ps in planned_sessions:
+                # day_of_week: 0=Mon, 6=Sun
+                session_date = week_monday + timedelta(days=ps.day_of_week)
+
+                # Skip already completed or outside this month
+                if ps.session_id:
+                    continue
+                if not (month_start <= session_date <= month_end):
+                    continue
+
+                # Get split day name and muscle focus
+                split_day_name = "Training Day"
+                muscle_focus = []
+                if ps.split_day_id:
+                    sd = session.get(SplitDay, ps.split_day_id)
+                    if sd:
+                        split_day_name = sd.name
+                        try:
+                            muscle_focus = json.loads(sd.muscle_focus)
+                        except Exception:
+                            muscle_focus = []
+
+                planned_out.append({
+                    "date": session_date.isoformat(),
+                    "planned_session_id": ps.id,
+                    "split_day_name": split_day_name,
+                    "muscle_focus": muscle_focus,
+                })
+
+    return {"sessions": sessions_out, "planned": planned_out}
 
 
 @router.get("/exercise/{exercise_id}/last-session")

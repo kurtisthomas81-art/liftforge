@@ -18,7 +18,6 @@ async function request(method, path, body) {
   return res.json();
 }
 
-// Exercises
 export const api = {
   exercises: {
     list: (params = {}) => {
@@ -48,6 +47,7 @@ export const api = {
     recent: () => request('GET', '/history'),
     exerciseProgression: (id) => request('GET', `/history/exercise/${id}`),
     lastSession: (id) => request('GET', `/history/exercise/${id}/last-session`),
+    calendar: (year, month) => request('GET', `/history/calendar?year=${year}&month=${month}`),
   },
 
   profile: {
@@ -87,11 +87,31 @@ export const api = {
     forWeek: (date) => request('GET', `/volume/week${date ? '?date=' + date : ''}`),
     forMesocycle: (id) => request('GET', `/volume/mesocycle/${id}`),
     allTime: (weeks = 52) => request('GET', `/volume/alltime?weeks=${weeks}`),
+    fatigueReport: () => request('GET', '/volume/fatigue-report'),
   },
 
   prs: {
     getAll: () => request('GET', '/prs'),
     forExercise: (exerciseId) => request('GET', `/prs/exercise/${exerciseId}`),
     checkSession: (sessionId) => request('POST', `/prs/check/${sessionId}`),
+  },
+
+  templates: {
+    list: () => request('GET', '/templates'),
+    get: (id) => request('GET', `/templates/${id}`),
+    create: (data) => request('POST', '/templates', data),
+    update: (id, data) => request('PUT', `/templates/${id}`, data),
+    delete: (id) => request('DELETE', `/templates/${id}`),
+    start: (id) => request('POST', `/templates/${id}/start`),
+    saveFromSession: (sessionId, name) =>
+      request('POST', `/sessions/${sessionId}/save-as-template`, { name }),
+  },
+
+  measurements: {
+    list: () => request('GET', '/measurements'),
+    latest: () => request('GET', '/measurements/latest'),
+    create: (data) => request('POST', '/measurements', data),
+    update: (id, data) => request('PUT', `/measurements/${id}`, data),
+    delete: (id) => request('DELETE', `/measurements/${id}`),
   },
 };

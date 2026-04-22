@@ -22,11 +22,45 @@
 
   $: currentPath = $page.url.pathname;
 
+  const navGroups = [
+    {
+      label: 'Training',
+      links: [
+        { href: '/',           label: 'Dashboard',   icon: '◈' },
+        { href: '/program',    label: 'Program',     icon: '▦' },
+        { href: '/log',        label: 'Log Workout', icon: '✦' },
+        { href: '/templates',  label: 'Templates',   icon: '◫' },
+        { href: '/history',    label: 'History',     icon: '◎' },
+        { href: '/calendar',   label: 'Calendar',    icon: '▣' },
+      ],
+    },
+    {
+      label: 'Tools',
+      links: [
+        { href: '/plates',       label: 'Plates',       icon: '⊙' },
+        { href: '/measurements', label: 'Measurements', icon: '↕' },
+      ],
+    },
+    {
+      label: 'Library',
+      links: [
+        { href: '/exercises', label: 'Exercises', icon: '⊞' },
+        { href: '/chat',      label: 'AI Coach',  icon: '◇' },
+        { href: '/settings',  label: 'Settings',  icon: '⚙' },
+      ],
+    },
+  ];
+
+  // Flat list for mobile bottom nav (most used only)
   const navLinks = [
-    { href: '/',           label: 'Dashboard',  icon: '◈' },
-    { href: '/program',    label: 'Program',    icon: '▦' },
+    { href: '/',           label: 'Dashboard',   icon: '◈' },
+    { href: '/program',    label: 'Program',     icon: '▦' },
     { href: '/log',        label: 'Log Workout', icon: '✦' },
+    { href: '/templates',  label: 'Templates',   icon: '◫' },
     { href: '/history',    label: 'History',     icon: '◎' },
+    { href: '/calendar',   label: 'Calendar',    icon: '▣' },
+    { href: '/plates',     label: 'Plates',      icon: '⊙' },
+    { href: '/measurements', label: 'Measurements', icon: '↕' },
     { href: '/exercises',  label: 'Exercises',   icon: '⊞' },
     { href: '/chat',       label: 'AI Coach',    icon: '◇' },
     { href: '/settings',   label: 'Settings',    icon: '⚙' },
@@ -47,11 +81,17 @@
     </div>
 
     <nav class="sidebar-nav">
-      {#each navLinks as link}
-        <a href={link.href} class:active={isActive(link.href)}>
-          <span class="nav-icon">{link.icon}</span>
-          {link.label}
-        </a>
+      {#each navGroups as group, gi}
+        {#if gi > 0}
+          <div class="nav-divider"></div>
+        {/if}
+        <div class="nav-group-label">{group.label}</div>
+        {#each group.links as link}
+          <a href={link.href} class:active={isActive(link.href)}>
+            <span class="nav-icon">{link.icon}</span>
+            {link.label}
+          </a>
+        {/each}
       {/each}
     </nav>
 

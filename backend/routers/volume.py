@@ -1,5 +1,5 @@
 import json
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
@@ -259,3 +259,140 @@ def volume_alltime(
 
     landmarks = _get_landmarks(session)
     return {"weeks": result, "landmarks": landmarks}
+
+
+@router.get("/fatigue-report")
+def fatigue_report(session: Session = Depends(get_session)):
+    """Compute fatigue score and deload recommendation from recent training data."""
+    TRACKED_MUSCLES = ["chest", "back", "quads", "hamstrings", "shoulders", "biceps", "triceps"]
+
+    # Get last 10 completed sessions
+    stmt = (
+        select(WorkoutSession)
+        .where(WorkoutSession.user_id == USER_ID)
+        .where(WorkoutSession.completed_at != None)
+        .order_by(WorkoutSession.started_at.desc())
+        .limit(10)
+    )
+    recent_sessions = session.exec(stmt).all()
+
+    if not recent_sessions:
+        return {
+            "overall_fatigue": "low",
+            "fatigue_score": 0.0,
+            "deload_recommended": False,
+            "reasons": [],
+            "muscles_at_risk": [],
+            "last_deload_days_ago": None,
+        }
+
+    # Build session → sets → exercise cache
+    session_sets: dict[int, list] = {}
+    exercise_cache: dict[int, Exercise] = {}
+    for wk in recent_sessions:
+        sets_stmt = select(WorkoutSet).where(WorkoutSet.session_id == wk.id)
+        s_list = session.exec(sets_stmt).all()
+        session_sets[wk.id] = s_list
+        for ws in s_list:
+            if ws.exercise_id not in exercise_cache:
+                ex = session.get(Exercise, ws.exercise_id)
+                if ex:
+                    exercise_cache[ws.exercise_id] = ex
+
+    # Per-muscle RIR trend: find last 3 sessions that trained each muscle
+    muscles_at_risk = []
+    reasons = []
+
+    for muscle in TRACKED_MUSCLES:
+        sessions_with_muscle = []
+        for wk in recent_sessions:
+            sets = session_sets.get(wk.id, [])
+            muscle_straight_sets = [
+                ws for ws in sets
+                if ws.set_type == "straight"
+                and ws.rir is not None
+                and ws.exercise_id in exercise_cache
+                and muscle in _parse_muscles(exercise_cache[ws.exercise_id].primary_muscles)
+            ]
+            if muscle_straight_sets:
+                avg_rir = sum(ws.rir for ws in muscle_straight_sets) / len(muscle_straight_sets)
+                sessions_with_muscle.append(avg_rir)
+            if len(sessions_with_muscle) == 3:
+                break
+
+        if len(sessions_with_muscle) == 3 and all(r < 1.5 for r in sessions_with_muscle):
+            muscles_at_risk.append(muscle)
+            reasons.append(f"{muscle.capitalize()} RIR has averaged below 1.5 for 3 consecutive sessions")
+
+    # Average readiness over last 7 sessions
+    readiness_values = [
+        wk.readiness_rating for wk in recent_sessions[:7]
+        if wk.readiness_rating is not None
+    ]
+    avg_readiness = sum(readiness_values) / len(readiness_values) if readiness_values else None
+
+    if avg_readiness is not None and avg_readiness < 2.5:
+        reasons.append(f"Readiness ratings have averaged {avg_readiness:.1f}/5 over the past week")
+
+    # Days since last deload
+    last_deload_days_ago = None
+    deload_stmt = (
+        select(MesocycleWeek)
+        .where(MesocycleWeek.is_deload == True)
+        .order_by(MesocycleWeek.id.desc())
+    )
+    last_deload_week = session.exec(deload_stmt).first()
+    if last_deload_week:
+        # Find a planned session in that week that was completed
+        ps_stmt = select(PlannedSession).where(
+            PlannedSession.mesocycle_week_id == last_deload_week.id,
+            PlannedSession.session_id != None,
+        )
+        deload_ps = session.exec(ps_stmt).first()
+        if deload_ps and deload_ps.session_id:
+            deload_wk = session.get(WorkoutSession, deload_ps.session_id)
+            if deload_wk and deload_wk.completed_at:
+                delta = datetime.utcnow() - deload_wk.completed_at
+                last_deload_days_ago = delta.days
+
+    if last_deload_days_ago is not None and last_deload_days_ago > 28:
+        reasons.append(f"Last deload was {last_deload_days_ago} days ago")
+
+    # Compute fatigue score (0-10)
+    # Component 1: muscle risk score (0-4): 1 point per muscle at risk, capped at 4
+    muscle_score = min(4.0, len(muscles_at_risk) * 1.0)
+
+    # Component 2: readiness score (0-3): inverse of avg readiness (1=bad → 3pts, 5=great → 0pts)
+    readiness_score = 0.0
+    if avg_readiness is not None:
+        readiness_score = max(0.0, (3.0 - avg_readiness) * (3.0 / 4.0))
+
+    # Component 3: deload recency score (0-3): 28 days → 1.5, 42+ days → 3
+    deload_score = 0.0
+    if last_deload_days_ago is not None:
+        deload_score = min(3.0, max(0.0, (last_deload_days_ago - 21) / 7.0))
+    elif len(recent_sessions) >= 8:
+        # No deload found but lots of sessions — assume moderate penalty
+        deload_score = 2.0
+
+    fatigue_score = round(min(10.0, muscle_score + readiness_score + deload_score), 1)
+
+    deload_recommended = fatigue_score >= 6.0 or len(muscles_at_risk) >= 3
+
+    if fatigue_score >= 8:
+        overall_fatigue = "critical"
+    elif fatigue_score >= 6:
+        overall_fatigue = "high"
+    elif fatigue_score >= 3:
+        overall_fatigue = "moderate"
+    else:
+        overall_fatigue = "low"
+
+    return {
+        "overall_fatigue": overall_fatigue,
+        "fatigue_score": fatigue_score,
+        "deload_recommended": deload_recommended,
+        "reasons": reasons,
+        "muscles_at_risk": muscles_at_risk,
+        "last_deload_days_ago": last_deload_days_ago,
+    }

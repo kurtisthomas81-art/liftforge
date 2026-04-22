@@ -7,6 +7,7 @@
   let activeMeso = null;
   let weekVolume = null;
   let error = null;
+  let fatigueReport = null;
 
   const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -16,6 +17,9 @@
       if (activeMeso) {
         weekVolume = await api.volume.forWeek(null);
       }
+      try {
+        fatigueReport = await api.volume.fatigueReport();
+      } catch (e) { /* graceful */ }
     } catch (e) {
       error = e.message;
     }
@@ -87,6 +91,26 @@
       + Create Program
     </button>
   </div>
+
+  <!-- Fatigue banner -->
+  {#if fatigueReport && fatigueReport.deload_recommended}
+    <div style="
+      margin-bottom:16px;
+      padding:12px 16px;
+      border-radius:var(--radius-lg);
+      border:1px solid {fatigueReport.fatigue_score >= 8 ? 'rgba(201,64,64,0.4)' : 'rgba(232,160,64,0.35)'};
+      background:{fatigueReport.fatigue_score >= 8 ? 'rgba(201,64,64,0.08)' : 'rgba(232,160,64,0.06)'};
+    ">
+      <div style="font-weight:600; font-size:13px; color:{fatigueReport.fatigue_score >= 8 ? 'var(--danger)' : 'var(--primary)'}; margin-bottom:4px;">
+        {fatigueReport.fatigue_score >= 8 ? 'High fatigue — deload recommended now' : 'Fatigue detected — consider a deload this week'}
+      </div>
+      <ul style="margin:0; padding-left:16px; color:var(--text-muted); font-size:12px; line-height:1.7;">
+        {#each fatigueReport.reasons as reason}
+          <li>{reason}</li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
 
   {#if loading}
     <div class="flex items-center gap-3" style="padding:32px 0;">

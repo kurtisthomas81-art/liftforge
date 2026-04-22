@@ -262,6 +262,44 @@
     </div>
   </div>
 
+  <!-- Export Data -->
+  <div class="card mb-4">
+    <div class="section-title mb-1">Export Data</div>
+    <p style="color:var(--text-muted); font-size:12px; margin-bottom:16px; line-height:1.6;">
+      Your data stays on your server. These files contain everything.
+    </p>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <button
+        class="btn-secondary"
+        on:click={() => (window.location.href = '/api/export/workouts.csv')}
+        style="text-align:left; justify-content:flex-start;"
+      >
+        Download Workouts CSV
+      </button>
+      <button
+        class="btn-secondary"
+        on:click={() => (window.location.href = '/api/export/measurements.csv')}
+        style="text-align:left; justify-content:flex-start;"
+      >
+        Download Measurements CSV
+      </button>
+      <button
+        class="btn-secondary"
+        on:click={() => (window.location.href = '/api/export/exercises.csv')}
+        style="text-align:left; justify-content:flex-start;"
+      >
+        Download Exercise Library CSV
+      </button>
+      <button
+        class="btn-secondary"
+        on:click={() => (window.location.href = '/api/export/backup.json')}
+        style="text-align:left; justify-content:flex-start;"
+      >
+        Download Full Backup (JSON)
+      </button>
+    </div>
+  </div>
+
   <!-- Volume Landmarks -->
   {#if landmarks.length > 0}
     <div class="card">

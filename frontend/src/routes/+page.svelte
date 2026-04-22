@@ -13,6 +13,8 @@
   let weekSessions = 0;
   let weekVolume = 0;
 
+  let fatigueReport = null;
+
   onMount(async () => {
     await refreshActiveSession();
     try {
@@ -32,6 +34,11 @@
       // Rough weekly volume from history summaries (set_count as proxy)
       const weekData = sessions.filter(s => s.started_at && new Date(s.started_at) >= weekStart);
       weekVolume = weekData.reduce((acc, s) => acc + s.set_count, 0);
+
+      // Fatigue report (non-blocking)
+      try {
+        fatigueReport = await api.volume.fatigueReport();
+      } catch (e) { /* graceful */ }
     } catch (e) {
       console.error(e);
     }
@@ -87,6 +94,26 @@
           {creating ? 'Starting...' : 'Start Workout'}
         </button>
       </div>
+    </div>
+  {/if}
+
+  <!-- Fatigue banner -->
+  {#if fatigueReport && fatigueReport.deload_recommended}
+    <div style="
+      margin-bottom:16px;
+      padding:12px 16px;
+      border-radius:var(--radius-lg);
+      border:1px solid {fatigueReport.fatigue_score >= 8 ? 'rgba(201,64,64,0.4)' : 'rgba(232,160,64,0.35)'};
+      background:{fatigueReport.fatigue_score >= 8 ? 'rgba(201,64,64,0.08)' : 'rgba(232,160,64,0.06)'};
+    ">
+      <div style="font-weight:600; font-size:13px; color:{fatigueReport.fatigue_score >= 8 ? 'var(--danger)' : 'var(--primary)'}; margin-bottom:4px;">
+        {fatigueReport.fatigue_score >= 8 ? 'High fatigue — deload recommended now' : 'Fatigue detected — consider a deload this week'}
+      </div>
+      <ul style="margin:0; padding-left:16px; color:var(--text-muted); font-size:12px; line-height:1.7;">
+        {#each fatigueReport.reasons as reason}
+          <li>{reason}</li>
+        {/each}
+      </ul>
     </div>
   {/if}
 

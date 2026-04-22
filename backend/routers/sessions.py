@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from database import get_session
-from models import WorkoutSession, WorkoutSet, Exercise
+from models import WorkoutSession, WorkoutSet, Exercise, WorkoutTemplate, TemplateExercise
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -248,3 +248,54 @@ def delete_set(
     session.delete(ws)
     session.commit()
     return {"ok": True}
+
+
+class SaveAsTemplatePayload(BaseModel):
+    name: str
+
+
+@router.post("/{session_id}/save-as-template")
+def save_session_as_template(
+    session_id: int,
+    payload: SaveAsTemplatePayload,
+    session: Session = Depends(get_session),
+):
+    wk = session.get(WorkoutSession, session_id)
+    if not wk:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    tpl = WorkoutTemplate(user_id=USER_ID, name=payload.name, notes=wk.notes or "")
+    session.add(tpl)
+    session.commit()
+    session.refresh(tpl)
+
+    # Collect unique exercises in order of first appearance
+    sets_stmt = (
+        select(WorkoutSet)
+        .where(WorkoutSet.session_id == session_id)
+        .order_by(WorkoutSet.exercise_id, WorkoutSet.set_number)
+    )
+    all_sets = session.exec(sets_stmt).all()
+
+    # Group by exercise_id preserving insertion order
+    seen: dict[int, list] = {}
+    for ws in all_sets:
+        seen.setdefault(ws.exercise_id, []).append(ws)
+
+    for order_idx, (exercise_id, ex_sets) in enumerate(seen.items(), start=1):
+        working = [s for s in ex_sets if s.set_type != "warmup"]
+        set_count = len(working) if working else len(ex_sets)
+        te = TemplateExercise(
+            template_id=tpl.id,
+            exercise_id=exercise_id,
+            order_in_template=order_idx,
+            target_sets=set_count,
+            target_reps_min=8,
+            target_reps_max=12,
+            target_rir=2,
+            notes="",
+        )
+        session.add(te)
+    session.commit()
+
+    return {"template_id": tpl.id, "name": tpl.name}

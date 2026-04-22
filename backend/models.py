@@ -138,3 +138,41 @@ class PlannedExercise(SQLModel, table=True):
     target_reps_max: int
     target_rir: int = Field(default=2)
     notes: str = Field(default="")
+
+
+# ── Phase 3 tables ─────────────────────────────────────────────────────────────
+
+class WorkoutTemplate(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(default=1)
+    name: str
+    notes: str = Field(default="")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class TemplateExercise(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    template_id: int = Field(foreign_key="workouttemplate.id")
+    exercise_id: int = Field(foreign_key="exercise.id")
+    order_in_template: int = Field(default=1)
+    target_sets: int = Field(default=3)
+    target_reps_min: int = Field(default=8)
+    target_reps_max: int = Field(default=12)
+    target_rir: int = Field(default=2)
+    notes: str = Field(default="")
+
+
+class BodyMeasurement(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(default=1)
+    date: str  # ISO date string "YYYY-MM-DD"
+    body_weight: Optional[float] = Field(default=None)
+    body_fat_pct: Optional[float] = Field(default=None)
+    waist_in: Optional[float] = Field(default=None)
+    chest_in: Optional[float] = Field(default=None)
+    hips_in: Optional[float] = Field(default=None)
+    left_arm_in: Optional[float] = Field(default=None)
+    right_arm_in: Optional[float] = Field(default=None)
+    left_quad_in: Optional[float] = Field(default=None)
+    right_quad_in: Optional[float] = Field(default=None)
+    notes: str = Field(default="")

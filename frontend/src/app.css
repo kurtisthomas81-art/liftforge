@@ -242,6 +242,19 @@ tr:last-child td { border-bottom: none; }
   text-align: center;
   flex-shrink: 0;
 }
+.nav-group-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+  padding: 6px 20px 2px;
+}
+.nav-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 16px;
+}
 
 .active-session-badge {
   margin: 0 12px 12px;
