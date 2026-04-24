@@ -18,7 +18,7 @@ ALL_MUSCLES = [
 @router.get("/recovery-map")
 def recovery_map(session: Session = Depends(get_session)):
     stmt = (
-        select(WorkoutSession)
+        select(WorkoutSession.id, WorkoutSession.started_at)
         .where(WorkoutSession.user_id == USER_ID)
         .where(WorkoutSession.completed_at != None)
         .order_by(WorkoutSession.started_at.desc())
