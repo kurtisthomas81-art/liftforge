@@ -43,23 +43,24 @@
 
   $: plateOptions = unit === 'lbs' ? PLATES_LBS : PLATES_KG;
   $: barOptions = unit === 'lbs' ? BAR_OPTIONS_LBS : BAR_OPTIONS_KG;
-  $: {
-    // When unit changes, reset bar weight to default
-    barWeight = barOptions[0].value;
-  }
 
   // Which plates the user has available
-  let availablePlates = new Set(plateOptions.map(p => p.weight));
+  let availablePlates = new Set(PLATES_LBS.map(p => p.weight));
 
-  $: {
-    // Re-init when unit changes
-    availablePlates = new Set(plateOptions.map(p => p.weight));
+  function switchUnit(newUnit) {
+    unit = newUnit;
+    barWeight = (newUnit === 'lbs' ? BAR_OPTIONS_LBS : BAR_OPTIONS_KG)[0].value;
+    availablePlates = new Set((newUnit === 'lbs' ? PLATES_LBS : PLATES_KG).map(p => p.weight));
+    result = null;
+    if (targetWeight) calculate();
   }
 
   onMount(async () => {
     try {
       const profile = await api.profile.get();
-      unit = profile.unit_preference || 'lbs';
+      if (profile.unit_preference && profile.unit_preference !== unit) {
+        switchUnit(profile.unit_preference);
+      }
     } catch (e) {
       // graceful fallback
     }
@@ -67,12 +68,9 @@
 
   function togglePlate(weight) {
     const s = new Set(availablePlates);
-    if (s.has(weight)) {
-      s.delete(weight);
-    } else {
-      s.add(weight);
-    }
+    if (s.has(weight)) s.delete(weight); else s.add(weight);
     availablePlates = s;
+    if (targetWeight) calculate();
   }
 
   function calculate() {
@@ -131,8 +129,6 @@
     };
   }
 
-  $: if (targetWeight && barWeight) calculate();
-
   function plateBreakdown(plates) {
     const counts = {};
     for (const p of plates) {
@@ -159,11 +155,11 @@
     <!-- Unit toggle -->
     <div class="flex gap-2 mb-4">
       <button
-        on:click={() => (unit = 'lbs')}
+        on:click={() => switchUnit('lbs')}
         style="padding:7px 20px; border-radius:4px; border:2px solid {unit === 'lbs' ? 'var(--primary)' : 'var(--border)'}; background:{unit === 'lbs' ? 'rgba(232,160,64,0.12)' : 'var(--surface-2)'}; color:{unit === 'lbs' ? 'var(--primary)' : 'var(--text-muted)'}; font-weight:{unit === 'lbs' ? '700' : '400'}; cursor:pointer; transition:all 0.15s;"
       >lbs</button>
       <button
-        on:click={() => (unit = 'kg')}
+        on:click={() => switchUnit('kg')}
         style="padding:7px 20px; border-radius:4px; border:2px solid {unit === 'kg' ? 'var(--primary)' : 'var(--border)'}; background:{unit === 'kg' ? 'rgba(232,160,64,0.12)' : 'var(--surface-2)'}; color:{unit === 'kg' ? 'var(--primary)' : 'var(--text-muted)'}; font-weight:{unit === 'kg' ? '700' : '400'}; cursor:pointer; transition:all 0.15s;"
       >kg</button>
     </div>
@@ -178,6 +174,7 @@
           min="0"
           step={unit === 'lbs' ? 2.5 : 1.25}
           bind:value={targetWeight}
+          on:input={calculate}
           placeholder="e.g. 185"
           style="font-size:20px; font-weight:700; padding:10px 14px;"
         />
@@ -185,7 +182,7 @@
       <!-- Bar weight -->
       <div style="flex:1; min-width:160px;">
         <label for="barWeight">Bar Weight</label>
-        <select id="barWeight" bind:value={barWeight}>
+        <select id="barWeight" bind:value={barWeight} on:change={calculate}>
           {#each barOptions as opt}
             <option value={opt.value}>{opt.label}</option>
           {/each}
