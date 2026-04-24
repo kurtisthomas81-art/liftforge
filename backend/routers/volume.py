@@ -358,6 +358,16 @@ def fatigue_report(session: Session = Depends(get_session)):
     if last_deload_days_ago is not None and last_deload_days_ago > 28:
         reasons.append(f"Last deload was {last_deload_days_ago} days ago")
 
+    # Average post-session RPE over last 5 sessions
+    rpe_values = [
+        wk.post_session_rpe for wk in recent_sessions[:5]
+        if wk.post_session_rpe is not None
+    ]
+    avg_rpe = sum(rpe_values) / len(rpe_values) if rpe_values else None
+
+    if avg_rpe is not None and avg_rpe >= 8:
+        reasons.append(f"Session RPE has averaged {avg_rpe:.1f}/10 — workouts are very hard")
+
     # Compute fatigue score (0-10)
     # Component 1: muscle risk score (0-4): 1 point per muscle at risk, capped at 4
     muscle_score = min(4.0, len(muscles_at_risk) * 1.0)
@@ -372,10 +382,14 @@ def fatigue_report(session: Session = Depends(get_session)):
     if last_deload_days_ago is not None:
         deload_score = min(3.0, max(0.0, (last_deload_days_ago - 21) / 7.0))
     elif len(recent_sessions) >= 8:
-        # No deload found but lots of sessions — assume moderate penalty
         deload_score = 2.0
 
-    fatigue_score = round(min(10.0, muscle_score + readiness_score + deload_score), 1)
+    # Component 4: RPE score (0-2): RPE ≤6 → 0, RPE 10 → 2
+    rpe_score = 0.0
+    if avg_rpe is not None:
+        rpe_score = max(0.0, min(2.0, (avg_rpe - 6.0) * 0.5))
+
+    fatigue_score = round(min(10.0, muscle_score + readiness_score + deload_score + rpe_score), 1)
 
     deload_recommended = fatigue_score >= 6.0 or len(muscles_at_risk) >= 3
 

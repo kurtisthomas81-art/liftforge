@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import create_db_and_tables, engine
+from database import create_db_and_tables, migrate_db, engine
 from models import Exercise, SplitTemplate, MuscleVolumeLandmark
 from sqlmodel import Session, select
 from routers import exercises, sessions, history, profile, ollama
@@ -34,6 +34,7 @@ app.include_router(recovery.router)
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
+    migrate_db()
     with Session(engine) as session:
         # Seed exercises if table is empty
         exercise_count = session.exec(select(Exercise)).all()

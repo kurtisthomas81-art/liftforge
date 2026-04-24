@@ -26,7 +26,8 @@ class WorkoutSession(SQLModel, table=True):
     notes: Optional[str] = Field(default=None)
     started_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = Field(default=None)
-    readiness_rating: Optional[int] = Field(default=None)  # 1-5 scale
+    readiness_rating: Optional[int] = Field(default=None)   # 1-5 pre-session
+    post_session_rpe: Optional[int] = Field(default=None)   # 1-10 post-session
 
 
 class WorkoutSet(SQLModel, table=True):

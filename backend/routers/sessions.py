@@ -22,6 +22,7 @@ class SessionUpdate(BaseModel):
     name: Optional[str] = None
     notes: Optional[str] = None
     readiness_rating: Optional[int] = None
+    post_session_rpe: Optional[int] = None
 
 
 class SetCreate(BaseModel):
@@ -67,6 +68,7 @@ def _serialize_session(wk: WorkoutSession) -> dict:
         "started_at": wk.started_at.isoformat() if wk.started_at else None,
         "completed_at": wk.completed_at.isoformat() if wk.completed_at else None,
         "readiness_rating": wk.readiness_rating,
+        "post_session_rpe": wk.post_session_rpe,
     }
 
 
@@ -132,6 +134,8 @@ def update_session(
         wk.notes = payload.notes
     if payload.readiness_rating is not None:
         wk.readiness_rating = payload.readiness_rating
+    if payload.post_session_rpe is not None:
+        wk.post_session_rpe = payload.post_session_rpe
     session.add(wk)
     session.commit()
     session.refresh(wk)

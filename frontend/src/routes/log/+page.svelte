@@ -49,6 +49,12 @@
   let saveTemplateName = '';
   let savingTemplate = false;
 
+  // Post-session RPE
+  let showRpeModal = false;
+  let finishedSessionId = null;
+  let sessionRpe = null;
+  let submittingRpe = false;
+
   onMount(async () => {
     await refreshActiveSession();
     session = $activeSession;
@@ -218,17 +224,29 @@
   async function finishSession() {
     if (!confirm('Finish this session?')) return;
     finishing = true;
-    await api.sessions.finish(session.id);
-    // Check for PRs
-    try {
-      await api.prs.checkSession(session.id);
-    } catch (e) { /* graceful */ }
+    const sid = session.id;
+    await api.sessions.finish(sid);
+    try { await api.prs.checkSession(sid); } catch (e) {}
     await refreshActiveSession();
     dismissRestTimer();
+    clearInterval(intervalId);
     session = null;
     exercises = [];
-    clearInterval(intervalId);
     finishing = false;
+    finishedSessionId = sid;
+    sessionRpe = null;
+    showRpeModal = true;
+  }
+
+  async function submitRpe() {
+    submittingRpe = true;
+    if (sessionRpe !== null && finishedSessionId) {
+      try {
+        await api.sessions.update(finishedSessionId, { post_session_rpe: sessionRpe });
+      } catch (e) {}
+    }
+    showRpeModal = false;
+    submittingRpe = false;
     goto('/');
   }
 
@@ -364,6 +382,14 @@
   }
 
   const MUSCLES = ['chest','back','shoulders','biceps','triceps','quads','hamstrings','glutes','calves','abs'];
+
+  function rpeColor(n) {
+    if (n <= 3) return '#4caf6a';   // green
+    if (n <= 5) return '#8bc34a';   // yellow-green
+    if (n <= 7) return '#e8a040';   // amber
+    if (n <= 8) return '#e06830';   // orange
+    return '#c94040';               // red
+  }
 
   // ── Exercise swap ────────────────────────────────────────────────────────────
   let showSwapModal = false;
@@ -899,6 +925,67 @@
               </button>
             {/each}
           {/if}
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- ── Post-session RPE Modal ────────────────────────────────────────────── -->
+{#if showRpeModal}
+  <div class="modal-overlay">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header">
+        <h3>How hard was that session?</h3>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--text-muted); font-size:13px; margin-bottom:18px;">
+          Rate the overall effort — 1 is a walk in the park, 10 is absolute max.
+        </p>
+
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+          <!-- Row 1–5 -->
+          <div style="display:flex; gap:6px;">
+            {#each [1,2,3,4,5] as n}
+              <button
+                on:click={() => (sessionRpe = n)}
+                style="
+                  flex:1; padding:10px 0; border-radius:6px; border:2px solid {sessionRpe === n ? rpeColor(n) : 'var(--border)'};
+                  background:{sessionRpe === n ? rpeColor(n) + '22' : 'var(--surface-2)'};
+                  color:{sessionRpe === n ? rpeColor(n) : 'var(--text-muted)'};
+                  font-size:16px; font-weight:{sessionRpe === n ? '700' : '400'}; cursor:pointer;
+                "
+              >{n}</button>
+            {/each}
+          </div>
+          <!-- Row 6–10 -->
+          <div style="display:flex; gap:6px;">
+            {#each [6,7,8,9,10] as n}
+              <button
+                on:click={() => (sessionRpe = n)}
+                style="
+                  flex:1; padding:10px 0; border-radius:6px; border:2px solid {sessionRpe === n ? rpeColor(n) : 'var(--border)'};
+                  background:{sessionRpe === n ? rpeColor(n) + '22' : 'var(--surface-2)'};
+                  color:{sessionRpe === n ? rpeColor(n) : 'var(--text-muted)'};
+                  font-size:16px; font-weight:{sessionRpe === n ? '700' : '400'}; cursor:pointer;
+                "
+              >{n}</button>
+            {/each}
+          </div>
+          <!-- Labels -->
+          <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-faint); padding:0 2px;">
+            <span>Easy</span>
+            <span>Moderate</span>
+            <span>Hard</span>
+            <span>Max</span>
+          </div>
+        </div>
+
+        <div class="flex gap-2 justify-end">
+          <button class="btn-ghost" on:click={submitRpe} disabled={submittingRpe}>Skip</button>
+          <button class="btn-primary" on:click={submitRpe} disabled={!sessionRpe || submittingRpe}>
+            {submittingRpe ? 'Saving...' : 'Save & Done'}
+          </button>
         </div>
       </div>
     </div>
