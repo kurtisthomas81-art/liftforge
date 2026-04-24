@@ -250,6 +250,41 @@ def delete_set(
     return {"ok": True}
 
 
+class SwapExercisePayload(BaseModel):
+    old_exercise_id: int
+    new_exercise_id: int
+
+
+@router.post("/{session_id}/swap-exercise")
+def swap_exercise(
+    session_id: int,
+    payload: SwapExercisePayload,
+    session: Session = Depends(get_session),
+):
+    # Verify session belongs to user without selecting readiness_rating
+    exists = session.exec(
+        select(WorkoutSession.id).where(
+            WorkoutSession.id == session_id,
+            WorkoutSession.user_id == USER_ID,
+        )
+    ).first()
+    if not exists:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    sets = session.exec(
+        select(WorkoutSet).where(
+            WorkoutSet.session_id == session_id,
+            WorkoutSet.exercise_id == payload.old_exercise_id,
+        )
+    ).all()
+
+    for ws in sets:
+        ws.exercise_id = payload.new_exercise_id
+        session.add(ws)
+    session.commit()
+    return {"ok": True, "swapped": len(sets)}
+
+
 class SaveAsTemplatePayload(BaseModel):
     name: str
 

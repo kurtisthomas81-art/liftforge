@@ -365,6 +365,55 @@
 
   const MUSCLES = ['chest','back','shoulders','biceps','triceps','quads','hamstrings','glutes','calves','abs'];
 
+  // ── Exercise swap ────────────────────────────────────────────────────────────
+  let showSwapModal = false;
+  let swapGroup = null;        // the exercise group being replaced
+  let swapMuscle = '';         // pre-seeded muscle filter
+  let swapSearch = '';
+  let swapExercises = [];
+  let swapping = false;
+
+  async function openSwapModal(group) {
+    swapGroup = group;
+    if (allExercises.length === 0) allExercises = await api.exercises.list();
+    const ex = allExercises.find(e => e.id === group.exercise_id);
+    swapMuscle = ex?.primary_muscles?.[0] ?? '';
+    swapSearch = '';
+    filterSwap();
+    showSwapModal = true;
+  }
+
+  function filterSwap() {
+    let list = allExercises.filter(e => e.id !== swapGroup?.exercise_id);
+    if (swapMuscle) {
+      list = list.filter(e =>
+        e.primary_muscles.includes(swapMuscle) ||
+        e.secondary_muscles.includes(swapMuscle)
+      );
+    }
+    if (swapSearch) {
+      const q = swapSearch.toLowerCase();
+      list = list.filter(e =>
+        e.name.toLowerCase().includes(q) ||
+        e.aliases.some(a => a.toLowerCase().includes(q))
+      );
+    }
+    swapExercises = list;
+  }
+
+  $: { swapSearch; swapMuscle; if (showSwapModal) filterSwap(); }
+
+  async function confirmSwap(newEx) {
+    if (!session || !swapGroup || swapping) return;
+    swapping = true;
+    try {
+      await api.sessions.swapExercise(session.id, swapGroup.exercise_id, newEx.id);
+      showSwapModal = false;
+      await loadSession();
+    } catch (e) { /* graceful */ }
+    swapping = false;
+  }
+
   // Inline plate calculator
   let plateCalcSetId = null;
   let plateCalcWeight = '';
@@ -495,9 +544,12 @@
         <!-- Exercise header -->
         <div class="flex items-center justify-between mb-2">
           <div style="font-weight:600; font-size:15px;">{group.exercise_name}</div>
-          <button class="btn-ghost btn-sm" on:click={() => togglePrev(group.exercise_id)}>
-            {showPrev[group.exercise_id] ? '▲ Hide ref' : '▼ Previous'}
-          </button>
+          <div class="flex gap-2">
+            <button class="btn-ghost btn-sm" on:click={() => openSwapModal(group)}>⇄ Swap</button>
+            <button class="btn-ghost btn-sm" on:click={() => togglePrev(group.exercise_id)}>
+              {showPrev[group.exercise_id] ? '▲ Hide ref' : '▼ Previous'}
+            </button>
+          </div>
         </div>
 
         <!-- Overload suggestion -->
@@ -836,6 +888,63 @@
             {#each filteredExercises as ex}
               <button
                 on:click={() => addExerciseToSession(ex)}
+                style="width:100%; text-align:left; background:transparent; border:none; border-bottom:1px solid var(--border); padding:10px 4px; cursor:pointer; transition:background 0.1s;"
+                on:mouseenter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                on:mouseleave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <div style="font-weight:500; color:var(--text); font-size:14px;">{ex.name}</div>
+                <div style="color:var(--text-muted); font-size:12px; margin-top:2px;">
+                  {ex.primary_muscles.join(', ')} · {ex.movement_pattern}
+                </div>
+              </button>
+            {/each}
+          {/if}
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- ── Swap Exercise Modal ───────────────────────────────────────────────── -->
+{#if showSwapModal}
+  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+  <div class="modal-overlay" on:click|self={() => (showSwapModal = false)}>
+    <div class="modal" style="max-height:75vh;">
+      <div class="modal-header">
+        <div>
+          <h3>Swap Exercise</h3>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+            Replacing: {swapGroup?.exercise_name}
+          </div>
+        </div>
+        <button class="btn-ghost btn-sm" on:click={() => (showSwapModal = false)}>✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:12px; overflow:hidden;">
+        <!-- Search -->
+        <div class="search-wrap">
+          <span class="search-icon">⊞</span>
+          <input bind:value={swapSearch} placeholder="Search exercises..." autofocus />
+        </div>
+
+        <!-- Muscle filter chips -->
+        <div class="filter-chips">
+          <button class="chip" class:active={swapMuscle === ''} on:click={() => (swapMuscle = '')}>All</button>
+          {#each MUSCLES as m}
+            <button class="chip" class:active={swapMuscle === m} on:click={() => (swapMuscle = m)}>
+              {m}
+            </button>
+          {/each}
+        </div>
+
+        <!-- Exercise list -->
+        <div style="overflow-y:auto; flex:1;">
+          {#if swapExercises.length === 0}
+            <div style="text-align:center; padding:32px; color:var(--text-muted);">No exercises found</div>
+          {:else}
+            {#each swapExercises as ex}
+              <button
+                on:click={() => confirmSwap(ex)}
+                disabled={swapping}
                 style="width:100%; text-align:left; background:transparent; border:none; border-bottom:1px solid var(--border); padding:10px 4px; cursor:pointer; transition:background 0.1s;"
                 on:mouseenter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
                 on:mouseleave={e => e.currentTarget.style.background = 'transparent'}

@@ -41,6 +41,8 @@ export const api = {
       request('PUT', `/sessions/${sessionId}/sets/${setId}`, data),
     deleteSet: (sessionId, setId) =>
       request('DELETE', `/sessions/${sessionId}/sets/${setId}`),
+    swapExercise: (sessionId, oldId, newId) =>
+      request('POST', `/sessions/${sessionId}/swap-exercise`, { old_exercise_id: oldId, new_exercise_id: newId }),
   },
 
   history: {
