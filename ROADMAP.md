@@ -53,17 +53,23 @@ Repo: https://github.com/kurtisthomas81-art/liftforge
 
 ---
 
-## 🔜 Phase 4 — Caliber-Inspired Features
+## 🔄 Phase 4 — Caliber-Inspired Features (In Progress)
 
 ### High Priority
-| Feature | Description |
-|---------|-------------|
-| Post-session RPE | Rate overall workout 1–10 after finishing; feeds fatigue model |
-| Program adherence score | % of planned sessions completed per mesocycle, per week |
-| Muscle recovery map | Front/back SVG body diagram; green/amber/red by time since last trained + RIR |
-| Weekly check-ins | Monday prompt: energy, sleep quality, stress, soreness, adherence notes |
-| Goal setting | Performance goals (e.g., "Bench 225 by July 1") with auto-detection when hit |
-| In-logger exercise swap | "Swap" button mid-session; filtered by same muscle + your equipment |
+| Feature | Status | Description |
+|---------|--------|-------------|
+| ~~Post-session RPE~~ | ✅ Done | Rate overall workout 1–10 after finishing; feeds fatigue model |
+| Program adherence score | 🔜 Next | % of planned sessions completed per mesocycle, per week |
+| ~~Muscle recovery map~~ | ✅ Done | Front/back SVG body diagram; green/amber/red by time since last trained + RIR |
+| Weekly check-ins | — | Monday prompt: energy, sleep quality, stress, soreness, adherence notes |
+| Goal setting | — | Performance goals (e.g., "Bench 225 by July 1") with auto-detection when hit |
+| ~~In-logger exercise swap~~ | ✅ Done | "Swap" button mid-session; filtered by same muscle + your equipment |
+
+### Plate Calculator Enhancements (Phase 3.5)
+| Feature | Status | Description |
+|---------|--------|-------------|
+| ~~Plate count stepper~~ | ✅ Done | Per-plate owned count; solver respects per-side limits |
+| ~~Cable machine mode~~ | ✅ Done | Stack setup + pulley ratio (1:1 / 2:1); target resistance → plates to pin |
 
 ### Medium Priority
 | Feature | Description |
