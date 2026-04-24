@@ -8,8 +8,11 @@
   let weekVolume = null;
   let error = null;
   let fatigueReport = null;
+  let selectedSession = null; // drill-in: full planned session detail
+  let loadingDetail = false;
 
   const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const CHART_MUSCLES = ['chest', 'back', 'quads', 'hamstrings', 'shoulders', 'biceps', 'triceps'];
 
   onMount(async () => {
     try {
@@ -17,236 +20,384 @@
       if (activeMeso) {
         weekVolume = await api.volume.forWeek(null);
       }
-      try {
-        fatigueReport = await api.volume.fatigueReport();
-      } catch (e) { /* graceful */ }
-    } catch (e) {
-      error = e.message;
-    }
+      try { fatigueReport = await api.volume.fatigueReport(); } catch {}
+    } catch (e) { error = e.message; }
     loading = false;
   });
 
+  async function openDay(ps) {
+    loadingDetail = true;
+    try {
+      selectedSession = await api.programs.getPlannedSession(ps.id);
+    } catch { selectedSession = ps; }
+    loadingDetail = false;
+  }
+
+  function closeDay() { selectedSession = null; }
+
+  async function startDay(ps) {
+    try {
+      const s = await api.programs.startPlannedSession(ps.id || ps.planned_session_id);
+      goto('/log');
+    } catch { goto('/log'); }
+  }
+
   function goalBadgeColor(goal) {
-    if (goal === 'strength') return '#5b9bd5';
-    if (goal === 'recomp') return '#7cb87c';
-    return 'var(--primary)';
+    if (goal === 'strength') return '#5090e8';
+    if (goal === 'recomp') return '#50c880';
+    return 'var(--accent)';
   }
 
   function sessionLabel(ps) {
-    const today = new Date().getDay(); // 0=Sun, 1=Mon...
-    // Convert to Mon=0 basis
-    const todayDow = today === 0 ? 6 : today - 1;
-    if (ps.session_id) return 'Completed';
-    if (ps.day_of_week === todayDow) return 'Today';
+    const todayDow = new Date().getDay();
+    const todayMon = todayDow === 0 ? 6 : todayDow - 1;
+    if (ps.session_id) return 'Done';
+    if (ps.day_of_week === todayMon) return 'Today';
     return null;
   }
 
-  function getMavWidth(muscle, volume) {
-    if (!volume) return 0;
-    const entry = volume.muscles.find(m => m.muscle === muscle);
-    if (!entry || !entry.landmarks) return 0;
+  function getMavWidth(muscle) {
+    if (!weekVolume) return 0;
+    const entry = weekVolume.muscles.find(m => m.muscle === muscle);
+    if (!entry?.landmarks) return 0;
+    return Math.min(100, (entry.sets / (entry.landmarks.mrv || 25)) * 100);
+  }
+
+  function getMavRange(muscle) {
+    if (!weekVolume) return { start:0, end:0 };
+    const entry = weekVolume.muscles.find(m => m.muscle === muscle);
+    if (!entry?.landmarks) return { start:0, end:0 };
     const mrv = entry.landmarks.mrv || 25;
-    return Math.min(100, (entry.sets / mrv) * 100);
+    return { start:(entry.landmarks.mav_low/mrv)*100, end:(entry.landmarks.mav_high/mrv)*100 };
   }
 
-  function getMavRange(muscle, volume) {
-    if (!volume) return { start: 0, end: 0 };
-    const entry = volume.muscles.find(m => m.muscle === muscle);
-    if (!entry || !entry.landmarks) return { start: 0, end: 0 };
-    const mrv = entry.landmarks.mrv || 25;
-    return {
-      start: (entry.landmarks.mav_low / mrv) * 100,
-      end: (entry.landmarks.mav_high / mrv) * 100,
-    };
+  function barColor(muscle) {
+    if (!weekVolume) return 'var(--muted)';
+    const entry = weekVolume.muscles.find(m => m.muscle === muscle);
+    if (!entry) return 'var(--muted)';
+    if (entry.status === 'at_mrv') return 'var(--danger)';
+    if (entry.status === 'in_mav') return 'var(--success)';
+    if (entry.status === 'above_mav') return 'var(--warn)';
+    return 'var(--muted)';
   }
 
-  function getBarColor(muscle, volume) {
-    if (!volume) return 'var(--text-muted)';
-    const entry = volume.muscles.find(m => m.muscle === muscle);
-    if (!entry) return 'var(--text-muted)';
-    if (entry.status === 'at_mrv') return '#c94040';
-    if (entry.status === 'in_mav') return '#4caf6a';
-    if (entry.status === 'above_mav') return '#e8a040';
-    return 'var(--text-muted)';
+  function dayCatColor(name) {
+    const n = (name || '').toLowerCase();
+    if (n.includes('push')) return 'var(--push)';
+    if (n.includes('pull')) return 'var(--pull)';
+    if (n.includes('leg') || n.includes('squat') || n.includes('quad')) return 'var(--squat)';
+    if (n.includes('dead') || n.includes('hinge') || n.includes('rdl')) return 'var(--hinge)';
+    if (n.includes('core') || n.includes('abs')) return 'var(--core)';
+    return 'var(--accent)';
   }
 
-  const CHART_MUSCLES = ['chest', 'back', 'quads', 'hamstrings', 'shoulders', 'biceps', 'triceps'];
-
-  let totalSetsThisWeek = 0;
-  let completedSessionsThisWeek = 0;
-  $: if (activeMeso && activeMeso.current_week_sessions) {
-    completedSessionsThisWeek = activeMeso.current_week_sessions.filter(s => s.session_id).length;
-  }
-  $: if (weekVolume) {
-    totalSetsThisWeek = weekVolume.muscles.reduce((sum, m) => sum + m.sets, 0);
-  }
+  $: currentDay = activeMeso?.current_week_sessions?.find(s => !s.session_id) || activeMeso?.current_week_sessions?.[0];
+  $: weekProgress = activeMeso ? Math.round((activeMeso.current_week - 1) / activeMeso.weeks_total * 100) : 0;
+  $: completedSessions = activeMeso?.current_week_sessions?.filter(s => s.session_id).length ?? 0;
 </script>
 
 <svelte:head><title>Program — LiftForge</title></svelte:head>
 
-<div style="max-width:900px;">
-  <div class="flex items-center justify-between mb-4">
-    <h2 style="font-size:20px; font-weight:700;">Program</h2>
-    <button class="btn-primary" on:click={() => goto('/program/builder')}>
-      + Create Program
+{#if selectedSession}
+  <!-- Drill-in view -->
+  <div class="drill-header">
+    <button class="back-btn" on:click={closeDay}>‹</button>
+    <div class="drill-title-wrap">
+      <div class="drill-title">{selectedSession.split_day_name || 'Training Day'}</div>
+      <div class="drill-meta">
+        {#if selectedSession.exercises?.length}
+          {selectedSession.exercises.length} exercises
+        {:else if selectedSession.planned_exercises?.length}
+          {selectedSession.planned_exercises.length} exercises
+        {/if}
+      </div>
+    </div>
+    <span class="drill-cat-badge" style="color:{dayCatColor(selectedSession.split_day_name)};border-color:{dayCatColor(selectedSession.split_day_name)}35;background:{dayCatColor(selectedSession.split_day_name)}18">
+      {selectedSession.split_day_name?.split(' ')[0]?.toLowerCase() || 'train'}
+    </span>
+  </div>
+
+  <div class="drill-body">
+    {@const exList = selectedSession.exercises || selectedSession.planned_exercises || []}
+    {#each exList as ex, i}
+      <div class="drill-ex-row">
+        <div class="drill-num" style="background:{dayCatColor(selectedSession.split_day_name)}18;border-color:{dayCatColor(selectedSession.split_day_name)}35;color:{dayCatColor(selectedSession.split_day_name)}">
+          {i + 1}
+        </div>
+        <div class="drill-ex-info">
+          <div class="drill-ex-name">{ex.exercise_name || ex.name}</div>
+          {#if ex.target_sets}
+            <div class="drill-ex-meta">{ex.target_sets} × {ex.target_reps_min ?? '?'}–{ex.target_reps_max ?? '?'}</div>
+          {/if}
+        </div>
+      </div>
+    {/each}
+
+    {#if (selectedSession.exercises || selectedSession.planned_exercises || []).length === 0}
+      <div class="empty-state" style="padding:32px 0;"><p>No exercises listed</p></div>
+    {/if}
+  </div>
+
+  <div class="drill-footer">
+    <button class="start-day-btn" on:click={() => startDay(selectedSession)}>
+      Start This Day
     </button>
   </div>
 
-  <!-- Fatigue banner -->
-  {#if fatigueReport && fatigueReport.deload_recommended}
-    <div style="
-      margin-bottom:16px;
-      padding:12px 16px;
-      border-radius:var(--radius-lg);
-      border:1px solid {fatigueReport.fatigue_score >= 8 ? 'rgba(201,64,64,0.4)' : 'rgba(232,160,64,0.35)'};
-      background:{fatigueReport.fatigue_score >= 8 ? 'rgba(201,64,64,0.08)' : 'rgba(232,160,64,0.06)'};
-    ">
-      <div style="font-weight:600; font-size:13px; color:{fatigueReport.fatigue_score >= 8 ? 'var(--danger)' : 'var(--primary)'}; margin-bottom:4px;">
-        {fatigueReport.fatigue_score >= 8 ? 'High fatigue — deload recommended now' : 'Fatigue detected — consider a deload this week'}
-      </div>
-      <ul style="margin:0; padding-left:16px; color:var(--text-muted); font-size:12px; line-height:1.7;">
-        {#each fatigueReport.reasons as reason}
-          <li>{reason}</li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
+{:else}
+  <!-- Program overview -->
 
   {#if loading}
     <div class="flex items-center gap-3" style="padding:32px 0;">
       <div class="spinner"></div>
-      <span style="color:var(--text-muted);">Loading...</span>
     </div>
 
   {:else if error}
     <div class="card" style="color:var(--danger);">{error}</div>
 
   {:else if !activeMeso}
-    <div class="card">
-      <div class="empty-state">
-        <div class="empty-icon">▦</div>
-        <p>No active program.</p>
-        <p style="color:var(--text-muted); font-size:13px; margin-bottom:16px;">
-          Build a structured mesocycle to guide your training with progressive overload.
-        </p>
-        <button class="btn-primary" on:click={() => goto('/program/builder')}
-          style="padding:12px 32px; font-size:15px;">
-          Create Program
-        </button>
-      </div>
+    <div class="empty-program">
+      <div class="empty-icon">▦</div>
+      <div class="empty-title">No Active Program</div>
+      <div class="empty-sub">Build a mesocycle with progressive overload targets</div>
+      <button class="create-btn" on:click={() => goto('/program/builder')}>Create Program</button>
     </div>
 
   {:else}
-    <!-- Active mesocycle card -->
-    <div class="card mb-4">
-      <div class="flex items-center justify-between mb-3" style="flex-wrap:wrap; gap:8px;">
-        <div>
-          <div style="font-size:17px; font-weight:700;">{activeMeso.name}</div>
-          <div style="margin-top:4px; display:flex; align-items:center; gap:8px;">
-            <span style="background:{goalBadgeColor(activeMeso.goal)}22; color:{goalBadgeColor(activeMeso.goal)}; border:1px solid {goalBadgeColor(activeMeso.goal)}44; border-radius:3px; padding:2px 8px; font-size:11px; font-weight:600; text-transform:capitalize;">
-              {activeMeso.goal}
-            </span>
-            {#if activeMeso.split_name}
-              <span style="color:var(--text-muted); font-size:12px;">{activeMeso.split_name}</span>
-            {/if}
-          </div>
-        </div>
-        <a href="/program/{activeMeso.id}" class="btn-ghost btn-sm">View Details</a>
+    <!-- Program header -->
+    <div class="prog-hdr">
+      <div class="prog-label">Current Program</div>
+      <div class="prog-name">{activeMeso.name}</div>
+      <div class="prog-week-row">
+        <span class="prog-week-txt">Week {activeMeso.current_week} of {activeMeso.weeks_total}</span>
+        <span class="prog-pct">{weekProgress}%</span>
       </div>
-
-      <!-- Week progress bar -->
-      <div style="margin-bottom:4px;">
-        <div class="flex justify-between" style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
-          <span>Week {activeMeso.current_week} of {activeMeso.weeks_total}</span>
-          {#if activeMeso.current_week_is_deload}
-            <span style="color:var(--primary);">Deload Week</span>
-          {/if}
-        </div>
-        <div style="background:var(--surface-2); border-radius:4px; height:6px; overflow:hidden;">
-          <div style="background:var(--primary); height:100%; width:{(activeMeso.current_week / activeMeso.weeks_total) * 100}%; border-radius:4px; transition:width 0.3s;"></div>
-        </div>
+      <div class="prog-bar-track">
+        <div class="prog-bar-fill" style="width:{weekProgress}%"></div>
       </div>
+      {#if activeMeso.current_week_is_deload}
+        <div class="deload-badge">Deload Week</div>
+      {/if}
     </div>
 
-    <!-- This week's training grid -->
-    <div class="card mb-4">
-      <div class="section-title mb-3">This Week</div>
-      <div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:6px;">
-        {#each DOW as day, i}
-          {@const ps = activeMeso.current_week_sessions?.find(s => s.day_of_week === i)}
-          <div style="text-align:center;">
-            <div style="font-size:11px; color:var(--text-faint); margin-bottom:4px;">{day}</div>
-            {#if ps}
-              {@const label = sessionLabel(ps)}
-              <a
-                href="/planned/{ps.id}"
-                style="display:block; padding:8px 4px; background:{ps.session_id ? 'rgba(76,175,106,0.12)' : label === 'Today' ? 'rgba(232,160,64,0.12)' : 'var(--surface-2)'}; border:1px solid {ps.session_id ? 'rgba(76,175,106,0.3)' : label === 'Today' ? 'rgba(232,160,64,0.4)' : 'var(--border)'}; border-radius:6px; text-decoration:none; transition:border-color 0.15s;"
-              >
-                <div style="font-size:11px; font-weight:600; color:{ps.session_id ? '#4caf6a' : label === 'Today' ? 'var(--primary)' : 'var(--text)'}; word-break:break-word; line-height:1.3;">
-                  {ps.split_day_name || 'Training'}
-                </div>
-                {#if label}
-                  <div style="font-size:10px; margin-top:3px; color:{ps.session_id ? '#4caf6a' : 'var(--primary)'};">
-                    {label}
-                  </div>
-                {/if}
-              </a>
-            {:else}
-              <div style="padding:8px 4px; background:var(--surface-2); border:1px solid var(--border); border-radius:6px; opacity:0.4;">
-                <div style="font-size:11px; color:var(--text-faint);">Rest</div>
-              </div>
-            {/if}
+    <!-- Up Next card -->
+    {#if currentDay}
+      <div class="up-next-card" on:click={() => openDay(currentDay)}
+        role="button" tabindex="0"
+        on:keydown={e => e.key === 'Enter' && openDay(currentDay)}>
+        <div class="up-next-body">
+          <div>
+            <div class="up-next-label">Up Next</div>
+            <div class="up-next-name">{currentDay.split_day_name || 'Training Day'}</div>
+            <div class="up-next-meta">{activeMeso.sessions_per_week ?? ''} sessions/week</div>
           </div>
-        {/each}
+          <button class="start-now-btn" on:click|stopPropagation={() => startDay(currentDay)}>Start</button>
+        </div>
       </div>
-    </div>
+    {/if}
 
-    <!-- Quick stats -->
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
-      <div class="card" style="text-align:center;">
-        <div style="font-size:28px; font-weight:700; color:var(--primary);">{completedSessionsThisWeek}</div>
-        <div style="font-size:12px; color:var(--text-muted);">Sessions this week</div>
+    <!-- Fatigue banner -->
+    {#if fatigueReport?.deload_recommended}
+      <div class="fatigue-warn" style="border-color:{fatigueReport.fatigue_score>=8?'rgba(232,54,93,0.4)':'rgba(232,160,54,0.3)'}">
+        <div class="fatigue-warn-title" style="color:{fatigueReport.fatigue_score>=8?'var(--danger)':'var(--warn)'}">
+          {fatigueReport.fatigue_score>=8?'Critical fatigue — deload now':'High fatigue — consider a deload'}
+        </div>
       </div>
-      <div class="card" style="text-align:center;">
-        <div style="font-size:28px; font-weight:700; color:var(--primary);">{totalSetsThisWeek}</div>
-        <div style="font-size:12px; color:var(--text-muted);">Total sets this week</div>
-      </div>
+    {/if}
+
+    <!-- This week days -->
+    <div class="section-title">This Week</div>
+    <div class="days-list">
+      {#each (activeMeso.current_week_sessions || []).sort((a,b) => a.day_of_week - b.day_of_week) as ps}
+        {@const label = sessionLabel(ps)}
+        <div class="day-row" class:is-done={!!ps.session_id}
+          on:click={() => openDay(ps)}
+          role="button" tabindex="0"
+          on:keydown={e => e.key === 'Enter' && openDay(ps)}>
+          <div class="day-badge" style="background:{dayCatColor(ps.split_day_name)}18;border-color:{dayCatColor(ps.split_day_name)}35;color:{dayCatColor(ps.split_day_name)}">
+            {ps.session_id ? '✓' : (ps.day_of_week + 1)}
+          </div>
+          <div class="day-info">
+            <div class="day-name" class:strikethrough={!!ps.session_id}>{ps.split_day_name || 'Training Day'}</div>
+            <div class="day-meta">{DOW[ps.day_of_week]}{label ? ' · ' + label : ''}</div>
+          </div>
+          <div class="day-chevron">›</div>
+        </div>
+      {/each}
     </div>
 
     <!-- Weekly volume chart -->
     {#if weekVolume}
-      <div class="card">
-        <div class="section-title mb-3">Weekly Volume</div>
-        <div style="display:flex; flex-direction:column; gap:10px;">
+      <div class="card mt-4">
+        <div class="section-title">Weekly Volume</div>
+        <div class="vol-chart">
           {#each CHART_MUSCLES as muscle}
             {@const entry = weekVolume.muscles.find(m => m.muscle === muscle)}
             {@const sets = entry?.sets ?? 0}
             {@const lm = entry?.landmarks}
             {@const mrv = lm?.mrv ?? 25}
-            {@const mavRange = getMavRange(muscle, weekVolume)}
-            <div>
-              <div class="flex justify-between" style="font-size:12px; margin-bottom:4px;">
-                <span style="text-transform:capitalize; color:var(--text);">{muscle}</span>
-                <span style="color:var(--text-muted);">{sets} sets{lm ? ` / ${mrv} MRV` : ''}</span>
-              </div>
-              <div style="position:relative; background:var(--surface-2); border-radius:3px; height:14px; overflow:hidden;">
-                <!-- MAV range band (green background) -->
+            {@const mavR = getMavRange(muscle)}
+            <div class="vol-row">
+              <div class="vol-muscle">{muscle}</div>
+              <div class="vol-bar-wrap">
                 {#if lm}
-                  <div style="position:absolute; top:0; bottom:0; left:{mavRange.start}%; width:{mavRange.end - mavRange.start}%; background:rgba(76,175,106,0.15);"></div>
-                  <!-- MRV line -->
-                  <div style="position:absolute; top:0; bottom:0; left:calc(100% - 2px); width:2px; background:rgba(201,64,64,0.5);"></div>
+                  <div class="vol-mav-band" style="left:{mavR.start}%;width:{mavR.end-mavR.start}%"></div>
                 {/if}
-                <!-- Sets bar -->
-                <div style="position:absolute; top:0; bottom:0; left:0; width:{Math.min(100, (sets / mrv) * 100)}%; background:{getBarColor(muscle, weekVolume)}; border-radius:3px; transition:width 0.3s;"></div>
+                <div class="vol-bar-fill" style="width:{getMavWidth(muscle)}%;background:{barColor(muscle)}"></div>
               </div>
+              <div class="vol-count">{sets}{lm ? '/' + mrv : ''}</div>
             </div>
           {/each}
         </div>
-        <div style="display:flex; gap:16px; margin-top:12px; font-size:11px; color:var(--text-faint);">
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:10px; height:10px; background:rgba(76,175,106,0.3); border-radius:1px; display:inline-block;"></span> MAV range</span>
-          <span style="display:flex; align-items:center; gap:4px;"><span style="width:2px; height:10px; background:rgba(201,64,64,0.7); display:inline-block;"></span> MRV</span>
-        </div>
       </div>
     {/if}
+
+    <!-- Actions -->
+    <div class="prog-actions">
+      <a href="/program/{activeMeso.id}" class="prog-detail-btn">View Details</a>
+      <button class="create-outline-btn" on:click={() => goto('/program/builder')}>+ New Program</button>
+    </div>
   {/if}
-</div>
+{/if}
+
+<style>
+  /* Drill-in */
+  .drill-header {
+    display:flex; align-items:center; gap:12px;
+    background:var(--surf); border-bottom:1px solid var(--bdr);
+    padding:14px 0 14px; margin:-20px -20px 16px;
+    padding-left:20px; padding-right:20px;
+    position:sticky; top:0; z-index:10;
+  }
+  .back-btn { background:none; border:none; color:var(--muted); font-size:22px; cursor:pointer; padding:0; line-height:1; }
+  .drill-title-wrap { flex:1; }
+  .drill-title { font-family:var(--serif); font-size:22px; color:var(--text); line-height:1; }
+  .drill-meta { font-size:10px; color:var(--muted); margin-top:2px; }
+  .drill-cat-badge {
+    font-size:9px; padding:3px 10px; border-radius:var(--radius);
+    border:1px solid; text-transform:uppercase; font-weight:600; letter-spacing:0.06em;
+  }
+  .drill-body { padding-bottom:80px; }
+  .drill-ex-row {
+    display:flex; align-items:center; gap:12px;
+    padding:12px 16px; background:var(--surf);
+    border:1px solid var(--bdr); border-radius:var(--radius-lg); margin-bottom:8px;
+  }
+  .drill-num {
+    width:28px; height:28px; border-radius:50%;
+    border:1px solid; display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; flex-shrink:0;
+  }
+  .drill-ex-name { font-family:var(--serif); font-size:17px; color:var(--text); }
+  .drill-ex-meta { font-size:10px; color:var(--muted); margin-top:2px; }
+  .drill-footer {
+    position:fixed; bottom:var(--tab-h); left:0; right:0;
+    padding:12px 20px; background:var(--surf); border-top:1px solid var(--bdr); z-index:10;
+  }
+  .start-day-btn {
+    width:100%; background:var(--accent); color:#fff; border:none;
+    border-radius:var(--radius-lg); padding:15px;
+    font-family:var(--serif); font-size:18px; cursor:pointer;
+    transition:background 0.15s;
+  }
+  .start-day-btn:hover { background:#f05070; }
+
+  /* Program header */
+  .prog-hdr { margin-bottom:16px; }
+  .prog-label { font-size:10px; color:var(--accent); text-transform:uppercase; letter-spacing:0.18em; font-weight:600; margin-bottom:6px; }
+  .prog-name { font-family:var(--serif); font-size:26px; color:var(--text); line-height:1; margin-bottom:10px; }
+  .prog-week-row { display:flex; justify-content:space-between; margin-bottom:8px; font-size:11px; }
+  .prog-week-txt { color:var(--muted); }
+  .prog-pct { color:var(--accent); }
+  .prog-bar-track { height:4px; background:var(--faint); border-radius:2px; }
+  .prog-bar-fill { height:100%; background:var(--accent); border-radius:2px; transition:width 0.5s ease; }
+  .deload-badge {
+    display:inline-block; margin-top:8px;
+    font-size:10px; color:var(--warn);
+    background:rgba(232,160,54,0.1); border:1px solid rgba(232,160,54,0.25);
+    border-radius:var(--radius); padding:2px 8px;
+  }
+
+  /* Up Next */
+  .up-next-card {
+    background:var(--accent-bg); border:1px solid rgba(232,54,93,0.25);
+    border-radius:var(--radius-lg); padding:14px 16px; margin-bottom:12px; cursor:pointer;
+    transition:border-color 0.15s;
+  }
+  .up-next-card:hover { border-color:var(--accent); }
+  .up-next-body { display:flex; justify-content:space-between; align-items:center; }
+  .up-next-label { font-size:9px; color:var(--accent); text-transform:uppercase; letter-spacing:0.13em; font-weight:600; margin-bottom:5px; }
+  .up-next-name { font-family:var(--serif); font-size:22px; color:var(--text); }
+  .up-next-meta { font-size:11px; color:var(--muted); margin-top:2px; }
+  .start-now-btn {
+    background:var(--accent); color:#fff; border:none;
+    border-radius:var(--radius); padding:10px 18px;
+    font-size:12px; font-weight:600; cursor:pointer;
+    transition:background 0.15s;
+  }
+  .start-now-btn:hover { background:#f05070; }
+
+  /* Fatigue warn */
+  .fatigue-warn {
+    border:1px solid; border-radius:var(--radius-lg);
+    padding:10px 14px; margin-bottom:12px;
+  }
+  .fatigue-warn-title { font-size:12px; font-weight:600; }
+
+  /* Days list */
+  .days-list { display:flex; flex-direction:column; gap:8px; margin-bottom:4px; }
+  .day-row {
+    background:var(--surf); border:1px solid var(--bdr);
+    border-radius:var(--radius-lg); padding:13px 16px;
+    display:flex; align-items:center; gap:12px;
+    cursor:pointer; transition:border-color 0.15s;
+  }
+  .day-row.is-done { opacity:0.65; }
+  .day-row:hover { border-color:var(--accent); }
+  .day-badge {
+    width:32px; height:32px; border-radius:8px; border:1px solid;
+    display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:700; flex-shrink:0;
+  }
+  .day-info { flex:1; }
+  .day-name { font-family:var(--serif); font-size:17px; color:var(--text); line-height:1; }
+  .day-name.strikethrough { text-decoration:line-through; color:var(--muted); }
+  .day-meta { font-size:10px; color:var(--muted); margin-top:2px; }
+  .day-chevron { color:var(--muted); font-size:18px; }
+
+  /* Volume chart */
+  .vol-chart { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+  .vol-row { display:flex; align-items:center; gap:10px; }
+  .vol-muscle { font-size:12px; text-transform:capitalize; width:80px; flex-shrink:0; }
+  .vol-bar-wrap { flex:1; position:relative; background:var(--surf-2); border-radius:3px; height:10px; overflow:hidden; }
+  .vol-mav-band { position:absolute; top:0; bottom:0; background:rgba(54,200,122,0.15); }
+  .vol-bar-fill { position:absolute; top:0; bottom:0; left:0; border-radius:3px; transition:width 0.3s; }
+  .vol-count { font-size:11px; color:var(--muted); width:44px; text-align:right; flex-shrink:0; }
+
+  /* Empty */
+  .empty-program { display:flex; flex-direction:column; align-items:center; padding:60px 20px; text-align:center; gap:12px; }
+  .empty-title { font-family:var(--serif); font-size:22px; }
+  .empty-sub { font-size:13px; color:var(--muted); max-width:280px; }
+  .create-btn {
+    background:var(--accent); color:#fff; border:none;
+    border-radius:var(--radius-lg); padding:14px 36px;
+    font-family:var(--serif); font-size:18px; cursor:pointer; margin-top:8px;
+  }
+
+  /* Actions */
+  .prog-actions { display:flex; gap:10px; margin-top:16px; }
+  .prog-detail-btn {
+    flex:1; text-align:center; padding:11px;
+    background:var(--surf); border:1px solid var(--bdr);
+    border-radius:var(--radius-lg); font-size:13px; color:var(--muted);
+    text-decoration:none; transition:border-color 0.15s;
+  }
+  .prog-detail-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .create-outline-btn {
+    flex:1; padding:11px; background:transparent;
+    border:1px solid var(--bdr); border-radius:var(--radius-lg);
+    font-size:13px; color:var(--muted); cursor:pointer;
+    transition:border-color 0.15s;
+  }
+  .create-outline-btn:hover { border-color:var(--accent); color:var(--accent); }
+</style>
