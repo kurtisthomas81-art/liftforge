@@ -37,8 +37,9 @@
     {
       label: 'Tools',
       links: [
-        { href: '/plates',       label: 'Plates',       icon: '⊙' },
-        { href: '/measurements', label: 'Measurements', icon: '↕' },
+        { href: '/plates',       label: 'Plates',        icon: '⊙' },
+        { href: '/measurements', label: 'Measurements',  icon: '↕' },
+        { href: '/recovery',     label: 'Recovery Map',  icon: '◉' },
       ],
     },
     {
@@ -59,9 +60,10 @@
     { href: '/templates',  label: 'Templates',   icon: '◫' },
     { href: '/history',    label: 'History',     icon: '◎' },
     { href: '/calendar',   label: 'Calendar',    icon: '▣' },
-    { href: '/plates',     label: 'Plates',      icon: '⊙' },
-    { href: '/measurements', label: 'Measurements', icon: '↕' },
-    { href: '/exercises',  label: 'Exercises',   icon: '⊞' },
+    { href: '/plates',       label: 'Plates',        icon: '⊙' },
+    { href: '/measurements', label: 'Measurements',  icon: '↕' },
+    { href: '/recovery',     label: 'Recovery Map',  icon: '◉' },
+    { href: '/exercises',    label: 'Exercises',     icon: '⊞' },
     { href: '/chat',       label: 'AI Coach',    icon: '◇' },
     { href: '/settings',   label: 'Settings',    icon: '⚙' },
   ];

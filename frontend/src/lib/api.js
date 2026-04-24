@@ -114,4 +114,8 @@ export const api = {
     update: (id, data) => request('PUT', `/measurements/${id}`, data),
     delete: (id) => request('DELETE', `/measurements/${id}`),
   },
+
+  recovery: {
+    getMap: () => request('GET', '/recovery-map'),
+  },
 };
