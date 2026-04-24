@@ -2,168 +2,508 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
-  import { activeSession, refreshActiveSession, getElapsed } from '$lib/stores.js';
-  import { formatDate, autoSessionName } from '$lib/utils.js';
+  import { activeSession, refreshActiveSession, userProfile, getElapsed } from '$lib/stores.js';
+  import { autoSessionName } from '$lib/utils.js';
 
   let recentSessions = [];
   let loading = true;
   let elapsed = '0:00';
+  let elapsedInterval;
   let creating = false;
-
-  let weekSessions = 0;
-  let weekVolume = 0;
-
   let fatigueReport = null;
+  let nextPlanned = null;
+  let weekDays = [];
+
+  function buildWeekDays(sessions) {
+    const now = new Date();
+    const dayOffset = (now.getDay() + 6) % 7; // 0=Mon
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - dayOffset);
+    monday.setHours(0, 0, 0, 0);
+
+    return ['M','T','W','T','F','S','S'].map((label, i) => {
+      const start = new Date(monday);
+      start.setDate(monday.getDate() + i);
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      const daySessions = sessions.filter(s => {
+        if (!s.completed_at) return false;
+        const d = new Date(s.started_at);
+        return d >= start && d <= end;
+      });
+      return { label, sets: daySessions.reduce((a, s) => a + (s.set_count || 0), 0), trained: daySessions.length > 0 };
+    });
+  }
 
   onMount(async () => {
     await refreshActiveSession();
+
+    elapsedInterval = setInterval(() => {
+      if ($activeSession) elapsed = getElapsed($activeSession.started_at);
+    }, 1000);
+
     try {
       const sessions = await api.history.recent();
-      // Last 5 for dashboard
       recentSessions = sessions.slice(0, 5);
+      weekDays = buildWeekDays(sessions);
 
-      // Week stats
-      const now = new Date();
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - now.getDay());
-      weekStart.setHours(0, 0, 0, 0);
+      try {
+        const meso = await api.programs.getActiveMesocycle();
+        if (meso?.current_week_sessions) {
+          nextPlanned = meso.current_week_sessions.find(s => !s.session_id) || null;
+        }
+      } catch { /* no active program */ }
 
-      const allSessions = await api.sessions.list(1);
-      weekSessions = allSessions.filter(s => s.completed_at && new Date(s.started_at) >= weekStart).length;
-
-      // Rough weekly volume from history summaries (set_count as proxy)
-      const weekData = sessions.filter(s => s.started_at && new Date(s.started_at) >= weekStart);
-      weekVolume = weekData.reduce((acc, s) => acc + s.set_count, 0);
-
-      // Fatigue report (non-blocking)
       try {
         fatigueReport = await api.volume.fatigueReport();
-      } catch (e) { /* graceful */ }
+      } catch { /* graceful */ }
     } catch (e) {
       console.error(e);
     }
     loading = false;
+
+    return () => clearInterval(elapsedInterval);
   });
 
-  // Update elapsed every second when session is active
-  $: if ($activeSession) {
-    elapsed = getElapsed($activeSession.started_at);
+  $: weekSessions = weekDays.filter(d => d.trained).length;
+  $: weekSets = weekDays.reduce((a, d) => a + d.sets, 0);
+  $: maxWeekSets = Math.max(...weekDays.map(d => d.sets), 1);
+
+  $: fatigueScore = fatigueReport?.fatigue_score ?? 0;
+  $: fatigueColor = fatigueScore >= 8 ? 'var(--danger)' : fatigueScore >= 5 ? 'var(--warn)' : 'var(--success)';
+  $: ringCirc = 2 * Math.PI * 22;
+  $: ringOffset = ringCirc * (1 - fatigueScore / 10);
+
+  function greeting() {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning,';
+    if (h < 17) return 'Good afternoon,';
+    return 'Good evening,';
   }
 
-  async function startSession() {
+  function todayLabel() {
+    return new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  function sessionDuration(s) {
+    if (!s.started_at || !s.completed_at) return '';
+    const mins = Math.round((new Date(s.completed_at) - new Date(s.started_at)) / 60000);
+    if (mins < 1) return '';
+    return mins >= 60 ? `${Math.floor(mins/60)}h ${mins%60}m` : `${mins}m`;
+  }
+
+  function sessionDateStr(s) {
+    if (!s.started_at) return '';
+    return new Date(s.started_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  async function beginSession() {
     creating = true;
     try {
-      const s = await api.sessions.create({ name: autoSessionName() });
+      await api.sessions.create({ name: autoSessionName() });
       await refreshActiveSession();
       goto('/log');
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
     creating = false;
   }
 </script>
 
-<svelte:head><title>Dashboard — LiftForge</title></svelte:head>
+<svelte:head><title>LiftForge</title></svelte:head>
 
-<div style="max-width: 800px;">
-  <div class="flex items-center justify-between mb-4">
-    <h2 style="font-size:20px; font-weight:700;">Dashboard</h2>
+<div class="home">
+  <!-- Header -->
+  <div class="hdr">
+    <div class="hdr-left">
+      <div class="brand-label">LiftForge</div>
+      <div class="greeting">
+        {greeting()}<br/>
+        <em>{$userProfile?.name?.split(' ')[0] ?? 'Athlete'}.</em>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="fatigue-label">Fatigue</div>
+      <svg width="58" height="58" class="fatigue-ring">
+        <circle cx="29" cy="29" r="22" fill="none" stroke="var(--faint)" stroke-width="4"/>
+        <circle cx="29" cy="29" r="22" fill="none"
+          stroke={fatigueColor} stroke-width="4"
+          stroke-dasharray={ringCirc}
+          stroke-dashoffset={ringOffset}
+          stroke-linecap="round"
+          style="transform-origin:29px 29px;transform:rotate(-90deg);transition:stroke-dashoffset 0.6s ease"/>
+        <text x="29" y="34" text-anchor="middle" fill={fatigueColor}
+          font-size="13" font-family="var(--sans)" font-weight="700">{fatigueScore}</text>
+      </svg>
+    </div>
+  </div>
+  <div class="date-line">{todayLabel()}</div>
+
+  <!-- Stat grid -->
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-val">{weekSessions}</div>
+      <div class="stat-lbl">Sessions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">{weekSets}</div>
+      <div class="stat-lbl">Sets</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">{fatigueReport ? fatigueScore : '—'}</div>
+      <div class="stat-lbl">Fatigue /10</div>
+    </div>
   </div>
 
-  <!-- Active session card or start button -->
-  {#if $activeSession}
-    <div class="card mb-4" style="border-color: rgba(232,160,64,0.3); background: rgba(232,160,64,0.05);">
-      <div class="flex items-center justify-between">
-        <div>
-          <div style="color: var(--primary); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;">
-            Session Active
-          </div>
-          <div style="font-size:16px; font-weight:600;">{$activeSession.name || 'Unnamed Session'}</div>
-          <div style="color: var(--text-muted); font-size:13px; margin-top:2px;">{elapsed} elapsed</div>
+  <!-- Week chart -->
+  <div class="week-card">
+    <div class="week-card-hdr">
+      <span class="serif-15">Weekly Volume</span>
+      <span class="muted-10">{weekSets} sets this week</span>
+    </div>
+    <div class="week-bars">
+      {#each weekDays as d}
+        <div class="week-col">
+          <div class="week-bar" style="height:{d.trained ? Math.max(4, (d.sets / maxWeekSets) * 36) : 3}px; background:{d.trained ? 'var(--accent)' : 'var(--faint)'}"></div>
+          <div class="week-day" style="color:{d.trained ? 'var(--muted)' : 'var(--faint)'}">{d.label}</div>
         </div>
-        <a href="/log" class="btn-primary" style="padding:10px 20px; border-radius:4px; font-weight:600; color:#000; background:var(--primary); text-decoration:none;">
-          Continue
-        </a>
-      </div>
-    </div>
-  {:else}
-    <div class="card mb-4">
-      <div class="empty-state" style="padding: 24px;">
-        <div style="font-size:14px; color:var(--text-muted); margin-bottom:16px;">No active session</div>
-        <button class="btn-primary" on:click={startSession} disabled={creating} style="padding:12px 32px; font-size:15px;">
-          {creating ? 'Starting...' : 'Start Workout'}
-        </button>
-      </div>
-    </div>
-  {/if}
-
-  <!-- Fatigue banner -->
-  {#if fatigueReport && fatigueReport.deload_recommended}
-    <div style="
-      margin-bottom:16px;
-      padding:12px 16px;
-      border-radius:var(--radius-lg);
-      border:1px solid {fatigueReport.fatigue_score >= 8 ? 'rgba(201,64,64,0.4)' : 'rgba(232,160,64,0.35)'};
-      background:{fatigueReport.fatigue_score >= 8 ? 'rgba(201,64,64,0.08)' : 'rgba(232,160,64,0.06)'};
-    ">
-      <div style="font-weight:600; font-size:13px; color:{fatigueReport.fatigue_score >= 8 ? 'var(--danger)' : 'var(--primary)'}; margin-bottom:4px;">
-        {fatigueReport.fatigue_score >= 8 ? 'High fatigue — deload recommended now' : 'Fatigue detected — consider a deload this week'}
-      </div>
-      <ul style="margin:0; padding-left:16px; color:var(--text-muted); font-size:12px; line-height:1.7;">
-        {#each fatigueReport.reasons as reason}
-          <li>{reason}</li>
-        {/each}
-      </ul>
-    </div>
-  {/if}
-
-  <!-- Week stats -->
-  <div class="flex gap-3 mb-4">
-    <div class="card" style="flex:1; text-align:center;">
-      <div style="font-size:28px; font-weight:700; color:var(--primary);">{weekSessions}</div>
-      <div style="color:var(--text-muted); font-size:12px; margin-top:2px;">Sessions this week</div>
-    </div>
-    <div class="card" style="flex:1; text-align:center;">
-      <div style="font-size:28px; font-weight:700; color:var(--primary);">{weekVolume}</div>
-      <div style="color:var(--text-muted); font-size:12px; margin-top:2px;">Sets this week</div>
+      {/each}
     </div>
   </div>
 
-  <!-- Recent sessions -->
-  <div class="section-title">Recent Sessions</div>
-
-  {#if loading}
-    <div class="flex items-center gap-3" style="padding:24px 0;">
-      <div class="spinner"></div>
-      <span style="color:var(--text-muted);">Loading...</span>
-    </div>
-  {:else if recentSessions.length === 0}
-    <div class="card">
-      <div class="empty-state" style="padding:24px;">
-        <p style="color:var(--text-muted);">No completed sessions yet. Start lifting!</p>
+  <!-- Fatigue warning banner -->
+  {#if fatigueReport?.deload_recommended}
+    <div class="fatigue-banner" style="border-color:{fatigueScore>=8?'rgba(232,54,93,0.4)':'rgba(232,160,54,0.3)'}; background:{fatigueScore>=8?'rgba(232,54,93,0.07)':'rgba(232,160,54,0.07)'}">
+      <div class="fatigue-banner-title" style="color:{fatigueScore>=8?'var(--danger)':'var(--warn)'}">
+        {fatigueScore >= 8 ? 'Critical fatigue — deload now' : 'High fatigue — consider a deload'}
       </div>
-    </div>
-  {:else}
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      {#each recentSessions as s}
-        <a href="/history" class="card" style="display:block; text-decoration:none; color:inherit; transition: border-color 0.15s;"
-           on:mouseenter={e => e.currentTarget.style.borderColor='var(--border-2)'}
-           on:mouseleave={e => e.currentTarget.style.borderColor='var(--border)'}>
-          <div class="flex items-center justify-between">
-            <div>
-              <div style="font-weight:600; font-size:14px;">{s.name || 'Unnamed Session'}</div>
-              <div style="color:var(--text-muted); font-size:12px; margin-top:2px;">
-                {formatDate(s.started_at)} · {s.set_count} sets
-              </div>
-            </div>
-            <div class="flex gap-2" style="flex-wrap:wrap; justify-content:flex-end; max-width:200px;">
-              {#each (s.muscles || []).slice(0, 4) as m}
-                <span class="tag">{m}</span>
-              {/each}
-            </div>
-          </div>
-        </a>
+      {#each (fatigueReport.reasons || []) as r}
+        <div class="fatigue-reason">{r}</div>
       {/each}
     </div>
   {/if}
+
+  <!-- Session CTA -->
+  {#if $activeSession}
+    <div class="active-card">
+      <div class="active-label">In Progress</div>
+      <div class="active-body">
+        <div>
+          <div class="active-name">{$activeSession.name || 'Unnamed Session'}</div>
+          <div class="active-elapsed">{elapsed}</div>
+        </div>
+        <a href="/log" class="resume-btn">Resume →</a>
+      </div>
+    </div>
+  {:else}
+    <div class="cta-wrap">
+      <button class="begin-btn" on:click={beginSession} disabled={creating}>
+        {creating ? 'Starting…' : 'Begin Session'}
+      </button>
+      <div class="cta-secondary">
+        <a href="/program" class="cta-sec-btn">From Program</a>
+        <a href="/templates" class="cta-sec-btn">From Template</a>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Next planned -->
+  {#if nextPlanned}
+    <a href="/program" class="next-card">
+      <div>
+        <div class="next-label">Next Up</div>
+        <div class="serif-17">{nextPlanned.split_day_name || 'Next Session'}</div>
+        <div class="muted-11">{nextPlanned.exercise_count ?? ''} exercises</div>
+      </div>
+      <span class="tomorrow-badge">Tomorrow ›</span>
+    </a>
+  {/if}
+
+  <!-- Recent sessions -->
+  {#if loading}
+    <div class="loading-row"><div class="spinner"></div></div>
+  {:else if recentSessions.length > 0}
+    <div class="divider-row">
+      <div class="divider-line"></div>
+      <div class="divider-label">Recent</div>
+      <div class="divider-line"></div>
+    </div>
+    {#each recentSessions as s, i}
+      <a href="/history" class="session-row" class:border-b={i < recentSessions.length - 1}>
+        <div class="session-main">
+          <div class="serif-17">{s.name || 'Unnamed Session'}</div>
+          <div class="session-meta">
+            {sessionDateStr(s)}{sessionDuration(s) ? ' · ' + sessionDuration(s) : ''} · {s.set_count} sets
+          </div>
+        </div>
+        <div class="muscle-tags">
+          {#each (s.muscles || []).slice(0, 3) as m}
+            <span class="muscle-tag">{m}</span>
+          {/each}
+        </div>
+      </a>
+    {/each}
+  {:else}
+    <div class="empty-state" style="padding:32px 0;">
+      <p>No sessions yet — start your first workout!</p>
+    </div>
+  {/if}
 </div>
+
+<style>
+  .home { padding-bottom: 8px; }
+
+  /* Header */
+  .hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+  }
+  .brand-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .greeting {
+    font-family: var(--serif);
+    font-size: 28px;
+    color: var(--text);
+    line-height: 1.1;
+  }
+  .greeting em {
+    font-style: italic;
+    color: var(--accent);
+  }
+  .hdr-right { text-align: right; }
+  .fatigue-label {
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 3px;
+  }
+  .date-line {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+
+  /* Stats */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .stat-card {
+    background: var(--surf);
+    border: 1px solid var(--bdr);
+    border-radius: var(--radius-lg);
+    padding: 12px 8px;
+    text-align: center;
+  }
+  .stat-val {
+    font-family: var(--serif);
+    font-size: 24px;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .stat-lbl {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  /* Week chart */
+  .week-card {
+    background: var(--surf);
+    border: 1px solid var(--bdr);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .week-card-hdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .serif-15 { font-family: var(--serif); font-size: 15px; color: var(--text); }
+  .muted-10 { font-size: 10px; color: var(--muted); }
+  .week-bars {
+    display: flex;
+    gap: 4px;
+    align-items: flex-end;
+    height: 48px;
+  }
+  .week-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+  .week-bar {
+    width: 100%;
+    border-radius: 3px 3px 0 0;
+    transition: height 0.4s ease;
+  }
+  .week-day { font-size: 9px; }
+
+  /* Fatigue banner */
+  .fatigue-banner {
+    border: 1px solid;
+    border-radius: var(--radius-lg);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .fatigue-banner-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .fatigue-reason { font-size: 11px; color: var(--muted); line-height: 1.6; }
+
+  /* Active session card */
+  .active-card {
+    background: var(--accent-bg);
+    border: 1px solid rgba(232,54,93,0.25);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .active-label {
+    font-size: 9px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .active-body { display: flex; justify-content: space-between; align-items: flex-end; }
+  .active-name { font-family: var(--serif); font-size: 20px; color: var(--text); }
+  .active-elapsed {
+    font-family: var(--serif);
+    font-size: 18px;
+    color: var(--accent);
+    font-style: italic;
+    margin-top: 2px;
+  }
+  .resume-btn {
+    background: var(--accent);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  /* CTA */
+  .cta-wrap { margin-bottom: 12px; }
+  .begin-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-lg);
+    padding: 17px;
+    font-family: var(--serif);
+    font-size: 20px;
+    cursor: pointer;
+    margin-bottom: 8px;
+    transition: background 0.15s;
+  }
+  .begin-btn:hover { background: #f05070; }
+  .begin-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .cta-secondary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cta-sec-btn {
+    background: var(--surf);
+    border: 1px solid var(--bdr);
+    border-radius: var(--radius-lg);
+    padding: 11px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+    text-align: center;
+    text-decoration: none;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .cta-sec-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Next planned */
+  .next-card {
+    background: var(--surf);
+    border: 1px solid var(--bdr);
+    border-radius: var(--radius-lg);
+    padding: 13px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color 0.15s;
+  }
+  .next-card:hover { border-color: var(--accent); }
+  .next-label {
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 3px;
+  }
+  .serif-17 { font-family: var(--serif); font-size: 17px; color: var(--text); }
+  .muted-11 { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .tomorrow-badge {
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: var(--radius);
+    background: var(--accent-bg);
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  /* Recent sessions */
+  .loading-row { display: flex; justify-content: center; padding: 24px 0; }
+  .divider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+  }
+  .divider-line { flex: 1; height: 1px; background: var(--bdr); }
+  .divider-label {
+    font-size: 9px;
+    color: var(--faint);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+  .session-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 12px 0;
+    text-decoration: none;
+    color: var(--text);
+    gap: 12px;
+  }
+  .border-b { border-bottom: 1px solid var(--bdr); }
+  .session-meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .muscle-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: flex-end;
+    max-width: 110px;
+    flex-shrink: 0;
+  }
+  .muscle-tag {
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    border: 1px solid rgba(232,54,93,0.2);
+  }
+</style>
