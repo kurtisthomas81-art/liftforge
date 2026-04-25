@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
 
-  let mode = 'barbell'; // 'barbell' | 'cable'
+  let mode = 'barbell'; // 'barbell' | 'cable' | 'percent'
   let unit = 'lbs';
 
   // ── Plate definitions ───────────────────────────────────────────────────────
@@ -158,6 +158,22 @@
   $: resistancePerPlate = stackPlateWeight / pulleyRatio;
   $: maxResistance     = totalCapacity / pulleyRatio;
 
+  // ── 1RM % state ─────────────────────────────────────────────────────────────
+  let pctOneRM = '';
+  const PCT_ROWS = [100, 97.5, 95, 92.5, 90, 87.5, 85, 82.5, 80, 77.5, 75, 70, 65, 60, 55, 50];
+
+  function round25(v) { return Math.round(v / 2.5) * 2.5; }
+
+  $: pctTable = (() => {
+    const max = parseFloat(pctOneRM);
+    if (!max || max <= 0) return [];
+    return PCT_ROWS.map(pct => ({
+      pct,
+      exact: max * pct / 100,
+      rounded: round25(max * pct / 100),
+    }));
+  })();
+
   function calculateCable() {
     const target = parseFloat(cableTarget);
     if (!target || target <= 0) { cableResult = null; return; }
@@ -197,6 +213,9 @@
     </button>
     <button class="tab" class:active={mode === 'cable'} on:click={() => mode = 'cable'}>
       Cable Machine
+    </button>
+    <button class="tab" class:active={mode === 'percent'} on:click={() => mode = 'percent'}>
+      1RM %
     </button>
   </div>
 
@@ -406,6 +425,40 @@
         {/if}
       </div>
     {/if}
+  {/if}
+
+  <!-- ── 1RM % Calculator ── -->
+  {#if mode === 'percent'}
+    <div style="margin-top:16px;">
+      <div style="margin-bottom:20px;">
+        <label style="font-size:13px; color:var(--text-muted); display:block; margin-bottom:8px;">Your 1RM ({unit})</label>
+        <input
+          type="number"
+          bind:value={pctOneRM}
+          placeholder="e.g. 225"
+          style="font-size:28px; font-weight:800; width:160px;"
+        />
+      </div>
+
+      {#if pctTable.length}
+        <div class="pct-table">
+          <div class="pct-header">
+            <span>%</span>
+            <span>Weight</span>
+            <span style="color:var(--text-faint); font-size:10px;">Rounded 2.5</span>
+          </div>
+          {#each pctTable as row}
+            <div class="pct-row" class:pct-key={[100,90,80,70,60].includes(row.pct)}>
+              <span class="pct-label">{row.pct}%</span>
+              <span class="pct-val">{row.rounded} <span style="font-size:11px; color:var(--text-muted);">{unit}</span></span>
+              <span style="font-size:11px; color:var(--text-faint);">{row.exact.toFixed(1)}</span>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div style="font-size:13px; color:var(--text-faint); padding:8px 0;">Enter your 1RM to see the percentage table.</div>
+      {/if}
+    </div>
   {/if}
 </div>
 
@@ -741,4 +794,20 @@
     .plate-grid { gap: 10px; }
     .plate-circle { width: 46px; height: 46px; font-size: 10px; }
   }
+
+  /* 1RM % table */
+  .pct-table { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  .pct-header {
+    display: grid; grid-template-columns: 70px 1fr 80px;
+    padding: 8px 14px; background: var(--surface-2);
+    font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase;
+  }
+  .pct-row {
+    display: grid; grid-template-columns: 70px 1fr 80px;
+    padding: 9px 14px; border-top: 1px solid var(--border);
+    font-size: 13px; align-items: center;
+  }
+  .pct-row.pct-key { background: rgba(232,160,64,0.05); }
+  .pct-label { color: var(--text-muted); font-weight: 600; }
+  .pct-val { font-size: 16px; font-weight: 700; color: var(--text); }
 </style>

@@ -254,3 +254,53 @@ def last_session_for_exercise(exercise_id: int, session: Session = Depends(get_s
             if ws.set_type != "warmup"  # exclude warm-up sets from reference
         ],
     }
+
+
+@router.get("/search")
+def search_notes(q: str = Query("", min_length=1), session: Session = Depends(get_session)):
+    """Full-text search across session names, session notes, and set notes."""
+    if not q.strip():
+        return []
+    term = q.strip().lower()
+
+    # Sessions whose name or notes match
+    all_sessions_stmt = (
+        select(WorkoutSession)
+        .where(WorkoutSession.user_id == USER_ID)
+        .where(WorkoutSession.completed_at != None)
+        .order_by(WorkoutSession.started_at.desc())
+    )
+    all_sessions = session.exec(all_sessions_stmt).all()
+
+    results = []
+    seen_session_ids: set[int] = set()
+
+    for wk in all_sessions:
+        name_match = term in (wk.name or "").lower()
+        notes_match = term in (wk.notes or "").lower()
+
+        # Check set notes for this session
+        sets_stmt = select(WorkoutSet).where(WorkoutSet.session_id == wk.id)
+        sets = session.exec(sets_stmt).all()
+
+        matching_set_notes = []
+        for ws in sets:
+            if ws.notes and term in ws.notes.lower():
+                ex = session.get(Exercise, ws.exercise_id)
+                matching_set_notes.append({
+                    "exercise_name": ex.name if ex else "Unknown",
+                    "note": ws.notes,
+                })
+
+        if name_match or notes_match or matching_set_notes:
+            seen_session_ids.add(wk.id)
+            results.append({
+                "session_id": wk.id,
+                "session_name": wk.name or "Unnamed Session",
+                "started_at": wk.started_at.isoformat() if wk.started_at else None,
+                "match_type": "name" if name_match else ("notes" if notes_match else "set_notes"),
+                "session_notes": wk.notes or "",
+                "matching_set_notes": matching_set_notes,
+            })
+
+    return results

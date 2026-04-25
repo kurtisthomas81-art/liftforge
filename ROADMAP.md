@@ -92,8 +92,8 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 | Published programs library | — | Seed 5/3/1, GZCLP, nSuns, Starting Strength, Jeff Nippard PHUL — just pick and run |
 | Superset support | — | Pair exercises, shared rest timer, logged back-to-back |
 | Progress photos | — | Date-stamped, local storage only; side-by-side comparison |
-| Training notes search | — | Full-text search across all session + exercise notes |
-| 1RM percent calculator | — | Given 1RM, show weight for any % (50%, 65%, 80%, etc.) |
+| ~~Training notes search~~ | ✅ Done | Full-text search across session names, session notes, set notes — `/search` route + More sheet |
+| ~~1RM percent calculator~~ | ✅ Done | 1RM % tab on Plates page — enter max, get table of 50–100% weights rounded to 2.5 |
 | PWA / mobile install | — | Manifest + service worker so it installs as a home screen app on phone |
 | ~~Periodization types~~ | ✅ Done | DUP / Linear / Block — picker in mesocycle wizard Step 3; engine applies correct rep/RIR scheme per week/session |
 | ~~1RM test protocol~~ | ✅ Done | 4-step guided protocol: pick exercise → working max → warmup ramp (40–100%) → result with e1RM + PR badge; linked from exercises page + More sheet |

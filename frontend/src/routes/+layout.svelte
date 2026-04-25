@@ -38,6 +38,7 @@
     { href: '/recovery',     label: 'Recovery',     icon: '◉', desc: 'Muscle recovery map' },
     { href: '/templates',    label: 'Templates',    icon: '◫', desc: 'Saved workouts' },
     { href: '/plates',       label: 'Plates',       icon: '⊙', desc: 'Plate calculator' },
+    { href: '/search',       label: 'Search',       icon: '◎', desc: 'Search training notes' },
     { href: '/chat',         label: 'AI Coach',     icon: '◇', desc: 'Ollama coaching' },
     { href: '/settings',     label: 'Settings',     icon: '⚙', desc: 'App preferences' },
   ];

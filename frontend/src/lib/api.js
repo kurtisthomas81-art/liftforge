@@ -50,6 +50,7 @@ export const api = {
     exerciseProgression: (id) => request('GET', `/history/exercise/${id}`),
     lastSession: (id) => request('GET', `/history/exercise/${id}/last-session`),
     calendar: (year, month) => request('GET', `/history/calendar?year=${year}&month=${month}`),
+    search: (q) => request('GET', `/history/search?q=${encodeURIComponent(q)}`),
   },
 
   profile: {
