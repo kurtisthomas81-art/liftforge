@@ -15,6 +15,15 @@
   let heatSide = 'front';
   let expandedCard = null;
 
+  let goals = [];
+  let showGoalForm = false;
+  let goalExerciseId = null;
+  let goalType = 'e1rm';
+  let goalTarget = '';
+  let goalDeadline = '';
+  let savingGoal = false;
+  let goalSearch = '';
+
   // Key exercise shortcuts — look up by name fragment
   let quickExercises = [];
 
@@ -41,10 +50,11 @@
   const BACK_MUSCLES  = ['traps', 'lats', 'rear_delts', 'triceps', 'glutes', 'hamstrings'];
 
   onMount(async () => {
-    [fatigueData, weekVolume, exercises] = await Promise.all([
+    [fatigueData, weekVolume, exercises, goals] = await Promise.all([
       api.volume.fatigueReport().catch(() => null),
       api.volume.forWeek().catch(() => null),
       api.exercises.list().catch(() => []),
+      api.goals.list().catch(() => []),
     ]);
 
     // Get prev-week data for WoW comparison
@@ -153,6 +163,35 @@
 
   function destroyChart() { if (chart) { chart.destroy(); chart = null; } }
 
+  async function saveGoal() {
+    if (!goalExerciseId || !goalTarget) return;
+    savingGoal = true;
+    try {
+      const g = await api.goals.create({
+        exercise_id: goalExerciseId,
+        goal_type: goalType,
+        target_value: parseFloat(goalTarget),
+        deadline: goalDeadline || null,
+      });
+      goals = [...goals, g];
+      showGoalForm = false;
+      goalExerciseId = null; goalTarget = ''; goalDeadline = ''; goalSearch = '';
+    } catch {}
+    savingGoal = false;
+  }
+
+  async function deleteGoal(id) {
+    await api.goals.delete(id).catch(() => {});
+    goals = goals.filter(g => g.id !== id);
+  }
+
+  $: filteredExercises = goalSearch
+    ? exercises.filter(e => e.name.toLowerCase().includes(goalSearch.toLowerCase())).slice(0, 8)
+    : [];
+
+  $: activeGoals = goals.filter(g => g.status === 'active');
+  $: achievedGoals = goals.filter(g => g.status === 'achieved');
+
   $: bestOneRM = progressionData.length
     ? Math.max(...progressionData.map(d => d.estimated_1rm)).toFixed(1)
     : null;
@@ -242,6 +281,90 @@
     <div class="chart-wrap"><canvas bind:this={chartCanvas}></canvas></div>
   {:else}
     <div class="chart-placeholder" style="color:var(--faint);font-size:12px;">Select an exercise to see 1RM trend</div>
+  {/if}
+</div>
+
+<!-- Goals -->
+<div class="card section-card">
+  <div class="goals-hdr">
+    <div class="section-title" style="margin-bottom:0">Goals</div>
+    <button class="add-goal-btn" on:click={() => showGoalForm = !showGoalForm}>
+      {showGoalForm ? 'Cancel' : '+ Add Goal'}
+    </button>
+  </div>
+
+  {#if showGoalForm}
+    <div class="goal-form">
+      <div class="goal-form-row">
+        <input class="goal-input" placeholder="Search exercise…" bind:value={goalSearch} />
+        {#if filteredExercises.length}
+          <div class="goal-ex-dropdown">
+            {#each filteredExercises as ex}
+              <button class="goal-ex-opt" on:click={() => { goalExerciseId = ex.id; goalSearch = ex.name; filteredExercises = []; }}>
+                {ex.name}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <div class="goal-type-row">
+        {#each [['e1rm','Est. 1RM'],['weight','Max Weight'],['reps','Max Reps']] as [val, lbl]}
+          <button class="goal-type-btn" class:active={goalType === val} on:click={() => goalType = val}>{lbl}</button>
+        {/each}
+      </div>
+      <div class="goal-form-row">
+        <input class="goal-input" type="number" min="1" placeholder="{goalType === 'reps' ? 'Reps target' : 'Weight target (lbs)'}" bind:value={goalTarget} style="flex:1" />
+        <input class="goal-input" type="date" bind:value={goalDeadline} style="flex:1" />
+      </div>
+      <button class="btn-primary" on:click={saveGoal} disabled={savingGoal || !goalExerciseId || !goalTarget}>
+        {savingGoal ? 'Saving…' : 'Save Goal'}
+      </button>
+    </div>
+  {/if}
+
+  {#if activeGoals.length === 0 && !showGoalForm}
+    <p class="goals-empty">No active goals. Add one to track your progress.</p>
+  {/if}
+
+  {#each activeGoals as g}
+    {@const barColor = g.pct >= 100 ? 'var(--success)' : 'var(--accent)'}
+    <div class="goal-card">
+      <div class="goal-card-hdr">
+        <div class="goal-ex-name">{g.exercise_name}</div>
+        <div class="goal-right">
+          <span class="goal-type-badge">{g.goal_type}</span>
+          <button class="goal-del" on:click={() => deleteGoal(g.id)}>×</button>
+        </div>
+      </div>
+      <div class="goal-bar-track">
+        <div class="goal-bar-fill" style="width:{g.pct}%;background:{barColor}"></div>
+      </div>
+      <div class="goal-meta">
+        <span style="color:var(--muted)">{g.current_value ?? '—'} → <strong style="color:var(--text)">{g.target_value}</strong> {g.goal_type === 'reps' ? 'reps' : 'lbs'}</span>
+        <span style="color:{barColor};font-weight:600">{g.pct}%</span>
+      </div>
+      {#if g.deadline}
+        <div class="goal-deadline">by {new Date(g.deadline + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}</div>
+      {/if}
+    </div>
+  {/each}
+
+  {#if achievedGoals.length > 0}
+    <div class="achieved-hdr">Achieved</div>
+    {#each achievedGoals as g}
+      <div class="goal-card achieved-card">
+        <div class="goal-card-hdr">
+          <div class="goal-ex-name">{g.exercise_name} <span class="achieved-badge">✓ Achieved</span></div>
+          <button class="goal-del" on:click={() => deleteGoal(g.id)}>×</button>
+        </div>
+        <div class="goal-meta">
+          <span style="color:var(--muted)">{g.target_value} {g.goal_type === 'reps' ? 'reps' : 'lbs'} ({g.goal_type})</span>
+          {#if g.achieved_at}
+            <span style="color:var(--muted)">{new Date(g.achieved_at).toLocaleDateString('en-US', { month:'short', day:'numeric' })}</span>
+          {/if}
+        </div>
+      </div>
+    {/each}
   {/if}
 </div>
 
@@ -432,6 +555,65 @@
   .rm-val { font-family:var(--serif); font-size:22px; color:var(--accent); line-height:1; }
   .rm-unit { font-size:11px; color:var(--muted); margin-left:3px; }
   .rm-lbl { font-size:10px; color:var(--muted); margin-top:3px; }
+
+  /* Goals */
+  .goals-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .add-goal-btn {
+    font-size:11px; padding:4px 12px; background:transparent;
+    border:1px solid var(--bdr-2); border-radius:4px;
+    color:var(--muted); cursor:pointer; transition:all 0.15s;
+  }
+  .add-goal-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .goals-empty { font-size:12px; color:var(--muted); padding:8px 0; }
+
+  .goal-form { background:var(--surf-2); border:1px solid var(--bdr-2); border-radius:var(--radius); padding:14px; margin-bottom:14px; display:flex; flex-direction:column; gap:10px; }
+  .goal-form-row { display:flex; gap:8px; position:relative; }
+  .goal-input {
+    flex:1; background:var(--surf); border:1px solid var(--bdr-2);
+    border-radius:var(--radius); padding:8px 10px;
+    font-size:12px; color:var(--text); outline:none;
+  }
+  .goal-ex-dropdown {
+    position:absolute; top:100%; left:0; right:0; z-index:20;
+    background:var(--surf); border:1px solid var(--bdr-2); border-radius:var(--radius);
+    margin-top:2px; overflow:hidden;
+  }
+  .goal-ex-opt {
+    display:block; width:100%; text-align:left; padding:8px 12px;
+    background:transparent; border:none; font-size:12px; color:var(--text);
+    cursor:pointer; transition:background 0.1s;
+  }
+  .goal-ex-opt:hover { background:var(--surf-2); }
+  .goal-type-row { display:flex; gap:6px; }
+  .goal-type-btn {
+    flex:1; padding:5px; background:transparent;
+    border:1px solid var(--bdr-2); border-radius:4px;
+    font-size:11px; color:var(--muted); cursor:pointer; transition:all 0.15s;
+  }
+  .goal-type-btn.active { border-color:var(--accent); color:var(--accent); background:var(--accent-bg); }
+
+  .goal-card {
+    background:var(--surf-2); border:1px solid var(--bdr-2);
+    border-radius:var(--radius); padding:12px 14px; margin-bottom:8px;
+  }
+  .goal-card-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .goal-ex-name { font-family:var(--serif); font-size:16px; color:var(--text); }
+  .goal-right { display:flex; align-items:center; gap:8px; }
+  .goal-type-badge {
+    font-size:9px; padding:2px 7px; border-radius:3px;
+    background:var(--accent-bg); color:var(--accent);
+    border:1px solid rgba(232,54,93,0.25); text-transform:uppercase; font-weight:600;
+  }
+  .goal-del { background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:0 2px; line-height:1; }
+  .goal-del:hover { color:var(--danger); }
+  .goal-bar-track { height:5px; background:var(--faint); border-radius:3px; overflow:hidden; margin-bottom:6px; }
+  .goal-bar-fill { height:100%; border-radius:3px; transition:width 0.4s ease; }
+  .goal-meta { display:flex; justify-content:space-between; font-size:11px; }
+  .goal-deadline { font-size:10px; color:var(--muted); margin-top:4px; }
+
+  .achieved-hdr { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; font-weight:600; margin:14px 0 8px; }
+  .achieved-card { opacity:0.6; }
+  .achieved-badge { font-size:10px; color:var(--success); font-weight:600; margin-left:8px; font-family:var(--sans); }
 
   /* WoW bars */
   .wow-legend { display:flex; gap:12px; align-items:center; font-size:11px; color:var(--muted); margin-bottom:12px; }

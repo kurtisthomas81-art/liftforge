@@ -144,6 +144,7 @@ def update_session(
 
 @router.post("/{session_id}/finish")
 def finish_session(session_id: int, session: Session = Depends(get_session)):
+    from routers.goals import check_goals_for_session
     wk = session.get(WorkoutSession, session_id)
     if not wk:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -151,7 +152,9 @@ def finish_session(session_id: int, session: Session = Depends(get_session)):
     session.add(wk)
     session.commit()
     session.refresh(wk)
-    return _serialize_session(wk)
+    result = _serialize_session(wk)
+    result["achieved_goals"] = check_goals_for_session(session_id, session)
+    return result
 
 
 @router.get("/{session_id}")

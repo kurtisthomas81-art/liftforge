@@ -164,6 +164,19 @@ class TemplateExercise(SQLModel, table=True):
     notes: str = Field(default="")
 
 
+class Goal(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(default=1, index=True)
+    exercise_id: int = Field(foreign_key="exercise.id", index=True)
+    goal_type: str                                    # e1rm | weight | reps
+    target_value: float
+    deadline: Optional[str] = Field(default=None)    # ISO date YYYY-MM-DD
+    status: str = Field(default="active")            # active | achieved | expired
+    achieved_at: Optional[datetime] = Field(default=None)
+    achieved_session_id: Optional[int] = Field(default=None, foreign_key="workoutsession.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class BodyMeasurement(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(default=1)

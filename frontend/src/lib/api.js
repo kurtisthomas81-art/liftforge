@@ -121,4 +121,10 @@ export const api = {
   recovery: {
     getMap: () => request('GET', '/recovery-map'),
   },
+
+  goals: {
+    list: () => request('GET', '/goals'),
+    create: (data) => request('POST', '/goals', data),
+    delete: (id) => request('DELETE', `/goals/${id}`),
+  },
 };
