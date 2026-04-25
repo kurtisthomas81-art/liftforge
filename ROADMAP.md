@@ -83,18 +83,22 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 
 ## 🔮 Phase 5 — Advanced & Polish
 
-| Feature | Description |
-|---------|-------------|
-| Published programs library | Seed 5/3/1, GZCLP, nSuns, Starting Strength, Jeff Nippard PHUL — just pick and run |
-| Superset support | Pair exercises, shared rest timer, logged back-to-back |
-| Muscle activation diagrams | SVG body map on exercise detail + session summary |
-| Habit tracking | Daily log: sleep hours, steps, stress, protein hit → feeds weekly check-in |
-| Progress photos | Date-stamped, local storage only; side-by-side comparison |
-| Session comparison | This week vs. last week same session: volume delta, RIR delta, weight delta |
-| Systemic fatigue score | Single 0–10 number from RIR trends + readiness + check-ins |
-| Training notes search | Full-text search across all session + exercise notes |
-| 1RM percent calculator | Given 1RM, show weight for any % (50%, 65%, 80%, etc.) |
-| PWA / mobile install | Manifest + service worker so it installs as a home screen app on phone |
+| Feature | Status | Description |
+|---------|--------|-------------|
+| ~~Muscle activation diagrams~~ | ✅ Done | SVG front/back body on `/recovery` + `/progress`; colored by recovery status and weekly volume |
+| ~~Session comparison~~ | ✅ Done | Week-over-week volume bars on `/progress`; this week vs. last week sets per muscle |
+| ~~Systemic fatigue score~~ | ✅ Done | 0–10 score on `/progress` from RIR trends + readiness + deload recency + RPE + check-in |
+| Habit tracking | 🔶 Partial | Weekly check-ins done (Mon: energy/sleep/stress/soreness); daily log + steps + protein still pending |
+| Published programs library | — | Seed 5/3/1, GZCLP, nSuns, Starting Strength, Jeff Nippard PHUL — just pick and run |
+| Superset support | — | Pair exercises, shared rest timer, logged back-to-back |
+| Progress photos | — | Date-stamped, local storage only; side-by-side comparison |
+| Training notes search | — | Full-text search across all session + exercise notes |
+| 1RM percent calculator | — | Given 1RM, show weight for any % (50%, 65%, 80%, etc.) |
+| PWA / mobile install | — | Manifest + service worker so it installs as a home screen app on phone |
+| Periodization types | — | DUP (rep ranges rotate per session), Linear, Block — in mesocycle wizard |
+| 1RM test protocol | — | Guided warmup → max attempt progression; stores tested (not estimated) 1RM |
+| Injury / limitation tracking | — | Flag body parts; exercises with affected movement patterns get ⚠ warning |
+| Post-mesocycle review | — | Auto-summary on completion; adjust MEV/MAV landmarks for next meso |
 
 ---
 
