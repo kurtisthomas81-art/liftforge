@@ -118,8 +118,7 @@
   </div>
 
   <div class="drill-body">
-    {@const exList = selectedSession.exercises || selectedSession.planned_exercises || []}
-    {#each exList as ex, i}
+    {#each (selectedSession.exercises || selectedSession.planned_exercises || []) as ex, i}
       <div class="drill-ex-row">
         <div class="drill-num" style="background:{dayCatColor(selectedSession.split_day_name)}18;border-color:{dayCatColor(selectedSession.split_day_name)}35;color:{dayCatColor(selectedSession.split_day_name)}">
           {i + 1}
