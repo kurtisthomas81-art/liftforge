@@ -77,6 +77,7 @@ export const api = {
     updatePlannedExercises: (id, exercises) =>
       request('PUT', `/programs/planned/${id}/exercises`, exercises),
     startPlannedSession: (id) => request('POST', `/programs/planned/${id}/start`),
+    adherence: (id) => request('GET', `/programs/mesocycles/${id}/adherence`),
   },
 
   landmarks: {

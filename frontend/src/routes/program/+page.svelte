@@ -6,9 +6,10 @@
   let loading = true;
   let activeMeso = null;
   let weekVolume = null;
+  let adherence = null;
   let error = null;
   let fatigueReport = null;
-  let selectedSession = null; // drill-in: full planned session detail
+  let selectedSession = null;
   let loadingDetail = false;
 
   const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -18,7 +19,10 @@
     try {
       activeMeso = await api.programs.getActiveMesocycle();
       if (activeMeso) {
-        weekVolume = await api.volume.forWeek(null);
+        [weekVolume, adherence] = await Promise.all([
+          api.volume.forWeek(null),
+          api.programs.adherence(activeMeso.id),
+        ]);
       }
       try { fatigueReport = await api.volume.fatigueReport(); } catch {}
     } catch (e) { error = e.message; }
@@ -179,6 +183,31 @@
       {/if}
     </div>
 
+    <!-- Adherence card -->
+    {#if adherence}
+      {@const ov = adherence.overall}
+      <div class="adh-card">
+        <div class="adh-left">
+          <div class="adh-pct">{ov.pct}%</div>
+          <div class="adh-sub">{ov.completed} of {ov.planned} sessions</div>
+        </div>
+        <div class="adh-right">
+          {#each adherence.weeks as w}
+            {@const isCurrent = w.week_number === adherence.current_week}
+            {@const isFuture = w.week_number > adherence.current_week}
+            {@const color = isFuture ? 'var(--faint)' : w.pct >= 80 ? 'var(--success)' : w.pct >= 50 ? 'var(--warn)' : 'var(--danger)'}
+            <div class="adh-week" class:adh-week-current={isCurrent}
+              style="background:{isFuture ? 'var(--surf-2)' : color + '22'};border-color:{isCurrent ? 'var(--accent)' : color}">
+              <div class="adh-week-num">W{w.week_number}</div>
+              <div class="adh-week-pct" style="color:{isFuture ? 'var(--muted)' : color}">
+                {isFuture ? '–' : w.pct + '%'}
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
     <!-- Up Next card -->
     {#if currentDay}
       <div class="up-next-card" on:click={() => openDay(currentDay)}
@@ -316,6 +345,25 @@
     background:rgba(232,160,54,0.1); border:1px solid rgba(232,160,54,0.25);
     border-radius:var(--radius); padding:2px 8px;
   }
+
+  /* Adherence card */
+  .adh-card {
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    background:var(--surf); border:1px solid var(--bdr);
+    border-radius:var(--radius-lg); padding:14px 16px; margin-bottom:12px;
+  }
+  .adh-left { flex-shrink:0; }
+  .adh-pct { font-family:var(--serif); font-size:30px; color:var(--text); line-height:1; }
+  .adh-sub { font-size:10px; color:var(--muted); margin-top:3px; }
+  .adh-right { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  .adh-week {
+    display:flex; flex-direction:column; align-items:center;
+    border:1px solid; border-radius:6px; padding:5px 8px; min-width:36px;
+    transition:border-color 0.15s;
+  }
+  .adh-week-current { border-color:var(--accent) !important; }
+  .adh-week-num { font-size:9px; color:var(--muted); font-weight:600; letter-spacing:0.04em; }
+  .adh-week-pct { font-size:11px; font-weight:700; margin-top:2px; }
 
   /* Up Next */
   .up-next-card {

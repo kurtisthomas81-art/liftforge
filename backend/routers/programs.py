@@ -425,6 +425,44 @@ def get_active_mesocycle(session: Session = Depends(get_session)):
     return data
 
 
+@router.get("/mesocycles/{id}/adherence")
+def get_mesocycle_adherence(id: int, session: Session = Depends(get_session)):
+    meso = session.get(Mesocycle, id)
+    if not meso or meso.user_id != USER_ID:
+        raise HTTPException(status_code=404, detail="Mesocycle not found")
+
+    weeks_stmt = select(MesocycleWeek).where(
+        MesocycleWeek.mesocycle_id == meso.id
+    ).order_by(MesocycleWeek.week_number)
+    weeks = session.exec(weeks_stmt).all()
+
+    total_planned = 0
+    total_completed = 0
+    weeks_out = []
+
+    for week in weeks:
+        ps_stmt = select(PlannedSession).where(PlannedSession.mesocycle_week_id == week.id)
+        planned = session.exec(ps_stmt).all()
+        planned_count = len(planned)
+        completed_count = sum(1 for ps in planned if ps.session_id is not None)
+        total_planned += planned_count
+        total_completed += completed_count
+        weeks_out.append({
+            "week_number": week.week_number,
+            "is_deload": week.is_deload,
+            "planned": planned_count,
+            "completed": completed_count,
+            "pct": round(completed_count / planned_count * 100) if planned_count else 0,
+        })
+
+    overall_pct = round(total_completed / total_planned * 100) if total_planned else 0
+    return {
+        "overall": {"planned": total_planned, "completed": total_completed, "pct": overall_pct},
+        "weeks": weeks_out,
+        "current_week": meso.current_week,
+    }
+
+
 @router.get("/mesocycles/{id}")
 def get_mesocycle(id: int, session: Session = Depends(get_session)):
     meso = session.get(Mesocycle, id)
