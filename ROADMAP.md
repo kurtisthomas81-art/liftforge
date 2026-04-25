@@ -66,31 +66,18 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 
 ---
 
-## 🔄 Phase 4 — Caliber-Inspired Features (In Progress)
+## ✅ Phase 4 — Caliber-Inspired Features (COMPLETE)
 
-### High Priority
-| Feature | Status | Description |
-|---------|--------|-------------|
-| ~~Post-session RPE~~ | ✅ Done | Rate overall workout 1–10 after finishing; feeds fatigue model |
-| Program adherence score | 🔜 Next | % of planned sessions completed per mesocycle, per week |
-| ~~Muscle recovery map~~ | ✅ Done | Front/back SVG body diagram; green/amber/red by time since last trained + RIR |
-| Weekly check-ins | — | Monday prompt: energy, sleep quality, stress, soreness, adherence notes |
-| Goal setting | — | Performance goals (e.g., "Bench 225 by July 1") with auto-detection when hit |
-| ~~In-logger exercise swap~~ | ✅ Done | "Swap" button mid-session; filtered by same muscle + your equipment |
-
-### Plate Calculator Enhancements (Phase 3.5)
-| Feature | Status | Description |
-|---------|--------|-------------|
-| ~~Plate count stepper~~ | ✅ Done | Per-plate owned count; solver respects per-side limits |
-| ~~Cable machine mode~~ | ✅ Done | Stack setup + pulley ratio (1:1 / 2:1); target resistance → plates to pin |
-
-### Medium Priority
 | Feature | Description |
 |---------|-------------|
-| Periodization types | DUP (rep ranges rotate per session), Linear, Block — in mesocycle wizard |
-| 1RM test protocol | Guided warmup → max attempt progression; stores tested (not estimated) 1RM |
-| Injury / limitation tracking | Flag body parts; exercises with affected movement patterns get ⚠ warning |
-| Post-mesocycle review | Auto-summary on completion; adjust MEV/MAV landmarks for next meso |
+| ~~Post-session RPE~~ | Rate overall workout 1–10 after finishing; feeds fatigue model |
+| ~~Program adherence score~~ | % of planned sessions completed per mesocycle; per-week pills on Program page |
+| ~~Muscle recovery map~~ | Front/back SVG body diagram; green/amber/red by time since last trained + RIR |
+| ~~Weekly check-ins~~ | Monday prompt: energy/sleep/stress/soreness 1–5 dots; feeds fatigue score (+3 pts max) |
+| ~~Goal setting~~ | Performance goals (e1RM / weight / reps) with deadline; auto-detected on session finish via Epley |
+| ~~In-logger exercise swap~~ | "Swap" button mid-session; filtered by same muscle + your equipment |
+| ~~Liftosaur sync~~ | Connect via API token; import full workout history; idempotent (skips duplicates) |
+| ~~Session duration optimizer~~ | Set preferred duration (30–90 min); "Generate Session" builds time-budgeted workout from mesocycle muscle focus + equipment filter + goal-based sets/reps/rest; Today's Plan panel in logger |
 
 ---
 
@@ -117,7 +104,7 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 /home/cashbux/liftforge/
   backend/         FastAPI + SQLModel + SQLite
     engine/        meso_builder.py, progression logic
-    routers/       13 router files
+    routers/       14 router files
     seed_data.py   108 exercises + 13 splits + landmarks
   frontend/        SvelteKit (static adapter) + Chart.js
     src/routes/    16 pages
@@ -125,14 +112,52 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
   data/            SQLite DB persisted here (mount on Unraid)
 ```
 
-**Update workflow:**
-```bash
-# On Chromebook (Claude Code)
-git add -A && git commit -m "..." && git push
+---
 
-# On Unraid
+## Unraid Deployment
+
+**Server path:** `/mnt/user/appdata/liftforge`
+**GitHub repo:** `https://github.com/kurtisthomas81-art/liftforge`
+
+### Initial setup (first time only)
+```bash
+cd /mnt/user/appdata
+git clone https://github.com/kurtisthomas81-art/liftforge
+cd liftforge
+docker compose up -d --build
+```
+
+### Deploy an update
+```bash
 cd /mnt/user/appdata/liftforge
 git pull && docker compose up -d --build
+```
+
+### Useful commands
+```bash
+# View backend logs (errors, startup)
+docker logs liftforge-backend-1 2>&1 | tail -30
+
+# View frontend logs
+docker logs liftforge-frontend-1
+
+# Restart without rebuilding
+docker compose restart
+
+# Stop everything
+docker compose down
+
+# DB is at (persisted across rebuilds)
+/mnt/user/appdata/liftforge/data/liftforge.db
+```
+
+### Dev → Unraid workflow
+```bash
+# On Chromebook (Claude Code)
+git add <files> && git commit -m "..." && git push
+
+# On Unraid
+cd /mnt/user/appdata/liftforge && git pull && docker compose up -d --build
 ```
 
 ---
