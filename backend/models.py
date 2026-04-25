@@ -49,6 +49,7 @@ class UserProfile(SQLModel, table=True):
     unit_preference: str = Field(default="lbs")    # lbs|kg
     experience_level: str = Field(default="intermediate")  # beginner|intermediate|advanced
     default_rest_seconds: int = Field(default=90)
+    liftsaur_api_token: Optional[str] = Field(default=None)
 
 
 class UserEquipment(SQLModel, table=True):

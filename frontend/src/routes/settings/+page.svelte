@@ -17,6 +17,13 @@
   let savingLandmarks = false;
   let savedLandmarks = false;
 
+  let liftsaurToken = '';
+  let liftsaurConnected = false;
+  let savingToken = false;
+  let syncing = false;
+  let syncResult = null;
+  let syncError = null;
+
   const EQUIPMENT_GROUPS = [
     {
       label: 'Free Weights',
@@ -80,6 +87,10 @@
     try {
       landmarks = (await api.landmarks.get()).map(lm => ({ ...lm }));
     } catch {}
+    try {
+      const r = await fetch('/api/liftsaur/token');
+      if (r.ok) { const d = await r.json(); liftsaurConnected = d.connected; }
+    } catch {}
   });
 
   async function saveProfile() {
@@ -122,6 +133,38 @@
 
   function adjustRest(delta) {
     defaultRestSeconds = Math.max(10, Math.min(600, defaultRestSeconds + delta));
+  }
+
+  async function saveLiftsaurToken() {
+    savingToken = true;
+    try {
+      await fetch('/api/liftsaur/token', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: liftsaurToken })
+      });
+      liftsaurConnected = true; liftsaurToken = '';
+    } catch {}
+    savingToken = false;
+  }
+
+  async function syncLiftosaur() {
+    syncing = true; syncResult = null; syncError = null;
+    try {
+      const res = await fetch('/api/liftsaur/sync', { method: 'POST' });
+      if (!res.ok) { const t = await res.text(); throw new Error(t); }
+      syncResult = await res.json();
+    } catch (e) { syncError = e.message || 'Sync failed'; }
+    syncing = false;
+  }
+
+  async function disconnectLiftosaur() {
+    await fetch('/api/liftsaur/token', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: '' })
+    });
+    liftsaurConnected = false; syncResult = null; syncError = null;
   }
 </script>
 
@@ -202,6 +245,44 @@
     </button>
     {#if savedEquip}<span class="saved-badge">Saved!</span>{/if}
   </div>
+</div>
+
+<!-- Liftosaur Sync -->
+<div class="settings-section">
+  <div class="section-title">Liftosaur Sync</div>
+  <p class="section-desc">Import your Liftosaur workout history using your API token (Settings → API in the Liftosaur app).</p>
+
+  {#if !liftsaurConnected}
+    <div class="setting-row">
+      <div class="setting-lbl">API Token</div>
+    </div>
+    <input class="token-input" type="password" bind:value={liftsaurToken} placeholder="Paste your lftsk_… token" />
+    <div class="save-row">
+      <button class="btn-primary" on:click={saveLiftsaurToken} disabled={savingToken || !liftsaurToken}>
+        {savingToken ? 'Saving…' : 'Connect Liftosaur'}
+      </button>
+    </div>
+  {:else}
+    <div class="connected-badge">Connected</div>
+    <div class="save-row">
+      <button class="btn-primary" on:click={syncLiftosaur} disabled={syncing}>
+        {syncing ? 'Syncing…' : 'Sync Now'}
+      </button>
+      <button class="btn-ghost" on:click={disconnectLiftosaur}>Disconnect</button>
+    </div>
+    {#if syncResult}
+      <div class="import-result">
+        ✓ {syncResult.imported_sessions} sessions · {syncResult.imported_sets} sets imported
+        {#if syncResult.skipped_sessions > 0} · {syncResult.skipped_sessions} already existed{/if}
+        {#if syncResult.new_exercises.length > 0}
+          <div class="new-exercises">New exercises created: {syncResult.new_exercises.join(', ')}</div>
+        {/if}
+      </div>
+    {/if}
+    {#if syncError}
+      <div class="import-error">{syncError}</div>
+    {/if}
+  {/if}
 </div>
 
 <!-- Export Data -->
@@ -353,6 +434,29 @@
     transition:all 0.15s;
   }
   .equip-check.on { border-color:var(--accent); background:var(--accent); color:#fff; }
+
+  /* Liftosaur sync */
+  .connected-badge {
+    display:inline-block; padding:3px 10px;
+    background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.3);
+    border-radius:4px; font-size:11px; font-weight:600; color:#22c55e;
+    margin-bottom:12px;
+  }
+  .token-input {
+    width:100%; background:var(--surf-2); border:1px solid var(--bdr-2);
+    border-radius:var(--radius); padding:8px 10px;
+    font-size:12px; color:var(--text); outline:none; box-sizing:border-box;
+    margin-bottom:4px;
+  }
+  .btn-ghost {
+    padding:8px 14px; background:transparent;
+    border:1px solid var(--bdr-2); border-radius:var(--radius);
+    font-size:12px; color:var(--muted); cursor:pointer; transition:all 0.15s;
+  }
+  .btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+  .import-result { font-size:12px; color:var(--success); margin-top:10px; line-height:1.6; }
+  .new-exercises { color:var(--muted); margin-top:4px; }
+  .import-error { font-size:12px; color:var(--accent); margin-top:10px; }
 
   /* Export rows */
   .data-row {

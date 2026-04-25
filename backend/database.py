@@ -20,6 +20,7 @@ def migrate_db():
     new_cols = [
         ("workoutsession", "readiness_rating", "INTEGER"),
         ("workoutsession", "post_session_rpe", "INTEGER"),
+        ("userprofile", "liftsaur_api_token", "TEXT"),
     ]
     with engine.connect() as conn:
         for table, col, typedef in new_cols:
