@@ -1,8 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, timedelta
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from typing import Optional
 from sqlmodel import Session, select
 from database import get_session
-from models import WorkoutSet, WorkoutSession, Exercise
+from models import WorkoutSet, WorkoutSession, Exercise, WeeklyCheckin
 from routers.volume import _parse_muscles
 
 router = APIRouter(prefix="/api", tags=["recovery"])
@@ -96,3 +98,65 @@ def recovery_map(session: Session = Depends(get_session)):
         })
 
     return {"muscles": result}
+
+
+# ── Weekly check-in ────────────────────────────────────────────────────────────
+
+class CheckinCreate(BaseModel):
+    energy: int
+    sleep_quality: int
+    stress: int
+    soreness: int
+    notes: Optional[str] = ""
+
+
+def _current_week_start() -> str:
+    today = date.today()
+    return (today - timedelta(days=today.weekday())).isoformat()
+
+
+@router.get("/recovery/checkin/status")
+def checkin_status(db: Session = Depends(get_session)):
+    week_start = _current_week_start()
+    existing = db.exec(
+        select(WeeklyCheckin).where(
+            WeeklyCheckin.user_id == USER_ID,
+            WeeklyCheckin.week_start == week_start,
+        )
+    ).first()
+    is_monday = date.today().weekday() == 0
+    return {
+        "due": is_monday and existing is None,
+        "week_start": week_start,
+        "completed": existing is not None,
+    }
+
+
+@router.post("/recovery/checkin")
+def submit_checkin(body: CheckinCreate, db: Session = Depends(get_session)):
+    week_start = _current_week_start()
+    existing = db.exec(
+        select(WeeklyCheckin).where(
+            WeeklyCheckin.user_id == USER_ID,
+            WeeklyCheckin.week_start == week_start,
+        )
+    ).first()
+    if existing:
+        existing.energy = body.energy
+        existing.sleep_quality = body.sleep_quality
+        existing.stress = body.stress
+        existing.soreness = body.soreness
+        existing.notes = body.notes or ""
+        db.add(existing)
+    else:
+        db.add(WeeklyCheckin(
+            user_id=USER_ID,
+            week_start=week_start,
+            energy=body.energy,
+            sleep_quality=body.sleep_quality,
+            stress=body.stress,
+            soreness=body.soreness,
+            notes=body.notes or "",
+        ))
+    db.commit()
+    return {"ok": True, "week_start": week_start}

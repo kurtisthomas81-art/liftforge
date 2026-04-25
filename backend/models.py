@@ -50,6 +50,7 @@ class UserProfile(SQLModel, table=True):
     experience_level: str = Field(default="intermediate")  # beginner|intermediate|advanced
     default_rest_seconds: int = Field(default=90)
     liftsaur_api_token: Optional[str] = Field(default=None)
+    preferred_session_minutes: int = Field(default=60)
 
 
 class UserEquipment(SQLModel, table=True):
@@ -162,6 +163,18 @@ class TemplateExercise(SQLModel, table=True):
     target_reps_max: int = Field(default=12)
     target_rir: int = Field(default=2)
     notes: str = Field(default="")
+
+
+class WeeklyCheckin(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(default=1, index=True)
+    week_start: str                           # ISO Monday date "YYYY-MM-DD"
+    energy: int                               # 1–5
+    sleep_quality: int                        # 1–5
+    stress: int                               # 1–5  (5 = most stressed)
+    soreness: int                             # 1–5
+    notes: str = Field(default="")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class Goal(SQLModel, table=True):
