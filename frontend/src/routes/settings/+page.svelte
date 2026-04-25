@@ -25,6 +25,24 @@
   let syncResult = null;
   let syncError = null;
 
+  let injuries = [];
+  let addingInjury = false;
+  let newInjuryPart = '';
+  let newInjurySeverity = 'mild';
+
+  const BODY_PARTS = [
+    { key: 'shoulder',   label: 'Shoulder' },
+    { key: 'elbow',      label: 'Elbow' },
+    { key: 'wrist',      label: 'Wrist' },
+    { key: 'lower_back', label: 'Lower Back' },
+    { key: 'upper_back', label: 'Upper Back' },
+    { key: 'hip',        label: 'Hip' },
+    { key: 'knee',       label: 'Knee' },
+    { key: 'ankle',      label: 'Ankle' },
+    { key: 'neck',       label: 'Neck' },
+  ];
+  const SEVERITIES = ['mild', 'moderate', 'severe'];
+
   const EQUIPMENT_GROUPS = [
     {
       label: 'Free Weights',
@@ -93,6 +111,7 @@
       const r = await fetch('/api/liftsaur/token');
       if (r.ok) { const d = await r.json(); liftsaurConnected = d.connected; }
     } catch {}
+    try { injuries = await api.injuries.list(); } catch {}
   });
 
   async function saveProfile() {
@@ -135,6 +154,24 @@
 
   function adjustRest(delta) {
     defaultRestSeconds = Math.max(10, Math.min(600, defaultRestSeconds + delta));
+  }
+
+  async function addInjury() {
+    if (!newInjuryPart) return;
+    addingInjury = true;
+    try {
+      const inj = await api.injuries.create({ body_part: newInjuryPart, severity: newInjurySeverity });
+      injuries = [...injuries.filter(i => i.body_part !== newInjuryPart), inj];
+      newInjuryPart = '';
+    } catch {}
+    addingInjury = false;
+  }
+
+  async function removeInjury(id) {
+    try {
+      await api.injuries.delete(id);
+      injuries = injuries.filter(i => i.id !== id);
+    } catch {}
   }
 
   async function saveLiftsaurToken() {
@@ -293,6 +330,46 @@
       <div class="import-error">{syncError}</div>
     {/if}
   {/if}
+</div>
+
+<!-- Injuries & Limitations -->
+<div class="settings-section">
+  <div class="section-title">Injuries &amp; Limitations</div>
+  <p class="section-desc">Active limitations — affected exercises show a ⚠ warning in the logger and library.</p>
+
+  {#if injuries.length > 0}
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+      {#each injuries as inj}
+        {@const sev = inj.severity}
+        <div style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:6px; border:1px solid {sev === 'severe' ? 'rgba(232,54,93,0.5)' : sev === 'moderate' ? 'rgba(255,160,40,0.5)' : 'var(--border)'}; background:{sev === 'severe' ? 'rgba(232,54,93,0.08)' : sev === 'moderate' ? 'rgba(255,160,40,0.08)' : 'var(--surface-2)'}; font-size:13px;">
+          <span style="font-weight:600; text-transform:capitalize;">{inj.body_part.replace('_', ' ')}</span>
+          <span style="font-size:10px; color:var(--text-muted); text-transform:uppercase;">{sev}</span>
+          <button on:click={() => removeInjury(inj.id)} style="background:none; border:none; cursor:pointer; color:var(--text-faint); font-size:14px; padding:0 2px; line-height:1;">×</button>
+        </div>
+      {/each}
+    </div>
+  {:else}
+    <div style="font-size:12px; color:var(--text-faint); margin-bottom:16px;">No active limitations.</div>
+  {/if}
+
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <select bind:value={newInjuryPart} style="flex:1; min-width:120px;">
+      <option value="">Select body part…</option>
+      {#each BODY_PARTS as p}
+        {#if !injuries.some(i => i.body_part === p.key)}
+          <option value={p.key}>{p.label}</option>
+        {/if}
+      {/each}
+    </select>
+    <select bind:value={newInjurySeverity} style="width:110px;">
+      {#each SEVERITIES as s}
+        <option value={s} style="text-transform:capitalize;">{s}</option>
+      {/each}
+    </select>
+    <button class="btn-primary btn-sm" on:click={addInjury} disabled={!newInjuryPart || addingInjury}>
+      + Add
+    </button>
+  </div>
 </div>
 
 <!-- Export Data -->

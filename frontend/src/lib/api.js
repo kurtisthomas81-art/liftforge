@@ -131,4 +131,11 @@ export const api = {
     create: (data) => request('POST', '/goals', data),
     delete: (id) => request('DELETE', `/goals/${id}`),
   },
+
+  injuries: {
+    list: () => request('GET', '/injuries'),
+    create: (data) => request('POST', '/injuries', data),
+    delete: (id) => request('DELETE', `/injuries/${id}`),
+    affectedExercises: () => request('GET', '/injuries/affected-exercises'),
+  },
 };

@@ -13,6 +13,7 @@
   let exDetail = null;
   let exHistory = [];
   let loadingDetail = false;
+  let affectedExercises = {};  // { exercise_id: [body_parts] }
 
   const MUSCLES = ['chest','back','shoulders','biceps','triceps','quads','hamstrings','glutes','calves','abs'];
   const PATTERNS = ['push','pull','hinge','squat','core','isolation'];
@@ -20,7 +21,10 @@
   const CAT_COLOR = { push:'var(--push)', pull:'var(--pull)', squat:'var(--squat)', hinge:'var(--hinge)', core:'var(--core)' };
 
   onMount(async () => {
-    exercises = await api.exercises.list();
+    [exercises] = await Promise.all([
+      api.exercises.list(),
+      api.injuries.affectedExercises().then(r => { affectedExercises = r; }).catch(() => {}),
+    ]);
     filtered = exercises;
     loading = false;
   });
@@ -96,6 +100,9 @@
             <div class="ex-row-name">{ex.name}</div>
             <div class="ex-row-meta">{ex.primary_muscles.join(', ')}</div>
           </div>
+          {#if affectedExercises[ex.id]}
+            <span title="Affected: {affectedExercises[ex.id].join(', ')}" style="font-size:13px; margin-right:2px;">⚠</span>
+          {/if}
           <span class="ex-cat-badge" style="color:{catColor(ex.movement_pattern)};border-color:{catColor(ex.movement_pattern)}35;background:{catColor(ex.movement_pattern)}14">
             {ex.movement_pattern}
           </span>

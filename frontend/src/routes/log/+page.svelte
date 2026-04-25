@@ -25,6 +25,7 @@
   let exerciseFilter = '';
   let allExercises = [];
   let filteredExercises = [];
+  let affectedExercises = {};  // { exercise_id: [body_parts] }
 
   // Previous session reference per exercise
   let prevSessions = {};
@@ -247,7 +248,12 @@
 
   // ── Exercise search modal ──────────────────────────────────────────────────
   async function openExerciseModal() {
-    if (!allExercises.length) allExercises = await api.exercises.list();
+    if (!allExercises.length) {
+      [allExercises] = await Promise.all([
+        api.exercises.list(),
+        api.injuries.affectedExercises().then(r => { affectedExercises = r; }).catch(() => {}),
+      ]);
+    }
     filteredExercises = allExercises;
     exerciseSearch = '';
     exerciseFilter = '';
@@ -780,8 +786,13 @@
           {:else}
             {#each filteredExercises as ex}
               <button class="ex-list-item" on:click={() => addExerciseToSession(ex)}>
-                <div class="ex-list-name">{ex.name}</div>
-                <div class="ex-list-meta">{ex.primary_muscles.join(', ')} · {ex.movement_pattern}</div>
+                <div style="flex:1;">
+                  <div class="ex-list-name">{ex.name}</div>
+                  <div class="ex-list-meta">{ex.primary_muscles.join(', ')} · {ex.movement_pattern}</div>
+                </div>
+                {#if affectedExercises[ex.id]}
+                  <span title="Affected: {affectedExercises[ex.id].join(', ')}" style="font-size:14px; flex-shrink:0; margin-left:6px;">⚠</span>
+                {/if}
               </button>
             {/each}
           {/if}

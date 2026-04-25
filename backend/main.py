@@ -4,7 +4,7 @@ from database import create_db_and_tables, migrate_db, engine
 from models import Exercise, SplitTemplate, MuscleVolumeLandmark
 from sqlmodel import Session, select
 from routers import exercises, sessions, history, profile, ollama
-from routers import programs, landmarks, volume, prs, templates, measurements, export, recovery, liftsaur_sync, goals
+from routers import programs, landmarks, volume, prs, templates, measurements, export, recovery, liftsaur_sync, goals, injuries
 
 app = FastAPI(title="LiftForge API", version="2.0.0")
 
@@ -31,6 +31,7 @@ app.include_router(export.router)
 app.include_router(recovery.router)
 app.include_router(liftsaur_sync.router)
 app.include_router(goals.router)
+app.include_router(injuries.router)
 
 
 @app.on_event("startup")

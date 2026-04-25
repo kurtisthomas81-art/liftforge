@@ -191,6 +191,16 @@ class Goal(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class Injury(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(default=1, index=True)
+    body_part: str   # shoulder|elbow|wrist|lower_back|upper_back|hip|knee|ankle|neck
+    severity: str = Field(default="mild")   # mild|moderate|severe
+    notes: str = Field(default="")
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class BodyMeasurement(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(default=1)
