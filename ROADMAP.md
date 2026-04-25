@@ -53,6 +53,19 @@ Repo: https://github.com/kurtisthomas81-art/liftforge
 
 ---
 
+## ✅ Apex UI Redesign (COMPLETE)
+
+Full mobile-first redesign replacing the original dark-orange sidebar UI.
+
+- **Typography**: DM Serif Display (headings, italic accents) + DM Sans (body)
+- **Design tokens**: `#0a0a10` bg, `#e8365d` red accent, `#6868a0` muted
+- **Navigation**: Bottom tab bar (5 tabs) + More sheet overlay — no sidebar
+- **Screens rewritten**: Home, Log, Program, History, Calendar, Library, Measurements, Settings
+- **New `/progress` route**: Readiness score (0–100), 1RM trend chart, week-over-week volume bars, 4 science cards, front/back muscle heatmap
+- **Logger enhancements**: Per-set done toggle, inline RPE picker (6–10 → RIR), inline rest timer ring (62px SVG), session progress bar
+
+---
+
 ## 🔄 Phase 4 — Caliber-Inspired Features (In Progress)
 
 ### High Priority
@@ -107,7 +120,7 @@ Repo: https://github.com/kurtisthomas81-art/liftforge
     routers/       13 router files
     seed_data.py   108 exercises + 13 splits + landmarks
   frontend/        SvelteKit (static adapter) + Chart.js
-    src/routes/    15 pages
+    src/routes/    16 pages
   docker-compose.yml
   data/            SQLite DB persisted here (mount on Unraid)
 ```
@@ -134,4 +147,4 @@ git pull && docker compose up -d --build
 | Olllama model | 8B (llama3.1:8b) | Fast on home hardware |
 | Nutrition | Separate app | User decision |
 | Calorie tracking | Excluded | User decision |
-| CSS | Custom, no framework | Dark theme (#0d0d0d bg, #e8a040 accent) |
+| CSS | Custom, no framework | Apex theme (#0a0a10 bg, #e8365d accent, DM Serif Display) |
