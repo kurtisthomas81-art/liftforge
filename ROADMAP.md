@@ -98,7 +98,7 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 | ~~Periodization types~~ | ✅ Done | DUP / Linear / Block — picker in mesocycle wizard Step 3; engine applies correct rep/RIR scheme per week/session |
 | ~~1RM test protocol~~ | ✅ Done | 4-step guided protocol: pick exercise → working max → warmup ramp (40–100%) → result with e1RM + PR badge; linked from exercises page + More sheet |
 | ~~Post-mesocycle review~~ | ✅ Done | Auto-summary on completion: adherence %, per-muscle volume vs landmarks, RIR trend, MEV/MRV adjustment suggestions |
-| Injury / limitation tracking | — | Flag body parts; exercises with affected movement patterns get ⚠ warning |
+| ~~Injury / limitation tracking~~ | ✅ Done | Flag body parts + severity in Settings; ⚠ badge on affected exercises in library and logger |
 
 ---
 
