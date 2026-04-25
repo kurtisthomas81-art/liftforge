@@ -11,6 +11,12 @@
   let updating = false;
   let volumeData = null;
 
+  // Post-mesocycle review
+  let review = null;
+  let showReview = false;
+  let acceptedSuggestions = new Set();
+  let savingSuggestions = false;
+
   const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   onMount(async () => {
@@ -30,7 +36,31 @@
     updating = true;
     await api.programs.updateMesocycle(meso.id, { status: 'completed' });
     meso = { ...meso, status: 'completed' };
+    try {
+      review = await api.programs.review(meso.id);
+      showReview = true;
+    } catch {}
     updating = false;
+  }
+
+  async function applyLandmarkSuggestion(muscle, suggestion, suggestedMrv, suggestedMev, currentLm) {
+    if (!currentLm) return;
+    const updated = { ...currentLm, muscle };
+    if (suggestion === 'raise_mrv' && suggestedMrv) updated.mrv = suggestedMrv;
+    if (suggestion === 'lower_mev' && suggestedMev) updated.mev = suggestedMev;
+    try {
+      await api.landmarks.update([updated]);
+      acceptedSuggestions = new Set([...acceptedSuggestions, muscle]);
+    } catch {}
+  }
+
+  function rrLabel(muscle) {
+    const m = review?.muscles?.find(m => m.muscle === muscle);
+    if (!m) return '';
+    if (m.avg_rir_early != null && m.avg_rir_late != null) {
+      return `RIR ${m.avg_rir_early} → ${m.avg_rir_late}`;
+    }
+    return '';
   }
 
   async function abandon() {
@@ -253,3 +283,161 @@
     {/if}
   {/if}
 </div>
+
+<!-- Post-mesocycle review modal -->
+{#if showReview && review}
+  <div class="review-backdrop">
+    <div class="review-modal">
+      <div class="review-hdr">
+        <div>
+          <div class="review-title">Mesocycle Complete</div>
+          <div class="review-sub">{review.name}</div>
+        </div>
+        <button class="review-close" on:click={() => showReview = false}>✕</button>
+      </div>
+
+      <!-- Adherence score -->
+      <div class="review-adh">
+        <div class="review-adh-num" style="color:{review.adherence.pct >= 80 ? 'var(--success)' : review.adherence.pct >= 50 ? 'var(--warn)' : 'var(--danger)'}">
+          {review.adherence.pct}%
+        </div>
+        <div class="review-adh-lbl">Adherence — {review.adherence.completed} of {review.adherence.planned} sessions</div>
+      </div>
+
+      <!-- Per-muscle summary -->
+      {#if review.muscles.length}
+        <div class="review-section-title">Volume Summary</div>
+        <div class="review-muscles">
+          {#each review.muscles as m}
+            {@const hasSuggestion = m.suggestion && !acceptedSuggestions.has(m.muscle)}
+            <div class="review-muscle-row" class:has-suggestion={hasSuggestion}>
+              <div class="review-muscle-main">
+                <div class="review-muscle-name">{m.muscle}</div>
+                <div class="review-muscle-stats">
+                  Avg {m.avg_sets_per_week} sets/wk · Peak {m.peak_sets_per_week}
+                  {#if m.avg_rir_early != null && m.avg_rir_late != null}
+                    · RIR {m.avg_rir_early}→{m.avg_rir_late}
+                  {/if}
+                </div>
+                {#if m.landmark}
+                  <div class="review-lm-bar-wrap">
+                    <div class="review-lm-mav"
+                      style="left:{(m.landmark.mav_low / m.landmark.mrv) * 100}%;width:{((m.landmark.mav_high - m.landmark.mav_low) / m.landmark.mrv) * 100}%">
+                    </div>
+                    <div class="review-lm-fill"
+                      style="width:{Math.min(100, (m.avg_sets_per_week / m.landmark.mrv) * 100)}%;background:{m.avg_sets_per_week > m.landmark.mav_high ? 'var(--warn)' : m.avg_sets_per_week >= m.landmark.mav_low ? 'var(--success)' : 'var(--muted)'}">
+                    </div>
+                  </div>
+                  <div class="review-lm-labels">
+                    <span>MEV {m.landmark.mev}</span>
+                    <span>MAV {m.landmark.mav_low}–{m.landmark.mav_high}</span>
+                    <span>MRV {m.landmark.mrv}</span>
+                  </div>
+                {/if}
+              </div>
+              {#if hasSuggestion}
+                <div class="review-suggestion">
+                  {#if m.suggestion === 'raise_mrv'}
+                    <div class="suggest-text">Raise MRV to {m.suggested_mrv}</div>
+                  {:else if m.suggestion === 'lower_mev'}
+                    <div class="suggest-text">Lower MEV to {m.suggested_mev}</div>
+                  {/if}
+                  <button class="suggest-btn"
+                    on:click={() => applyLandmarkSuggestion(m.muscle, m.suggestion, m.suggested_mrv, m.suggested_mev, m.landmark)}>
+                    Apply
+                  </button>
+                </div>
+              {:else if acceptedSuggestions.has(m.muscle)}
+                <div class="suggest-accepted">✓ Updated</div>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+
+      <button class="review-done-btn" on:click={() => { showReview = false; goto('/program/builder'); }}>
+        Start New Mesocycle
+      </button>
+      <button class="review-skip-btn" on:click={() => showReview = false}>
+        Close
+      </button>
+    </div>
+  </div>
+{/if}
+
+<style>
+  .review-backdrop {
+    position:fixed; inset:0; background:rgba(0,0,0,0.7);
+    z-index:200; display:flex; align-items:flex-end;
+  }
+  .review-modal {
+    width:100%; background:var(--surf);
+    border-radius:20px 20px 0 0; padding:24px 20px 40px;
+    max-height:90vh; overflow-y:auto;
+  }
+  .review-hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; }
+  .review-title { font-family:var(--serif); font-size:22px; color:var(--text); }
+  .review-sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .review-close { background:none; border:none; font-size:18px; color:var(--muted); cursor:pointer; padding:0; }
+
+  .review-adh { text-align:center; margin-bottom:24px; padding:16px; background:var(--surf-2); border-radius:var(--radius-lg); }
+  .review-adh-num { font-family:var(--serif); font-size:48px; line-height:1; }
+  .review-adh-lbl { font-size:12px; color:var(--muted); margin-top:4px; }
+
+  .review-section-title {
+    font-size:10px; text-transform:uppercase; letter-spacing:0.1em;
+    color:var(--muted); font-weight:600; margin-bottom:10px;
+  }
+  .review-muscles { display:flex; flex-direction:column; gap:10px; margin-bottom:20px; }
+  .review-muscle-row {
+    background:var(--surf-2); border:1px solid var(--bdr);
+    border-radius:var(--radius-lg); padding:12px 14px;
+  }
+  .review-muscle-row.has-suggestion { border-color:rgba(232,160,54,0.4); }
+  .review-muscle-main { flex:1; }
+  .review-muscle-name { font-size:13px; font-weight:600; color:var(--text); text-transform:capitalize; }
+  .review-muscle-stats { font-size:11px; color:var(--muted); margin-top:2px; }
+
+  .review-lm-bar-wrap {
+    position:relative; height:6px; background:var(--faint);
+    border-radius:3px; margin-top:8px; overflow:hidden;
+  }
+  .review-lm-mav {
+    position:absolute; top:0; bottom:0;
+    background:rgba(34,197,94,0.2); border-radius:3px;
+  }
+  .review-lm-fill {
+    position:absolute; top:0; bottom:0; left:0;
+    border-radius:3px; transition:width 0.5s;
+  }
+  .review-lm-labels {
+    display:flex; justify-content:space-between;
+    font-size:9px; color:var(--faint); margin-top:3px;
+  }
+
+  .review-suggestion {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:10px; padding-top:10px; border-top:1px solid var(--bdr);
+  }
+  .suggest-text { font-size:11px; color:var(--warn); font-weight:600; }
+  .suggest-btn {
+    padding:4px 12px; background:rgba(232,160,54,0.15);
+    border:1px solid rgba(232,160,54,0.4); border-radius:var(--radius);
+    font-size:11px; color:var(--warn); cursor:pointer; transition:all 0.15s;
+  }
+  .suggest-btn:hover { background:rgba(232,160,54,0.25); }
+  .suggest-accepted { font-size:11px; color:var(--success); margin-top:8px; font-weight:600; }
+
+  .review-done-btn {
+    width:100%; background:var(--accent); color:#fff; border:none;
+    border-radius:var(--radius-lg); padding:16px;
+    font-family:var(--serif); font-size:18px; cursor:pointer;
+    margin-bottom:8px; transition:background 0.15s;
+  }
+  .review-done-btn:hover { background:#f05070; }
+  .review-skip-btn {
+    width:100%; background:transparent; border:1px solid var(--bdr);
+    border-radius:var(--radius-lg); padding:12px;
+    font-size:13px; color:var(--muted); cursor:pointer;
+  }
+</style>

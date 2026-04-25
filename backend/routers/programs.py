@@ -8,7 +8,7 @@ from database import get_session
 from models import (
     SplitTemplate, SplitDay,
     Mesocycle, MesocycleWeek, PlannedSession, PlannedExercise,
-    WorkoutSession, Exercise, UserEquipment, MuscleVolumeLandmark
+    WorkoutSession, WorkoutSet, Exercise, UserEquipment, MuscleVolumeLandmark
 )
 
 router = APIRouter(prefix="/api/programs", tags=["programs"])
@@ -460,6 +460,133 @@ def get_mesocycle_adherence(id: int, session: Session = Depends(get_session)):
         "overall": {"planned": total_planned, "completed": total_completed, "pct": overall_pct},
         "weeks": weeks_out,
         "current_week": meso.current_week,
+    }
+
+
+@router.get("/mesocycles/{id}/review")
+def get_mesocycle_review(id: int, session: Session = Depends(get_session)):
+    from routers.volume import _parse_muscles
+
+    meso = session.get(Mesocycle, id)
+    if not meso or meso.user_id != USER_ID:
+        raise HTTPException(status_code=404, detail="Mesocycle not found")
+
+    weeks_stmt = select(MesocycleWeek).where(
+        MesocycleWeek.mesocycle_id == id
+    ).order_by(MesocycleWeek.week_number)
+    weeks = session.exec(weeks_stmt).all()
+
+    exercise_cache: dict[int, Exercise] = {}
+    total_planned = 0
+    total_completed = 0
+    week_muscle_sets: list[dict] = []   # one dict per week: {muscle: set_count}
+    week_muscle_rir: list[dict] = []    # one dict per week: {muscle: [rir values]}
+
+    for week in weeks:
+        ps_list = session.exec(
+            select(PlannedSession).where(PlannedSession.mesocycle_week_id == week.id)
+        ).all()
+        total_planned += len(ps_list)
+        total_completed += sum(1 for ps in ps_list if ps.session_id)
+
+        muscle_sets: dict[str, int] = {}
+        muscle_rir: dict[str, list] = {}
+        for ps in ps_list:
+            if not ps.session_id:
+                continue
+            sets = session.exec(
+                select(WorkoutSet).where(WorkoutSet.session_id == ps.session_id)
+            ).all()
+            for ws in sets:
+                if ws.set_type == "warmup":
+                    continue
+                if ws.exercise_id not in exercise_cache:
+                    ex = session.get(Exercise, ws.exercise_id)
+                    if ex:
+                        exercise_cache[ws.exercise_id] = ex
+                ex = exercise_cache.get(ws.exercise_id)
+                if not ex:
+                    continue
+                for m in _parse_muscles(ex.primary_muscles):
+                    muscle_sets[m] = muscle_sets.get(m, 0) + 1
+                    if ws.rir is not None:
+                        muscle_rir.setdefault(m, []).append(ws.rir)
+        week_muscle_sets.append(muscle_sets)
+        week_muscle_rir.append(muscle_rir)
+
+    landmarks = {
+        lm.muscle: lm for lm in session.exec(
+            select(MuscleVolumeLandmark).where(MuscleVolumeLandmark.user_id == USER_ID)
+        ).all()
+    }
+
+    all_muscles: set[str] = set()
+    for wms in week_muscle_sets:
+        all_muscles.update(wms.keys())
+
+    muscles_out = []
+    for muscle in sorted(all_muscles):
+        # Per-week set counts (all weeks including deload)
+        sets_per_week = [wms.get(muscle, 0) for wms in week_muscle_sets]
+
+        # Non-deload weeks only for averages
+        non_deload = [
+            wms.get(muscle, 0)
+            for wms, wk in zip(week_muscle_sets, weeks)
+            if not wk.is_deload
+        ]
+        avg_sets = round(sum(non_deload) / len(non_deload), 1) if non_deload else 0
+        peak_sets = max(non_deload) if non_deload else 0
+
+        # RIR trend: early (first half) vs late (second half)
+        all_rir = [r for wrir in week_muscle_rir for r in wrir.get(muscle, [])]
+        half = len(all_rir) // 2
+        avg_rir_early = round(sum(all_rir[:half]) / half, 1) if half else None
+        avg_rir_late = round(sum(all_rir[half:]) / max(len(all_rir) - half, 1), 1) if all_rir else None
+
+        lm = landmarks.get(muscle)
+        suggestion = None
+        suggested_mrv = None
+        suggested_mev = None
+        if lm and len(non_deload) >= 2:
+            weeks_above_mav = sum(1 for c in non_deload if c > lm.mav_high)
+            weeks_below_mev = sum(1 for c in non_deload if 0 < c < lm.mev)
+            if weeks_above_mav >= len(non_deload) // 2:
+                suggestion = "raise_mrv"
+                suggested_mrv = peak_sets + 2
+            elif weeks_below_mev >= len(non_deload) // 2:
+                suggestion = "lower_mev"
+                suggested_mev = max(1, round(avg_sets) - 1)
+
+        muscles_out.append({
+            "muscle": muscle,
+            "sets_per_week": sets_per_week,
+            "avg_sets_per_week": avg_sets,
+            "peak_sets_per_week": peak_sets,
+            "avg_rir_early": avg_rir_early,
+            "avg_rir_late": avg_rir_late,
+            "landmark": {
+                "mev": lm.mev, "mav_low": lm.mav_low,
+                "mav_high": lm.mav_high, "mrv": lm.mrv,
+            } if lm else None,
+            "suggestion": suggestion,
+            "suggested_mrv": suggested_mrv,
+            "suggested_mev": suggested_mev,
+        })
+
+    adherence_pct = round(total_completed / total_planned * 100) if total_planned else 0
+    return {
+        "mesocycle_id": id,
+        "name": meso.name,
+        "goal": meso.goal,
+        "weeks_total": meso.weeks_total,
+        "adherence": {
+            "pct": adherence_pct,
+            "planned": total_planned,
+            "completed": total_completed,
+        },
+        "muscles": muscles_out,
+        "weeks": [{"week_number": wk.week_number, "is_deload": wk.is_deload} for wk in weeks],
     }
 
 
