@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
-  import { activeSession, refreshActiveSession, userProfile, getElapsed } from '$lib/stores.js';
+  import { activeSession, refreshActiveSession, userProfile, getElapsed, sessionPlan } from '$lib/stores.js';
   import { autoSessionName } from '$lib/utils.js';
 
   let recentSessions = [];
@@ -13,6 +13,16 @@
   let fatigueReport = null;
   let nextPlanned = null;
   let weekDays = [];
+
+  // Weekly check-in
+  let checkinDue = false;
+  let checkinDismissed = false;
+  let checkinData = { energy: 3, sleep_quality: 3, stress: 3, soreness: 3, notes: '' };
+  let submittingCheckin = false;
+  let checkinDone = false;
+
+  // Generate session
+  let generating = false;
 
   function buildWeekDays(sessions) {
     const now = new Date();
@@ -56,6 +66,11 @@
 
       try {
         fatigueReport = await api.volume.fatigueReport();
+      } catch { /* graceful */ }
+
+      try {
+        const cs = await api.recovery.checkinStatus();
+        checkinDue = cs.due;
       } catch { /* graceful */ }
     } catch (e) {
       console.error(e);
@@ -106,6 +121,26 @@
     } catch (e) { console.error(e); }
     creating = false;
   }
+
+  async function submitCheckin() {
+    submittingCheckin = true;
+    try {
+      await api.recovery.submitCheckin(checkinData);
+      checkinDone = true;
+    } catch (e) { console.error(e); }
+    submittingCheckin = false;
+  }
+
+  async function generateSession() {
+    generating = true;
+    try {
+      const plan = await api.sessions.generate();
+      sessionPlan.set(plan);
+      await refreshActiveSession();
+      goto('/log');
+    } catch (e) { console.error(e); }
+    generating = false;
+  }
 </script>
 
 <svelte:head><title>LiftForge</title></svelte:head>
@@ -136,6 +171,42 @@
     </div>
   </div>
   <div class="date-line">{todayLabel()}</div>
+
+  <!-- Weekly check-in card -->
+  {#if checkinDue && !checkinDismissed && !checkinDone}
+    <div class="checkin-card">
+      <div class="checkin-hdr">
+        <div>
+          <div class="checkin-title">Weekly Check-in</div>
+          <div class="checkin-sub">How are you feeling this week?</div>
+        </div>
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <span class="checkin-skip" on:click={() => checkinDismissed = true}>Skip</span>
+      </div>
+      {#each [
+        { key: 'energy', label: 'Energy' },
+        { key: 'sleep_quality', label: 'Sleep' },
+        { key: 'stress', label: 'Stress' },
+        { key: 'soreness', label: 'Soreness' },
+      ] as row}
+        <div class="checkin-row">
+          <div class="checkin-lbl">{row.label}</div>
+          <div class="checkin-dots">
+            {#each [1,2,3,4,5] as n}
+              <!-- svelte-ignore a11y-click-events-have-key-events -->
+              <!-- svelte-ignore a11y-no-static-element-interactions -->
+              <span class="dot" class:filled={checkinData[row.key] >= n}
+                on:click={() => checkinData[row.key] = n}></span>
+            {/each}
+          </div>
+        </div>
+      {/each}
+      <button class="btn-primary checkin-submit" on:click={submitCheckin} disabled={submittingCheckin}>
+        {submittingCheckin ? 'Saving…' : 'Submit'}
+      </button>
+    </div>
+  {/if}
 
   <!-- Stat grid -->
   <div class="stat-grid">
@@ -201,6 +272,9 @@
       <div class="cta-secondary">
         <a href="/program" class="cta-sec-btn">From Program</a>
         <a href="/templates" class="cta-sec-btn">From Template</a>
+        <button class="cta-sec-btn generate-btn" on:click={generateSession} disabled={generating}>
+          {generating ? 'Building…' : 'Generate Session'}
+        </button>
       </div>
     </div>
   {/if}
@@ -399,6 +473,27 @@
     white-space: nowrap;
   }
 
+  /* Check-in card */
+  .checkin-card {
+    background: var(--surf); border: 1px solid rgba(232,54,93,0.25);
+    border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 14px;
+  }
+  .checkin-hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; }
+  .checkin-title { font-family:var(--serif); font-size:16px; color:var(--text); }
+  .checkin-sub { font-size:11px; color:var(--muted); margin-top:2px; }
+  .checkin-skip { font-size:11px; color:var(--muted); cursor:pointer; padding:2px 0; text-decoration:underline; }
+  .checkin-skip:hover { color:var(--accent); }
+  .checkin-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; }
+  .checkin-lbl { font-size:12px; color:var(--text); }
+  .checkin-dots { display:flex; gap:8px; }
+  .dot {
+    width:16px; height:16px; border-radius:50%;
+    border:1.5px solid var(--bdr-2); background:transparent;
+    cursor:pointer; transition:all 0.15s;
+  }
+  .dot.filled { background:var(--accent); border-color:var(--accent); }
+  .checkin-submit { width:100%; margin-top:12px; }
+
   /* CTA */
   .cta-wrap { margin-bottom: 12px; }
   .begin-btn {
@@ -417,6 +512,7 @@
   .begin-btn:hover { background: #f05070; }
   .begin-btn:disabled { opacity: 0.6; cursor: not-allowed; }
   .cta-secondary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .generate-btn { grid-column: 1 / -1; border:none; cursor:pointer; font-size:12px; font-weight:500; }
   .cta-sec-btn {
     background: var(--surf);
     border: 1px solid var(--bdr);

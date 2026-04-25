@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
-  import { activeSession, refreshActiveSession, getElapsed } from '$lib/stores.js';
+  import { activeSession, refreshActiveSession, getElapsed, sessionPlan } from '$lib/stores.js';
   import { autoSessionName, formatDate } from '$lib/utils.js';
 
   let session = null;
@@ -416,6 +416,16 @@
 
   $: plateResult = plateCalcSetId ? calcPlateResult(parseFloat(plateCalcWeight), plateCalcBar) : null;
 
+  // Today's Plan panel
+  let planOpen = true;
+
+  function quickFocusExercise(name) {
+    if (!allExercises.length) api.exercises.list().then(list => { allExercises = list; });
+    exerciseSearch = name;
+    exerciseFilter = '';
+    showExerciseModal = true;
+  }
+
   // Progress bar
   $: totalDone = doneIds.size;
   $: totalSets = exercises.reduce((a, g) => a + g.sets.length, 0);
@@ -488,6 +498,34 @@
             <button class="rest-skip" on:click={dismissRestTimer}>Skip rest</button>
           </div>
         </div>
+      </div>
+    {/if}
+
+    <!-- Today's Plan panel (generated sessions) -->
+    {#if $sessionPlan?.exercises?.length}
+      <div class="plan-card">
+        <!-- svelte-ignore a11y-click-events-have-key-events -->
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div class="plan-hdr" on:click={() => planOpen = !planOpen}>
+          <div>
+            <div class="plan-title">Today's Plan</div>
+            <div class="plan-sub">{$sessionPlan.session_name} · {$sessionPlan.rest_seconds}s rest</div>
+          </div>
+          <span class="plan-toggle">{planOpen ? '▲' : '▼'}</span>
+        </div>
+        {#if planOpen}
+          <div class="plan-exercises">
+            {#each $sessionPlan.exercises as pe}
+              <!-- svelte-ignore a11y-click-events-have-key-events -->
+              <!-- svelte-ignore a11y-no-static-element-interactions -->
+              <div class="plan-ex" on:click={() => quickFocusExercise(pe.name)}>
+                <span class="plan-ex-name">{pe.name}</span>
+                <span class="plan-ex-target">{pe.sets}×{pe.reps_min}–{pe.reps_max}</span>
+              </div>
+            {/each}
+          </div>
+          <button class="plan-dismiss" on:click={() => sessionPlan.set(null)}>Dismiss plan</button>
+        {/if}
       </div>
     {/if}
 
@@ -882,6 +920,30 @@
 
   /* Body */
   .log-body { padding-bottom:calc(var(--tab-h) + 64px); }
+
+  /* Today's Plan panel */
+  .plan-card {
+    background:var(--surf); border:1px solid rgba(232,54,93,0.2);
+    border-radius:var(--radius-lg); padding:12px 14px; margin-bottom:10px;
+  }
+  .plan-hdr { display:flex; justify-content:space-between; align-items:center; cursor:pointer; }
+  .plan-title { font-family:var(--serif); font-size:14px; color:var(--text); }
+  .plan-sub { font-size:10px; color:var(--muted); margin-top:2px; }
+  .plan-toggle { font-size:10px; color:var(--muted); }
+  .plan-exercises { margin-top:10px; display:flex; flex-direction:column; gap:6px; }
+  .plan-ex {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:6px 8px; border-radius:var(--radius);
+    background:var(--surf-2); cursor:pointer; transition:background 0.15s;
+  }
+  .plan-ex:hover { background:var(--accent-bg); }
+  .plan-ex-name { font-size:12px; color:var(--text); }
+  .plan-ex-target { font-size:11px; color:var(--accent); font-weight:600; }
+  .plan-dismiss {
+    margin-top:8px; background:transparent; border:none;
+    font-size:10px; color:var(--muted); cursor:pointer; padding:0; text-decoration:underline;
+  }
+  .plan-dismiss:hover { color:var(--accent); }
 
   /* Rest timer card */
   .rest-card {

@@ -8,6 +8,7 @@
   let experienceLevel = 'intermediate';
   let equipment = new Set();
   let defaultRestSeconds = 90;
+  let preferredSessionMinutes = 60;
   let saving = false;
   let savingEquip = false;
   let saved = false;
@@ -83,6 +84,7 @@
     unitPreference = p.unit_preference;
     experienceLevel = p.experience_level;
     defaultRestSeconds = p.default_rest_seconds ?? 90;
+    preferredSessionMinutes = p.preferred_session_minutes ?? 60;
     equipment = new Set(p.equipment || []);
     try {
       landmarks = (await api.landmarks.get()).map(lm => ({ ...lm }));
@@ -96,7 +98,7 @@
   async function saveProfile() {
     saving = true;
     try {
-      await api.profile.update({ display_name: displayName, unit_preference: unitPreference, experience_level: experienceLevel, default_rest_seconds: defaultRestSeconds });
+      await api.profile.update({ display_name: displayName, unit_preference: unitPreference, experience_level: experienceLevel, default_rest_seconds: defaultRestSeconds, preferred_session_minutes: preferredSessionMinutes });
       await refreshProfile();
       saved = true; setTimeout(() => saved = false, 2500);
     } catch {}
@@ -212,6 +214,16 @@
     </div>
   </div>
 
+  <div class="setting-row">
+    <div class="setting-lbl">Session Duration</div>
+    <div class="dur-pills">
+      {#each [30, 45, 60, 75, 90] as min}
+        <button class="dur-pill" class:active={preferredSessionMinutes === min}
+          on:click={() => preferredSessionMinutes = min}>{min}m</button>
+      {/each}
+    </div>
+  </div>
+
   <div class="save-row">
     <button class="btn-primary" on:click={saveProfile} disabled={saving}>
       {saving ? 'Saving…' : 'Save Profile'}
@@ -253,9 +265,7 @@
   <p class="section-desc">Import your Liftosaur workout history using your API token (Settings → API in the Liftosaur app).</p>
 
   {#if !liftsaurConnected}
-    <div class="setting-row">
-      <div class="setting-lbl">API Token</div>
-    </div>
+    <label class="setting-lbl">API Token</label>
     <input class="token-input" type="password" bind:value={liftsaurToken} placeholder="Paste your lftsk_… token" />
     <div class="save-row">
       <button class="btn-primary" on:click={saveLiftsaurToken} disabled={savingToken || !liftsaurToken}>
@@ -394,6 +404,15 @@
     transition:all 0.15s;
   }
   .exp-pill.active { border-color:var(--accent); color:var(--accent); background:var(--accent-bg); }
+
+  /* Duration pills */
+  .dur-pills { display:flex; gap:4px; }
+  .dur-pill {
+    padding:4px 8px; background:transparent; border:1px solid var(--bdr-2);
+    border-radius:4px; font-size:11px; color:var(--muted); cursor:pointer;
+    transition:all 0.15s;
+  }
+  .dur-pill.active { border-color:var(--accent); color:var(--accent); background:var(--accent-bg); }
 
   /* Rest stepper */
   .rest-stepper { display:flex; align-items:center; gap:10px; }

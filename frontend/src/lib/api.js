@@ -108,6 +108,7 @@ export const api = {
     start: (id) => request('POST', `/templates/${id}/start`),
     saveFromSession: (sessionId, name) =>
       request('POST', `/sessions/${sessionId}/save-as-template`, { name }),
+    generate: () => request('POST', '/sessions/generate'),
   },
 
   measurements: {
@@ -120,6 +121,8 @@ export const api = {
 
   recovery: {
     getMap: () => request('GET', '/recovery-map'),
+    checkinStatus: () => request('GET', '/recovery/checkin/status'),
+    submitCheckin: (data) => request('POST', '/recovery/checkin', data),
   },
 
   goals: {

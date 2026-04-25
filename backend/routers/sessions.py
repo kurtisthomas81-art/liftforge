@@ -1,11 +1,16 @@
 import json
+from math import floor
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from database import get_session
-from models import WorkoutSession, WorkoutSet, Exercise, WorkoutTemplate, TemplateExercise
+from models import (
+    WorkoutSession, WorkoutSet, Exercise, WorkoutTemplate, TemplateExercise,
+    UserProfile, UserEquipment, Mesocycle, MesocycleWeek, PlannedSession, SplitDay,
+    MuscleVolumeLandmark,
+)
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -117,6 +122,154 @@ def create_session(payload: SessionCreate, session: Session = Depends(get_sessio
     session.commit()
     session.refresh(wk)
     return _serialize_session(wk)
+
+
+@router.post("/generate")
+def generate_session(db: Session = Depends(get_session)):
+    def _parse(raw: str) -> list:
+        try:
+            return json.loads(raw)
+        except Exception:
+            return []
+
+    profile = db.exec(select(UserProfile).where(UserProfile.user_id == USER_ID)).first()
+    duration = profile.preferred_session_minutes if profile else 60
+
+    meso = db.exec(
+        select(Mesocycle).where(Mesocycle.user_id == USER_ID, Mesocycle.status == "active")
+    ).first()
+    goal = meso.goal if meso else "hypertrophy"
+
+    rest_by_goal = {"strength": 180, "hypertrophy": 90, "recomp": 75}
+    reps_by_goal = {"strength": (3, 6), "hypertrophy": (8, 12), "recomp": (10, 15)}
+    rest_seconds = rest_by_goal.get(goal, 90)
+    reps_min, reps_max = reps_by_goal.get(goal, (8, 12))
+
+    max_sets = floor((duration * 60 - 300) / (45 + rest_seconds))
+
+    # Resolve target muscles from today's planned session
+    target_muscles: list[str] = []
+    if meso:
+        today_dow = date.today().weekday()
+        week_obj = db.exec(
+            select(MesocycleWeek).where(
+                MesocycleWeek.mesocycle_id == meso.id,
+                MesocycleWeek.week_number == meso.current_week,
+            )
+        ).first()
+        if week_obj:
+            planned = db.exec(
+                select(PlannedSession).where(
+                    PlannedSession.mesocycle_week_id == week_obj.id,
+                    PlannedSession.day_of_week == today_dow,
+                )
+            ).first()
+            if planned and planned.split_day_id:
+                split_day = db.get(SplitDay, planned.split_day_id)
+                if split_day:
+                    target_muscles = _parse(split_day.muscle_focus)
+
+    # Fallback: muscles below MAV this week
+    if not target_muscles:
+        monday = date.today() - timedelta(days=date.today().weekday())
+        week_sessions = db.exec(
+            select(WorkoutSession).where(
+                WorkoutSession.user_id == USER_ID,
+                WorkoutSession.started_at >= monday.isoformat(),
+            )
+        ).all()
+        all_sets: list = []
+        ex_map: dict[int, Exercise] = {}
+        for wk in week_sessions:
+            s_list = db.exec(select(WorkoutSet).where(WorkoutSet.session_id == wk.id)).all()
+            all_sets.extend(s_list)
+            for ws in s_list:
+                if ws.exercise_id not in ex_map:
+                    ex = db.get(Exercise, ws.exercise_id)
+                    if ex:
+                        ex_map[ws.exercise_id] = ex
+        sets_by_muscle: dict[str, int] = {}
+        for ws in all_sets:
+            if ws.set_type == "warmup":
+                continue
+            ex = ex_map.get(ws.exercise_id)
+            if not ex:
+                continue
+            for m in _parse(ex.primary_muscles):
+                sets_by_muscle[m] = sets_by_muscle.get(m, 0) + 1
+        landmarks = {lm.muscle: lm for lm in db.exec(
+            select(MuscleVolumeLandmark).where(MuscleVolumeLandmark.user_id == USER_ID)
+        ).all()}
+        target_muscles = [m for m, lm in landmarks.items() if sets_by_muscle.get(m, 0) < lm.mav_low]
+
+    if not target_muscles:
+        target_muscles = ["chest", "back", "shoulders"]
+
+    # Get available equipment
+    equip_rows = db.exec(
+        select(UserEquipment).where(UserEquipment.user_id == USER_ID, UserEquipment.available == True)
+    ).all()
+    available_equipment = {r.equipment for r in equip_rows}
+
+    def equipment_ok(ex: Exercise) -> bool:
+        req = _parse(ex.equipment_required)
+        return not req or any(e in available_equipment for e in req)
+
+    all_exercises = db.exec(select(Exercise)).all()
+
+    compounds: list[Exercise] = []
+    isolations: list[Exercise] = []
+    seen_ids: set[int] = set()
+    for muscle in target_muscles:
+        for ex in all_exercises:
+            if ex.id in seen_ids or not equipment_ok(ex):
+                continue
+            if muscle in _parse(ex.primary_muscles):
+                (compounds if ex.mechanics == "compound" else isolations).append(ex)
+                seen_ids.add(ex.id)
+
+    selected_compounds = compounds[:3]
+    selected_isolations = isolations[:3]
+    c_sets, i_sets = 4, 3
+
+    # Trim to budget
+    total = len(selected_compounds) * c_sets + len(selected_isolations) * i_sets
+    while total > max_sets:
+        if selected_isolations and i_sets > 2:
+            i_sets -= 1
+        elif selected_isolations:
+            selected_isolations.pop()
+        elif selected_compounds and c_sets > 2:
+            c_sets -= 1
+        elif selected_compounds:
+            selected_compounds.pop()
+        else:
+            break
+        total = len(selected_compounds) * c_sets + len(selected_isolations) * i_sets
+
+    muscles_label = "/".join(m.capitalize() for m in target_muscles[:2])
+    session_name = f"{duration}-min {goal.capitalize()} — {muscles_label}" if muscles_label else f"{duration}-min {goal.capitalize()}"
+
+    wk = WorkoutSession(user_id=USER_ID, name=session_name, started_at=datetime.utcnow())
+    db.add(wk)
+    db.commit()
+    db.refresh(wk)
+
+    exercises_out = [
+        {"exercise_id": ex.id, "name": ex.name, "sets": c_sets, "reps_min": reps_min, "reps_max": reps_max}
+        for ex in selected_compounds
+    ] + [
+        {"exercise_id": ex.id, "name": ex.name, "sets": i_sets, "reps_min": reps_min, "reps_max": reps_max}
+        for ex in selected_isolations
+    ]
+
+    return {
+        "session_id": wk.id,
+        "session_name": session_name,
+        "goal": goal,
+        "rest_seconds": rest_seconds,
+        "exercises": exercises_out,
+    }
 
 
 @router.patch("/{session_id}")

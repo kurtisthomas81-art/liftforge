@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 from database import get_session
-from models import WorkoutSet, WorkoutSession, Exercise, MuscleVolumeLandmark, MesocycleWeek, PlannedSession
+from models import WorkoutSet, WorkoutSession, Exercise, MuscleVolumeLandmark, MesocycleWeek, PlannedSession, WeeklyCheckin
 
 router = APIRouter(prefix="/api/volume", tags=["volume"])
 
@@ -368,6 +368,37 @@ def fatigue_report(session: Session = Depends(get_session)):
     if avg_rpe is not None and avg_rpe >= 8:
         reasons.append(f"Session RPE has averaged {avg_rpe:.1f}/10 — workouts are very hard")
 
+    # Weekly check-in contribution
+    checkin_data = None
+    cutoff = datetime.utcnow() - timedelta(days=8)
+    recent_checkin = session.exec(
+        select(WeeklyCheckin)
+        .where(WeeklyCheckin.user_id == USER_ID)
+        .order_by(WeeklyCheckin.created_at.desc())
+    ).first()
+    if recent_checkin and recent_checkin.created_at >= cutoff:
+        checkin_data = {
+            "energy": recent_checkin.energy,
+            "sleep_quality": recent_checkin.sleep_quality,
+            "stress": recent_checkin.stress,
+            "soreness": recent_checkin.soreness,
+        }
+        checkin_score_raw = 0.0
+        if recent_checkin.energy <= 2:
+            checkin_score_raw += 1.5
+        if recent_checkin.stress >= 4:
+            checkin_score_raw += 1.0
+        if recent_checkin.sleep_quality <= 2:
+            checkin_score_raw += 1.0
+        if recent_checkin.soreness >= 4:
+            checkin_score_raw += 0.5
+        if checkin_score_raw > 0:
+            reasons.append("Weekly check-in indicates elevated fatigue (low energy/sleep or high stress/soreness)")
+    else:
+        checkin_score_raw = 0.0
+
+    checkin_score = min(3.0, checkin_score_raw)
+
     # Compute fatigue score (0-10)
     # Component 1: muscle risk score (0-4): 1 point per muscle at risk, capped at 4
     muscle_score = min(4.0, len(muscles_at_risk) * 1.0)
@@ -389,7 +420,7 @@ def fatigue_report(session: Session = Depends(get_session)):
     if avg_rpe is not None:
         rpe_score = max(0.0, min(2.0, (avg_rpe - 6.0) * 0.5))
 
-    fatigue_score = round(min(10.0, muscle_score + readiness_score + deload_score + rpe_score), 1)
+    fatigue_score = round(min(10.0, muscle_score + readiness_score + deload_score + rpe_score + checkin_score), 1)
 
     deload_recommended = fatigue_score >= 6.0 or len(muscles_at_risk) >= 3
 
@@ -409,4 +440,5 @@ def fatigue_report(session: Session = Depends(get_session)):
         "reasons": reasons,
         "muscles_at_risk": muscles_at_risk,
         "last_deload_days_ago": last_deload_days_ago,
+        "checkin": checkin_data,
     }

@@ -25,6 +25,9 @@ export async function refreshProfile() {
   }
 }
 
+// Generated session plan — set by home page, consumed by log page
+export const sessionPlan = writable(null);
+
 // Elapsed time for active session
 export function getElapsed(startedAt) {
   if (!startedAt) return '0:00';
