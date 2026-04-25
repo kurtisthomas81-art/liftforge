@@ -32,6 +32,7 @@
   const moreItems = [
     { href: '/calendar',     label: 'Calendar',     icon: '▣', desc: 'Monthly training view' },
     { href: '/exercises',    label: 'Library',      icon: '⊞', desc: 'Exercise browser' },
+    { href: '/1rm-test',     label: '1RM Test',     icon: '⊗', desc: 'Guided max strength test' },
     { href: '/measurements', label: 'Measurements', icon: '↕', desc: 'Body stats & trends' },
     { href: '/progress',     label: 'Progress',     icon: '◑', desc: '1RM charts & analytics' },
     { href: '/recovery',     label: 'Recovery',     icon: '◉', desc: 'Muscle recovery map' },

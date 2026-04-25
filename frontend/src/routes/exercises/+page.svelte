@@ -139,6 +139,7 @@
 
               <!-- Add to workout button -->
               <a href="/log" class="add-to-workout-btn">+ Add to Workout</a>
+              <a href="/1rm-test?exercise={ex.id}" class="test-1rm-btn">⊗ Test 1RM</a>
             {/if}
           </div>
         {/if}
@@ -198,4 +199,13 @@
     transition:background 0.15s;
   }
   .add-to-workout-btn:hover { background:#f05070; }
+  .test-1rm-btn {
+    display:block; width:100%; text-align:center;
+    background:transparent; color:var(--muted);
+    border:1px solid var(--bdr-2);
+    border-radius:var(--radius-lg); padding:9px;
+    font-size:12px; font-weight:600; text-decoration:none;
+    margin-top:8px; transition:all 0.15s;
+  }
+  .test-1rm-btn:hover { border-color:var(--accent); color:var(--accent); }
 </style>
