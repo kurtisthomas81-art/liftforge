@@ -95,10 +95,10 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 | Training notes search | — | Full-text search across all session + exercise notes |
 | 1RM percent calculator | — | Given 1RM, show weight for any % (50%, 65%, 80%, etc.) |
 | PWA / mobile install | — | Manifest + service worker so it installs as a home screen app on phone |
-| Periodization types | — | DUP (rep ranges rotate per session), Linear, Block — in mesocycle wizard |
-| 1RM test protocol | — | Guided warmup → max attempt progression; stores tested (not estimated) 1RM |
+| ~~Periodization types~~ | ✅ Done | DUP / Linear / Block — picker in mesocycle wizard Step 3; engine applies correct rep/RIR scheme per week/session |
+| ~~1RM test protocol~~ | ✅ Done | 4-step guided protocol: pick exercise → working max → warmup ramp (40–100%) → result with e1RM + PR badge; linked from exercises page + More sheet |
+| ~~Post-mesocycle review~~ | ✅ Done | Auto-summary on completion: adherence %, per-muscle volume vs landmarks, RIR trend, MEV/MRV adjustment suggestions |
 | Injury / limitation tracking | — | Flag body parts; exercises with affected movement patterns get ⚠ warning |
-| Post-mesocycle review | — | Auto-summary on completion; adjust MEV/MAV landmarks for next meso |
 
 ---
 
