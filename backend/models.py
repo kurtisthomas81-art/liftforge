@@ -113,6 +113,7 @@ class Mesocycle(SQLModel, table=True):
     goal: str = Field(default="hypertrophy")  # hypertrophy|strength|recomp
     start_date: Optional[str] = Field(default=None)  # ISO date string
     deload_week: int = Field(default=5)
+    periodization_type: str = Field(default="standard")  # standard|linear|dup|block
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

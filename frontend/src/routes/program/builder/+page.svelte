@@ -20,6 +20,7 @@
   // Step 3
   let selectedGoal = 'hypertrophy';
   let selectedWeeks = 5;
+  let selectedPeriodization = 'standard';
   let startDate = new Date().toISOString().slice(0, 10);
   let mesoName = '';
   let daysOfWeek = [];   // array of 0-6 per split day
@@ -35,6 +36,12 @@
     { key: 'hypertrophy', label: 'Hypertrophy', desc: '8-12 reps, RIR 2' },
     { key: 'strength',    label: 'Strength',    desc: '3-6 reps, RIR 1' },
     { key: 'recomp',      label: 'Recomp',      desc: '10-15 reps, RIR 2-3' },
+  ];
+  const PERIODIZATIONS = [
+    { key: 'standard', label: 'Standard',  desc: 'Fixed rep ranges, volume progresses week to week' },
+    { key: 'linear',   label: 'Linear',    desc: 'High reps week 1 descend to low reps by final week' },
+    { key: 'dup',      label: 'DUP',       desc: 'Rep ranges rotate session to session (hypertrophy / strength / volume)' },
+    { key: 'block',    label: 'Block',     desc: 'Accumulation → Intensification → Peak phases' },
   ];
 
   onMount(async () => {
@@ -97,6 +104,7 @@
       const payload = {
         goal: selectedGoal,
         weeks: selectedWeeks,
+        periodization_type: selectedPeriodization,
         start_date: startDate,
         name: mesoName,
         days_of_week: daysOfWeek,
@@ -250,6 +258,22 @@
         </div>
       </div>
 
+      <!-- Periodization -->
+      <div style="margin-bottom:20px;">
+        <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Periodization Style</label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          {#each PERIODIZATIONS as p}
+            <button
+              on:click={() => selectedPeriodization = p.key}
+              style="text-align:left; padding:12px; border-radius:6px; border:2px solid {selectedPeriodization === p.key ? 'var(--primary)' : 'var(--border)'}; background:{selectedPeriodization === p.key ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:{selectedPeriodization === p.key ? 'var(--primary)' : 'var(--text)'}; cursor:pointer; transition:all 0.15s;"
+            >
+              <div style="font-weight:700; font-size:13px; margin-bottom:3px;">{p.label}</div>
+              <div style="font-size:11px; opacity:0.75; line-height:1.4;">{p.desc}</div>
+            </button>
+          {/each}
+        </div>
+      </div>
+
       <!-- Weeks -->
       <div style="margin-bottom:20px;">
         <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Duration (weeks)</label>
@@ -316,6 +340,10 @@
         <div class="flex justify-between" style="font-size:13px;">
           <span style="color:var(--text-muted);">Goal</span>
           <span style="text-transform:capitalize;">{selectedGoal}</span>
+        </div>
+        <div class="flex justify-between" style="font-size:13px;">
+          <span style="color:var(--text-muted);">Periodization</span>
+          <span>{PERIODIZATIONS.find(p => p.key === selectedPeriodization)?.label ?? selectedPeriodization}</span>
         </div>
         <div class="flex justify-between" style="font-size:13px;">
           <span style="color:var(--text-muted);">Duration</span>

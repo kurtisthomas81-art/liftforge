@@ -15,12 +15,11 @@ def _round_to_nearest(value: float, increment: float = 2.5) -> float:
 
 
 def _rep_range_for_goal(goal: str, mechanics: str) -> tuple[int, int]:
-    """Return (min_reps, max_reps) based on training goal and exercise type."""
+    """Standard (unchanged) rep range by goal."""
     if goal == "strength":
         return (3, 6)
     if goal == "recomp":
         return (10, 15)
-    # hypertrophy default
     if mechanics == "compound":
         return (8, 12)
     return (10, 20)
@@ -29,6 +28,55 @@ def _rep_range_for_goal(goal: str, mechanics: str) -> tuple[int, int]:
 def _rir_for_goal(goal: str, is_deload: bool = False) -> int:
     base = 1 if goal == "strength" else 2
     return base + (1 if is_deload else 0)
+
+
+# ── Periodization helpers ──────────────────────────────────────────────────────
+
+def _rep_range_linear(goal: str, week_number: int, weeks_total: int) -> tuple[int, int]:
+    """Linear: high reps week 1 → low reps final working week."""
+    working_weeks = max(weeks_total - 1, 1)  # last week = deload
+    progress = min(1.0, (week_number - 1) / max(working_weeks - 1, 1))
+    if goal == "strength":
+        reps_max = round(10 - progress * 7)   # 10 → 3
+        reps_min = round(8 - progress * 5)    # 8 → 3
+    else:
+        reps_max = round(20 - progress * 12)  # 20 → 8
+        reps_min = round(15 - progress * 9)   # 15 → 6
+    reps_min = max(3, reps_min)
+    reps_max = max(reps_min + 2, reps_max)
+    return (reps_min, reps_max)
+
+
+# DUP: each entry is (reps_min, reps_max, rir, label)
+_DUP_PATTERNS: dict[str, list[tuple]] = {
+    "hypertrophy": [(8, 12, 2, "Hypertrophy"), (3, 6, 1, "Strength"), (12, 20, 3, "Volume")],
+    "strength":    [(3, 6, 1, "Strength"), (6, 10, 2, "Power"), (2, 4, 1, "Peaking")],
+    "recomp":      [(10, 15, 2, "Hypertrophy"), (4, 6, 1, "Strength"), (15, 20, 3, "Volume")],
+}
+
+
+def _dup_params(goal: str, day_number: int) -> tuple[int, int, int, str]:
+    """Return (reps_min, reps_max, rir, label) for this day in the DUP rotation."""
+    pattern = _DUP_PATTERNS.get(goal, _DUP_PATTERNS["hypertrophy"])
+    return pattern[(day_number - 1) % len(pattern)]
+
+
+# Block phases: (reps_min, reps_max, rir, label)
+_BLOCK_PHASES = {
+    "accumulation":    (12, 20, 3, "Accumulation"),
+    "hypertrophy":     (8, 12, 2, "Intensification"),
+    "strength":        (3, 6, 1, "Peak"),
+}
+
+
+def _block_phase(week_number: int, weeks_total: int) -> str:
+    working_weeks = max(weeks_total - 1, 1)
+    progress = (week_number - 1) / max(working_weeks - 1, 1)
+    if progress < 0.40:
+        return "accumulation"
+    if progress < 0.75:
+        return "hypertrophy"
+    return "strength"
 
 
 def _select_exercises(
@@ -88,6 +136,7 @@ def generate_mesocycle(
     landmarks: dict,            # muscle -> {"mev", "mav_low", "mav_high", "mrv"}
     available_equipment: list[str],
     exercises_db: list[dict],   # list of dicts with id, name, primary_muscles, mechanics, equipment_required
+    periodization_type: str = "standard",
 ) -> list[dict]:
     """
     Returns a list of week dicts:
@@ -188,8 +237,23 @@ def generate_mesocycle(
                 per_session = min(per_session, 6)
 
                 mechanics = ex.get("mechanics", "compound")
-                reps_min, reps_max = _rep_range_for_goal(goal, mechanics)
-                rir = _rir_for_goal(goal, is_deload)
+                session_label = ""
+
+                if is_deload:
+                    reps_min, reps_max = _rep_range_for_goal(goal, mechanics)
+                    rir = 3
+                elif periodization_type == "linear":
+                    reps_min, reps_max = _rep_range_linear(goal, week_num, weeks)
+                    progress = (week_num - 1) / max(weeks - 2, 1)
+                    rir = max(1, round(3 - min(1.0, progress) * 2))
+                elif periodization_type == "dup":
+                    reps_min, reps_max, rir, session_label = _dup_params(goal, day["day_number"])
+                elif periodization_type == "block":
+                    phase = _block_phase(week_num, weeks)
+                    reps_min, reps_max, rir, session_label = _BLOCK_PHASES[phase]
+                else:  # standard
+                    reps_min, reps_max = _rep_range_for_goal(goal, mechanics)
+                    rir = _rir_for_goal(goal, is_deload)
 
                 session_exercises.append({
                     "exercise_id": ex["id"],
@@ -199,7 +263,7 @@ def generate_mesocycle(
                     "target_reps_min": reps_min,
                     "target_reps_max": reps_max,
                     "target_rir": rir,
-                    "notes": "",
+                    "notes": session_label,
                 })
                 order += 1
 

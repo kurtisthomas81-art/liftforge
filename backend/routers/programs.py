@@ -143,6 +143,7 @@ class MesocycleCreate(BaseModel):
     days_of_week: list[int] = []  # maps split day_number-1 → day_of_week (0=Mon)
     # For custom splits
     custom_days: Optional[list[dict]] = None  # [{"name": "Push", "muscle_focus": [...]}]
+    periodization_type: str = "standard"  # standard|linear|dup|block
 
 
 class MesocycleUpdate(BaseModel):
@@ -265,6 +266,7 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
         goal=payload.goal,
         start_date=start,
         deload_week=deload_week,
+        periodization_type=payload.periodization_type,
     )
     session.add(meso)
     session.commit()
@@ -340,6 +342,7 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
         landmarks=landmarks,
         available_equipment=user_equipment,
         exercises_db=exercises_db,
+        periodization_type=payload.periodization_type,
     )
 
     # Ensure days_of_week has enough entries
