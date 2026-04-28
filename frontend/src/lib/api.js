@@ -81,7 +81,8 @@ export const api = {
     adherence: (id) => request('GET', `/programs/mesocycles/${id}/adherence`),
     review: (id) => request('GET', `/programs/mesocycles/${id}/review`),
     listLibrary: () => request('GET', '/programs/library'),
-    installLibraryProgram: (slug) => request('POST', `/programs/library/${slug}/install`),
+    previewLibraryProgram: (slug) => request('GET', `/programs/library/${slug}/preview`),
+    installLibraryProgram: (slug, config = {}) => request('POST', `/programs/library/${slug}/install`, config),
   },
 
   landmarks: {

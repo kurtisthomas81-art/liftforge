@@ -12,6 +12,10 @@
   let selectedSession = null;
   let loadingDetail = false;
 
+  let library = [];
+  let libraryLoading = true;
+  let installing = null;
+
   const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const CHART_MUSCLES = ['chest', 'back', 'quads', 'hamstrings', 'shoulders', 'biceps', 'triceps'];
 
@@ -27,7 +31,25 @@
       try { fatigueReport = await api.volume.fatigueReport(); } catch {}
     } catch (e) { error = e.message; }
     loading = false;
+
+    try { library = await api.programs.listLibrary(); } catch {}
+    libraryLoading = false;
   });
+
+  async function quickInstall(slug) {
+    installing = slug;
+    try {
+      await api.programs.installLibraryProgram(slug);
+      activeMeso = await api.programs.getActiveMesocycle();
+      if (activeMeso) {
+        [weekVolume, adherence] = await Promise.all([
+          api.volume.forWeek(null),
+          api.programs.adherence(activeMeso.id),
+        ]);
+      }
+    } catch (e) { error = e.message; }
+    installing = null;
+  }
 
   async function openDay(ps) {
     loadingDetail = true;
@@ -159,12 +181,33 @@
     <div class="card" style="color:var(--danger);">{error}</div>
 
   {:else if !activeMeso}
-    <div class="empty-program">
-      <div class="empty-icon">▦</div>
-      <div class="empty-title">No Active Program</div>
-      <div class="empty-sub">Build a mesocycle with progressive overload targets</div>
-      <button class="create-btn" on:click={() => goto('/program/builder')}>Create Program</button>
+    <div class="start-head">
+      <div class="start-title">Start a Program</div>
+      <div class="start-sub">Pick a published program or build a custom mesocycle.</div>
     </div>
+
+    {#if libraryLoading}
+      <div class="lib-loading">Loading programs…</div>
+    {:else}
+      <div class="lib-list">
+        {#each library as prog}
+          <div class="lib-row">
+            <div class="lib-row-info">
+              <div class="lib-row-name">{prog.name}</div>
+              <div class="lib-row-meta">{prog.days_per_week}d/wk · {prog.weeks}wk · {prog.difficulty}</div>
+            </div>
+            <div class="lib-row-btns">
+              <a class="lib-customize-link" href="/programs-library?open={prog.slug}">Customize</a>
+              <button class="lib-start-btn" disabled={installing !== null}
+                on:click={() => quickInstall(prog.slug)}>
+                {installing === prog.slug ? '…' : 'Start'}
+              </button>
+            </div>
+          </div>
+        {/each}
+      </div>
+      <button class="create-btn outline-btn" on:click={() => goto('/program/builder')}>Build Custom Mesocycle</button>
+    {/if}
 
   {:else}
     <!-- Program header -->
@@ -285,6 +328,9 @@
       <a href="/program/{activeMeso.id}" class="prog-detail-btn">View Details</a>
       <button class="create-outline-btn" on:click={() => goto('/program/builder')}>+ New Program</button>
     </div>
+
+    <!-- Switch program -->
+    <a href="/programs-library" class="switch-prog-link">Browse Programs Library →</a>
   {/if}
 {/if}
 
@@ -421,7 +467,51 @@
   .vol-bar-fill { position:absolute; top:0; bottom:0; left:0; border-radius:3px; transition:width 0.3s; }
   .vol-count { font-size:11px; color:var(--muted); width:44px; text-align:right; flex-shrink:0; }
 
-  /* Empty */
+  /* Start-a-program empty state */
+  .start-head { margin-bottom:16px; }
+  .start-title { font-family:var(--serif); font-size:22px; color:var(--text); margin-bottom:4px; }
+  .start-sub { font-size:12px; color:var(--muted); }
+  .lib-loading { font-size:12px; color:var(--muted); padding:12px 0; }
+  .lib-list { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+  .lib-row {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    background:var(--surf); border:1px solid var(--bdr);
+    border-radius:var(--radius-lg); padding:12px 14px;
+  }
+  .lib-row-info { flex:1; min-width:0; }
+  .lib-row-name { font-family:var(--serif); font-size:15px; color:var(--text); }
+  .lib-row-meta { font-size:10px; color:var(--muted); margin-top:2px; text-transform:capitalize; }
+  .lib-row-btns { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  .lib-customize-link {
+    font-size:11px; color:var(--muted); text-decoration:none;
+    border:1px solid var(--bdr); border-radius:var(--radius);
+    padding:5px 10px; transition:color .15s, border-color .15s;
+  }
+  .lib-customize-link:hover { color:var(--accent); border-color:var(--accent); }
+  .lib-start-btn {
+    background:var(--accent); color:#fff; border:none;
+    border-radius:var(--radius); padding:6px 14px;
+    font-size:12px; font-weight:600; cursor:pointer;
+    transition:opacity .15s;
+  }
+  .lib-start-btn:disabled { opacity:.5; cursor:not-allowed; }
+  .outline-btn {
+    width:100%; background:transparent;
+    border:1px dashed var(--bdr); border-radius:var(--radius-lg);
+    color:var(--muted); font-size:13px; padding:12px;
+    cursor:pointer; transition:border-color .15s, color .15s;
+  }
+  .outline-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* Switch program link */
+  .switch-prog-link {
+    display:block; margin-top:14px; text-align:center;
+    font-size:12px; color:var(--muted); text-decoration:none;
+    transition:color .15s;
+  }
+  .switch-prog-link:hover { color:var(--accent); }
+
+  /* Legacy empty (kept for safety) */
   .empty-program { display:flex; flex-direction:column; align-items:center; padding:60px 20px; text-align:center; gap:12px; }
   .empty-title { font-family:var(--serif); font-size:22px; }
   .empty-sub { font-size:13px; color:var(--muted); max-width:280px; }

@@ -835,51 +835,163 @@ def list_library(session: Session = Depends(get_session)):
     return list(PROGRAMS.values())
 
 
-@router.post("/library/{slug}/install")
-def install_library_program(slug: str, session: Session = Depends(get_session)):
+@router.get("/library/{slug}/preview")
+def preview_library_program(slug: str, session: Session = Depends(get_session)):
+    """Return program metadata + week-1 session templates with resolved exercise names/IDs."""
     from published_programs import PROGRAMS, build_schedule
 
     prog = PROGRAMS.get(slug)
     if not prog:
         raise HTTPException(status_code=404, detail="Program not found")
 
+    all_exercises = session.exec(select(Exercise)).all()
+    exercise_lookup = {ex.name: ex.id for ex in all_exercises}
+    id_to_name = {ex.id: ex.name for ex in all_exercises}
+
+    weeks_data = build_schedule(slug, exercise_lookup)
+
+    # Collect unique session types from week 1 (representative template)
+    seen_labels: set[str] = set()
+    session_types = []
+    for w in weeks_data:
+        if w["is_deload"]:
+            continue
+        for s in w["sessions"]:
+            label = s["split_day_name"]
+            if label not in seen_labels:
+                seen_labels.add(label)
+                session_types.append({
+                    "label": label,
+                    "exercises": [
+                        {
+                            "exercise_id": e["exercise_id"],
+                            "exercise_name": id_to_name.get(e["exercise_id"], e.get("exercise_name", "")),
+                            "sets": e["target_sets"],
+                            "reps_min": e["target_reps_min"],
+                            "reps_max": e["target_reps_max"],
+                            "rir": e["target_rir"],
+                            "notes": e.get("notes", ""),
+                        }
+                        for e in s["exercises"]
+                    ],
+                })
+
+    return {
+        **{k: prog[k] for k in ("slug", "name", "author", "description", "goal", "difficulty", "days_per_week", "weeks", "deload_week", "day_slots")},
+        "session_types": session_types,
+    }
+
+
+class LibraryInstallPayload(BaseModel):
+    weeks: Optional[int] = None
+    deload_week: Optional[int] = None
+    day_slots: Optional[list[int]] = None
+    session_overrides: Optional[dict] = None  # label → list of {exercise_id, sets, reps_min, reps_max, rir, notes}
+
+
+@router.post("/library/{slug}/install")
+def install_library_program(slug: str, payload: LibraryInstallPayload = LibraryInstallPayload(), db: Session = Depends(get_session)):
+    from published_programs import PROGRAMS, build_schedule
+
+    prog = PROGRAMS.get(slug)
+    if not prog:
+        raise HTTPException(status_code=404, detail="Program not found")
+
+    weeks_count = payload.weeks or prog["weeks"]
+    deload_wk = payload.deload_week or prog["deload_week"]
+    day_slots = payload.day_slots or prog["day_slots"]
+    deload_wk = min(deload_wk, weeks_count)
+
     # Deactivate any existing active mesocycles
     active_stmt = select(Mesocycle).where(
         Mesocycle.user_id == USER_ID,
         Mesocycle.status == "active",
     )
-    for old in session.exec(active_stmt).all():
+    for old in db.exec(active_stmt).all():
         old.status = "abandoned"
-        session.add(old)
-    session.commit()
+        db.add(old)
+    db.commit()
 
-    # Build exercise lookup: name → id
-    all_exercises = session.exec(select(Exercise)).all()
+    all_exercises = db.exec(select(Exercise)).all()
     exercise_lookup = {ex.name: ex.id for ex in all_exercises}
 
-    # Build the full week/session/exercise schedule
-    weeks_data = build_schedule(slug, exercise_lookup)
+    # Build base schedule then apply overrides and week-count adjustments
+    base_weeks = build_schedule(slug, exercise_lookup)
+    weeks_data = _apply_library_overrides(base_weeks, weeks_count, deload_wk, payload.session_overrides)
 
     meso = Mesocycle(
         user_id=USER_ID,
         name=prog["name"],
         split_template_id=None,
-        weeks_total=prog["weeks"],
+        weeks_total=weeks_count,
         current_week=1,
         status="active",
         goal=prog["goal"],
         start_date=date.today().isoformat(),
-        deload_week=prog["deload_week"],
+        deload_week=deload_wk,
         periodization_type="standard",
         created_at=datetime.utcnow(),
     )
-    session.add(meso)
-    session.commit()
-    session.refresh(meso)
+    db.add(meso)
+    db.commit()
+    db.refresh(meso)
 
-    _build_planned_sessions(meso.id, weeks_data, prog["day_slots"], session, {})
+    _build_planned_sessions(meso.id, weeks_data, day_slots, db, {})
 
     return _serialize_mesocycle(meso)
+
+
+def _apply_library_overrides(
+    base_weeks: list[dict],
+    weeks_count: int,
+    deload_week: int,
+    session_overrides: Optional[dict],
+) -> list[dict]:
+    """Extend/trim the schedule to weeks_count and apply exercise overrides."""
+    import copy
+
+    # Get working-week templates (non-deload)
+    working = [w for w in base_weeks if not w["is_deload"]]
+    if not working:
+        working = base_weeks
+
+    result = []
+    for w_num in range(1, weeks_count + 1):
+        is_deload = (w_num == deload_week)
+        template = working[(w_num - 1) % len(working)]
+        week = copy.deepcopy(template)
+        week["week_number"] = w_num
+        week["is_deload"] = is_deload
+
+        if session_overrides:
+            for sess in week["sessions"]:
+                label = sess["split_day_name"]
+                if label in session_overrides:
+                    new_exs = session_overrides[label]
+                    sess["exercises"] = [
+                        {
+                            "exercise_id": e["exercise_id"],
+                            "exercise_name": e.get("exercise_name", ""),
+                            "order_in_session": i + 1,
+                            "target_sets": max(2, e["sets"] // 2) if is_deload else e["sets"],
+                            "target_reps_min": e["reps_min"],
+                            "target_reps_max": e["reps_max"],
+                            "target_rir": min(4, e["rir"] + 2) if is_deload else e["rir"],
+                            "notes": (e.get("notes", "") + " (Deload)").strip() if is_deload else e.get("notes", ""),
+                        }
+                        for i, e in enumerate(new_exs)
+                    ]
+
+        if is_deload and not session_overrides:
+            # Scale default exercises for deload
+            for sess in week["sessions"]:
+                for ex in sess["exercises"]:
+                    ex["target_sets"] = max(2, ex["target_sets"] // 2)
+                    ex["target_rir"] = min(4, ex["target_rir"] + 2)
+
+        result.append(week)
+
+    return result
 
 
 @router.post("/planned/{id}/start")
