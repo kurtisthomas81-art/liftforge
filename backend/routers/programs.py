@@ -827,6 +827,61 @@ def update_planned_exercises(
     return {"ok": True, "count": len(exercises)}
 
 
+# ── Published program library ──────────────────────────────────────────────────
+
+@router.get("/library")
+def list_library(session: Session = Depends(get_session)):
+    from published_programs import PROGRAMS
+    return list(PROGRAMS.values())
+
+
+@router.post("/library/{slug}/install")
+def install_library_program(slug: str, session: Session = Depends(get_session)):
+    from published_programs import PROGRAMS, build_schedule
+
+    prog = PROGRAMS.get(slug)
+    if not prog:
+        raise HTTPException(status_code=404, detail="Program not found")
+
+    # Deactivate any existing active mesocycles
+    active_stmt = select(Mesocycle).where(
+        Mesocycle.user_id == USER_ID,
+        Mesocycle.status == "active",
+    )
+    for old in session.exec(active_stmt).all():
+        old.status = "abandoned"
+        session.add(old)
+    session.commit()
+
+    # Build exercise lookup: name → id
+    all_exercises = session.exec(select(Exercise)).all()
+    exercise_lookup = {ex.name: ex.id for ex in all_exercises}
+
+    # Build the full week/session/exercise schedule
+    weeks_data = build_schedule(slug, exercise_lookup)
+
+    meso = Mesocycle(
+        user_id=USER_ID,
+        name=prog["name"],
+        split_template_id=None,
+        weeks_total=prog["weeks"],
+        current_week=1,
+        status="active",
+        goal=prog["goal"],
+        start_date=date.today().isoformat(),
+        deload_week=prog["deload_week"],
+        periodization_type="standard",
+        created_at=datetime.utcnow(),
+    )
+    session.add(meso)
+    session.commit()
+    session.refresh(meso)
+
+    _build_planned_sessions(meso.id, weeks_data, prog["day_slots"], session, {})
+
+    return _serialize_mesocycle(meso)
+
+
 @router.post("/planned/{id}/start")
 def start_planned_session(id: int, session: Session = Depends(get_session)):
     """Create a WorkoutSession linked to this PlannedSession."""

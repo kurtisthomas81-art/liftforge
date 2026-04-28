@@ -89,7 +89,7 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 | ~~Session comparison~~ | ✅ Done | Week-over-week volume bars on `/progress`; this week vs. last week sets per muscle |
 | ~~Systemic fatigue score~~ | ✅ Done | 0–10 score on `/progress` from RIR trends + readiness + deload recency + RPE + check-in |
 | Habit tracking | 🔶 Partial | Weekly check-ins done (Mon: energy/sleep/stress/soreness); daily log + steps + protein still pending |
-| Published programs library | — | Seed 5/3/1, GZCLP, nSuns, Starting Strength, Jeff Nippard PHUL — just pick and run |
+| ~~Published programs library~~ | ✅ Done | Starting Strength, GZCLP, 5/3/1 BBB, nSuns CAP3, Jeff Nippard PHUL — one-tap install from More → Programs Library |
 | Superset support | — | Pair exercises, shared rest timer, logged back-to-back |
 | Progress photos | — | Date-stamped, local storage only; side-by-side comparison |
 | ~~Training notes search~~ | ✅ Done | Full-text search across session names, session notes, set notes — `/search` route + More sheet |

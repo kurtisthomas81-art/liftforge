@@ -80,6 +80,8 @@ export const api = {
     startPlannedSession: (id) => request('POST', `/programs/planned/${id}/start`),
     adherence: (id) => request('GET', `/programs/mesocycles/${id}/adherence`),
     review: (id) => request('GET', `/programs/mesocycles/${id}/review`),
+    listLibrary: () => request('GET', '/programs/library'),
+    installLibraryProgram: (slug) => request('POST', `/programs/library/${slug}/install`),
   },
 
   landmarks: {

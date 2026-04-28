@@ -30,6 +30,7 @@
   ];
 
   const moreItems = [
+    { href: '/programs-library', label: 'Programs Library', icon: '◈', desc: 'Pick a program and run it' },
     { href: '/calendar',     label: 'Calendar',     icon: '▣', desc: 'Monthly training view' },
     { href: '/exercises',    label: 'Library',      icon: '⊞', desc: 'Exercise browser' },
     { href: '/1rm-test',     label: '1RM Test',     icon: '⊗', desc: 'Guided max strength test' },
