@@ -94,7 +94,7 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 | Progress photos | — | Date-stamped, local storage only; side-by-side comparison |
 | ~~Training notes search~~ | ✅ Done | Full-text search across session names, session notes, set notes — `/search` route + More sheet |
 | ~~1RM percent calculator~~ | ✅ Done | 1RM % tab on Plates page — enter max, get table of 50–100% weights rounded to 2.5 |
-| PWA / mobile install | — | Manifest + service worker so it installs as a home screen app on phone |
+| ~~PWA / mobile install~~ | ✅ Done | Manifest + service worker; installs as home screen app on Android/iOS; offline shell cache |
 | ~~Periodization types~~ | ✅ Done | DUP / Linear / Block — picker in mesocycle wizard Step 3; engine applies correct rep/RIR scheme per week/session |
 | ~~1RM test protocol~~ | ✅ Done | 4-step guided protocol: pick exercise → working max → warmup ramp (40–100%) → result with e1RM + PR badge; linked from exercises page + More sheet |
 | ~~Post-mesocycle review~~ | ✅ Done | Auto-summary on completion: adherence %, per-muscle volume vs landmarks, RIR trend, MEV/MRV adjustment suggestions |
