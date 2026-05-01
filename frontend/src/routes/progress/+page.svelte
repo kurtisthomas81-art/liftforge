@@ -27,6 +27,8 @@
   // Key exercise shortcuts — look up by name fragment
   let quickExercises = [];
 
+  let strengthData = null;
+
   const SCIENCE_CARDS = [
     {
       title: 'Progressive Overload',
@@ -50,11 +52,12 @@
   const BACK_MUSCLES  = ['traps', 'lats', 'rear_delts', 'triceps', 'glutes', 'hamstrings'];
 
   onMount(async () => {
-    [fatigueData, weekVolume, exercises, goals] = await Promise.all([
+    [fatigueData, weekVolume, exercises, goals, strengthData] = await Promise.all([
       api.volume.fatigueReport().catch(() => null),
       api.volume.forWeek().catch(() => null),
       api.exercises.list().catch(() => []),
       api.goals.list().catch(() => []),
+      api.profile.strengthLevel().catch(() => null),
     ]);
 
     // Get prev-week data for WoW comparison
@@ -71,6 +74,19 @@
   });
 
   onDestroy(() => { if (chart) { chart.destroy(); chart = null; } });
+
+  function levelColor(level) {
+    if (level === 'elite')        return '#cd853f';
+    if (level === 'advanced')     return 'var(--accent)';
+    if (level === 'intermediate') return '#4a9eff';
+    return '#6868a0';
+  }
+  function liftLabel(key) {
+    return { squat: 'Squat', bench: 'Bench', deadlift: 'Deadlift', ohp: 'OHP' }[key] ?? key;
+  }
+  function nextLevelName(level) {
+    return { beginner: 'Intermediate', intermediate: 'Advanced', advanced: 'Elite' }[level] ?? '';
+  }
 
   $: overallScore = fatigueData != null ? Math.round(100 - fatigueData.fatigue_score * 10) : null;
   $: scoreColor = overallScore == null ? 'var(--muted)'
@@ -236,6 +252,50 @@
     {/if}
   </div>
 </div>
+
+<!-- Strength Level -->
+{#if strengthData}
+<div class="card section-card">
+  <div class="section-title">Strength Level</div>
+  {#if !strengthData.has_body_weight}
+    <p class="strength-prompt">Add body weight in your weekly check-in to unlock strength grading.</p>
+  {:else if !strengthData.lifts.some(l => l.level !== null)}
+    <p class="strength-prompt">Log Squat, Bench, Deadlift, and OHP to calibrate your strength level.</p>
+  {:else}
+    <div class="strength-overall">
+      <span class="strength-badge" style="background:{levelColor(strengthData.overall_level)}">
+        {strengthData.overall_level ?? '—'}
+      </span>
+      <span class="strength-method">Symmetric Strength · weakest lift scores</span>
+    </div>
+    <div class="strength-lifts">
+      {#each strengthData.lifts as lift}
+        <div class="strength-lift-row">
+          <div class="strength-lift-top">
+            <span class="strength-lift-name">{liftLabel(lift.lift_key)}</span>
+            {#if lift.level}
+              <span class="strength-level-chip" style="color:{levelColor(lift.level)}">{lift.level}</span>
+              <span class="strength-e1rm">{lift.e1rm} · {lift.ratio}×BW</span>
+            {:else}
+              <span class="strength-no-data">no data</span>
+            {/if}
+          </div>
+          {#if lift.level}
+            <div class="strength-bar-track">
+              <div class="strength-bar-fill" style="width:{lift.pct_to_next}%;background:{levelColor(lift.level)}"></div>
+            </div>
+            {#if lift.level !== 'elite'}
+              <div class="strength-bar-label">{lift.pct_to_next}% · next: {lift.next_threshold}×BW ({nextLevelName(lift.level)})</div>
+            {:else}
+              <div class="strength-bar-label" style="color:#cd853f">Elite</div>
+            {/if}
+          {/if}
+        </div>
+      {/each}
+    </div>
+  {/if}
+</div>
+{/if}
 
 <!-- 1RM Trend -->
 <div class="card section-card">
@@ -669,4 +729,20 @@
   .heat-label { display:flex; align-items:center; gap:8px; font-size:12px; text-transform:capitalize; }
   .heat-swatch { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
   .heat-sets { margin-left:auto; font-size:10px; color:var(--muted); }
+
+  /* Strength Level card */
+  .strength-prompt { color:var(--muted); font-size:13px; margin:8px 0; }
+  .strength-overall { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  .strength-badge { padding:4px 12px; border-radius:12px; font-size:12px; font-weight:700; color:#fff; text-transform:capitalize; }
+  .strength-method { font-size:10px; color:var(--muted); }
+  .strength-lifts { display:flex; flex-direction:column; gap:12px; }
+  .strength-lift-row {}
+  .strength-lift-top { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+  .strength-lift-name { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; width:52px; flex-shrink:0; }
+  .strength-level-chip { font-size:11px; font-weight:600; text-transform:capitalize; }
+  .strength-e1rm { font-size:12px; color:var(--text); margin-left:auto; }
+  .strength-no-data { font-size:11px; color:var(--faint); }
+  .strength-bar-track { height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; }
+  .strength-bar-fill { height:100%; border-radius:2px; transition:width .4s; }
+  .strength-bar-label { font-size:10px; color:var(--muted); margin-top:3px; }
 </style>

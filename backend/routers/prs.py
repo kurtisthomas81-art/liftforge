@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 from database import get_session
 from models import PersonalRecord, WorkoutSet, WorkoutSession, Exercise
+from routers.profile import grade_strength_level
 
 router = APIRouter(prefix="/api/prs", tags=["prs"])
 
@@ -169,5 +170,11 @@ def check_session_prs(session_id: int, session: Session = Depends(get_session)):
                 session.commit()
                 session.refresh(pr)
                 new_prs.append(_serialize_pr(pr, ex_name))
+
+    if any(pr["pr_type"] == "e1rm" for pr in new_prs):
+        try:
+            grade_strength_level(session)
+        except Exception:
+            pass
 
     return {"session_id": session_id, "new_prs": new_prs}

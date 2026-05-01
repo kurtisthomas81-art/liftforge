@@ -58,6 +58,7 @@ export const api = {
     update: (data) => request('PUT', '/profile', data),
     updateEquipment: (equipment) =>
       request('PUT', '/profile/equipment', { equipment }),
+    strengthLevel: () => request('GET', '/profile/strength-level'),
   },
 
   chat: {
