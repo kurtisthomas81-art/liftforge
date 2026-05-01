@@ -68,6 +68,7 @@ export const api = {
   programs: {
     getSplits: () => request('GET', '/programs/splits'),
     getSplit: (slug) => request('GET', `/programs/splits/${slug}`),
+    previewMesocycle: (data) => request('POST', '/programs/mesocycles/preview', data),
     createMesocycle: (data) => request('POST', '/programs/mesocycles', data),
     listMesocycles: () => request('GET', '/programs/mesocycles'),
     getActiveMesocycle: () => request('GET', '/programs/mesocycles/active'),

@@ -128,6 +128,96 @@ def _deload_sets(normal_sets: int, mev: int) -> int:
     return max(mev, normal_sets // 2)
 
 
+def preview_mesocycle(
+    split_template: dict,
+    goal: str,
+    weeks: int,
+    available_equipment: list[str],
+    exercises_db: list[dict],
+    landmarks: dict,
+    periodization_type: str = "standard",
+) -> list[dict]:
+    """
+    Returns per-day exercise selection (week-1 parameters) without persisting.
+    Each entry: {"day_index", "day_name", "muscle_focus", "exercises": [...]}
+    """
+    equip_set = set(available_equipment)
+    days = split_template.get("days", [])
+
+    # Sessions per muscle across all days (needed for per-session set calc)
+    sessions_per_muscle: dict[str, int] = {}
+    for d in days:
+        d_muscles = d.get("muscle_focus", [])
+        if isinstance(d_muscles, str):
+            try:
+                d_muscles = json.loads(d_muscles)
+            except Exception:
+                d_muscles = []
+        for m in d_muscles:
+            sessions_per_muscle[m] = sessions_per_muscle.get(m, 0) + 1
+
+    result = []
+    for idx, day in enumerate(days):
+        muscles: list[str] = day.get("muscle_focus", [])
+        if isinstance(muscles, str):
+            try:
+                muscles = json.loads(muscles)
+            except Exception:
+                muscles = []
+
+        day_muscle_count = len(muscles)
+        max_per_muscle = 1 if day_muscle_count >= 7 else (2 if day_muscle_count >= 4 else 3)
+        exercises_for_day = _select_exercises(muscles, equip_set, exercises_db, goal, max_per_muscle=max_per_muscle)
+
+        preview_exercises = []
+        for ex in exercises_for_day:
+            ex_muscles = ex.get("primary_muscles", [])
+            if isinstance(ex_muscles, str):
+                try:
+                    ex_muscles = json.loads(ex_muscles)
+                except Exception:
+                    ex_muscles = []
+            primary = ex_muscles[0] if ex_muscles else None
+            lm = landmarks.get(primary, {"mev": 8, "mav_low": 12, "mav_high": 20, "mrv": 22})
+            mev = lm.get("mev", 8)
+            mrv = lm.get("mrv", 22)
+            weekly_sets = _sets_for_week(mev, 1, mrv)
+            num_sessions = sessions_per_muscle.get(primary, 1)
+            per_session = min(max(2, math.ceil(weekly_sets / num_sessions)), 6)
+
+            mechanics = ex.get("mechanics", "compound")
+            if periodization_type == "linear":
+                reps_min, reps_max = _rep_range_linear(goal, 1, weeks)
+                rir = 3
+            elif periodization_type == "dup":
+                reps_min, reps_max, rir, _ = _dup_params(goal, day["day_number"])
+            elif periodization_type == "block":
+                phase = _block_phase(1, weeks)
+                reps_min, reps_max, rir, _ = _BLOCK_PHASES[phase]
+            else:
+                reps_min, reps_max = _rep_range_for_goal(goal, mechanics)
+                rir = _rir_for_goal(goal)
+
+            preview_exercises.append({
+                "exercise_id": ex["id"],
+                "exercise_name": ex["name"],
+                "primary_muscle": primary,
+                "target_sets": per_session,
+                "target_reps_min": reps_min,
+                "target_reps_max": reps_max,
+                "target_rir": rir,
+            })
+
+        result.append({
+            "day_index": idx,
+            "day_name": day["name"],
+            "muscle_focus": muscles,
+            "exercises": preview_exercises,
+        })
+
+    return result
+
+
 def generate_mesocycle(
     split_template: dict,
     goal: str,
@@ -137,6 +227,7 @@ def generate_mesocycle(
     available_equipment: list[str],
     exercises_db: list[dict],   # list of dicts with id, name, primary_muscles, mechanics, equipment_required
     periodization_type: str = "standard",
+    day_exercises: Optional[dict[int, list[int]]] = None,  # day_index -> [exercise_id, ...]
 ) -> list[dict]:
     """
     Returns a list of week dicts:
@@ -171,6 +262,7 @@ def generate_mesocycle(
     """
     equip_set = set(available_equipment)
     days = split_template.get("days", [])
+    ex_by_id = {ex["id"]: ex for ex in exercises_db}
 
     result = []
     for week_num in range(1, weeks + 1):
@@ -185,14 +277,18 @@ def generate_mesocycle(
                 except Exception:
                     muscles = []
 
-            # Determine max_per_muscle based on how many muscles are in the day
-            # Full body days get 1-2 per muscle, focused days get up to 3
-            day_muscle_count = len(muscles)
-            max_per_muscle = 1 if day_muscle_count >= 7 else (2 if day_muscle_count >= 4 else 3)
+            day_idx = day["day_number"] - 1
+            if day_exercises and day_idx in day_exercises:
+                exercises_for_day = [ex_by_id[eid] for eid in day_exercises[day_idx] if eid in ex_by_id]
+            else:
+                # Determine max_per_muscle based on how many muscles are in the day
+                # Full body days get 1-2 per muscle, focused days get up to 3
+                day_muscle_count = len(muscles)
+                max_per_muscle = 1 if day_muscle_count >= 7 else (2 if day_muscle_count >= 4 else 3)
 
-            exercises_for_day = _select_exercises(
-                muscles, equip_set, exercises_db, goal, max_per_muscle=max_per_muscle
-            )
+                exercises_for_day = _select_exercises(
+                    muscles, equip_set, exercises_db, goal, max_per_muscle=max_per_muscle
+                )
 
             # Distribute sets from weekly volume across sessions that hit each muscle
             # Count how many sessions per week hit each muscle

@@ -144,6 +144,8 @@ class MesocycleCreate(BaseModel):
     # For custom splits
     custom_days: Optional[list[dict]] = None  # [{"name": "Push", "muscle_focus": [...]}]
     periodization_type: str = "standard"  # standard|linear|dup|block
+    # Optional exercise overrides from wizard preview (day_index -> [exercise_id, ...])
+    day_exercises: Optional[dict[str, list[int]]] = None
 
 
 class MesocycleUpdate(BaseModel):
@@ -209,24 +211,10 @@ def _build_planned_sessions(
             session.commit()
 
 
-@router.post("/mesocycles")
-def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_session)):
-    from engine.meso_builder import generate_mesocycle
-
-    # Deactivate any existing active mesocycles
-    active_stmt = select(Mesocycle).where(
-        Mesocycle.user_id == USER_ID,
-        Mesocycle.status == "active",
-    )
-    for old in session.exec(active_stmt).all():
-        old.status = "abandoned"
-        session.add(old)
-    session.commit()
-
-    # Resolve split template
+def _resolve_meso_resources(payload: MesocycleCreate, session: Session) -> tuple:
+    """Return (template_data, user_equipment, landmarks, exercises_db) for engine calls."""
     template = None
     days = []
-    days_lookup: dict[int, int] = {}  # day_number -> split_day id
 
     if payload.split_slug:
         stmt = select(SplitTemplate).where(SplitTemplate.slug == payload.split_slug)
@@ -235,60 +223,25 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
             raise HTTPException(status_code=404, detail="Split template not found")
         days_stmt = select(SplitDay).where(SplitDay.template_id == template.id)
         days = sorted(session.exec(days_stmt).all(), key=lambda d: d.day_number)
-        days_lookup = {d.day_number: d.id for d in days}
 
-    # Determine days_per_week from template or custom_days
-    if template:
-        days_per_week = template.days_per_week
-    elif payload.custom_days:
-        days_per_week = len(payload.custom_days)
-    else:
+    if not template and not payload.custom_days:
         raise HTTPException(status_code=400, detail="split_slug or custom_days required")
 
-    deload_week = payload.weeks  # last week is deload by default
-    start = payload.start_date or date.today().isoformat()
-
-    # Auto-name
-    name = payload.name
-    if not name:
-        from datetime import datetime as dt
-        now = dt.utcnow()
-        month_year = now.strftime("%B %Y")
-        name = f"Mesocycle {month_year}"
-
-    meso = Mesocycle(
-        user_id=USER_ID,
-        name=name,
-        split_template_id=template.id if template else None,
-        weeks_total=payload.weeks,
-        current_week=1,
-        status="active",
-        goal=payload.goal,
-        start_date=start,
-        deload_week=deload_week,
-        periodization_type=payload.periodization_type,
-    )
-    session.add(meso)
-    session.commit()
-    session.refresh(meso)
-
-    # Get user equipment
     eq_stmt = select(UserEquipment).where(
         UserEquipment.user_id == USER_ID,
         UserEquipment.available == True,
     )
     user_equipment = [e.equipment for e in session.exec(eq_stmt).all()]
     if not user_equipment:
-        # Fall back to bodyweight + common free weights
         user_equipment = ["bodyweight", "dumbbells", "barbell", "bench", "rack", "cable_machine", "machine"]
 
-    # Get landmarks
     lm_stmt = select(MuscleVolumeLandmark).where(MuscleVolumeLandmark.user_id == USER_ID)
     landmarks_raw = session.exec(lm_stmt).all()
-    landmarks = {lm.muscle: {"mev": lm.mev, "mav_low": lm.mav_low, "mav_high": lm.mav_high, "mrv": lm.mrv}
-                 for lm in landmarks_raw}
+    landmarks = {
+        lm.muscle: {"mev": lm.mev, "mav_low": lm.mav_low, "mav_high": lm.mav_high, "mrv": lm.mrv}
+        for lm in landmarks_raw
+    }
 
-    # Get all exercises as dicts
     all_exercises = session.exec(select(Exercise)).all()
     exercises_db = []
     for ex in all_exercises:
@@ -308,16 +261,10 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
             "equipment_required": eq,
         })
 
-    # Build template data structure for engine
     if template:
         template_data = {
             "days": [
-                {
-                    "day_number": d.day_number,
-                    "id": d.id,
-                    "name": d.name,
-                    "muscle_focus": d.muscle_focus,
-                }
+                {"day_number": d.day_number, "id": d.id, "name": d.name, "muscle_focus": d.muscle_focus}
                 for d in days
             ]
         }
@@ -334,6 +281,75 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
             ]
         }
 
+    return template, days, template_data, user_equipment, landmarks, exercises_db
+
+
+@router.post("/mesocycles/preview")
+def preview_mesocycle_endpoint(payload: MesocycleCreate, session: Session = Depends(get_session)):
+    from engine.meso_builder import preview_mesocycle
+    _, _, template_data, user_equipment, landmarks, exercises_db = _resolve_meso_resources(payload, session)
+    return preview_mesocycle(
+        split_template=template_data,
+        goal=payload.goal,
+        weeks=payload.weeks,
+        available_equipment=user_equipment,
+        exercises_db=exercises_db,
+        landmarks=landmarks,
+        periodization_type=payload.periodization_type,
+    )
+
+
+@router.post("/mesocycles")
+def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_session)):
+    from engine.meso_builder import generate_mesocycle
+
+    # Deactivate any existing active mesocycles
+    active_stmt = select(Mesocycle).where(
+        Mesocycle.user_id == USER_ID,
+        Mesocycle.status == "active",
+    )
+    for old in session.exec(active_stmt).all():
+        old.status = "abandoned"
+        session.add(old)
+    session.commit()
+
+    template, days, template_data, user_equipment, landmarks, exercises_db = _resolve_meso_resources(payload, session)
+
+    days_lookup: dict[int, int] = {d.day_number: d.id for d in days}
+    if template:
+        days_per_week = template.days_per_week
+    else:
+        days_per_week = len(payload.custom_days)
+
+    deload_week = payload.weeks
+    start = payload.start_date or date.today().isoformat()
+
+    name = payload.name
+    if not name:
+        from datetime import datetime as dt
+        now = dt.utcnow()
+        name = f"Mesocycle {now.strftime('%B %Y')}"
+
+    meso = Mesocycle(
+        user_id=USER_ID,
+        name=name,
+        split_template_id=template.id if template else None,
+        weeks_total=payload.weeks,
+        current_week=1,
+        status="active",
+        goal=payload.goal,
+        start_date=start,
+        deload_week=deload_week,
+        periodization_type=payload.periodization_type,
+    )
+    session.add(meso)
+    session.commit()
+    session.refresh(meso)
+
+    day_exercises_override = None
+    if payload.day_exercises:
+        day_exercises_override = {int(k): v for k, v in payload.day_exercises.items()}
+
     weeks_data = generate_mesocycle(
         split_template=template_data,
         goal=payload.goal,
@@ -343,9 +359,9 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
         available_equipment=user_equipment,
         exercises_db=exercises_db,
         periodization_type=payload.periodization_type,
+        day_exercises=day_exercises_override,
     )
 
-    # Ensure days_of_week has enough entries
     dow_list = list(payload.days_of_week)
     while len(dow_list) < days_per_week:
         dow_list.append(len(dow_list) % 7)

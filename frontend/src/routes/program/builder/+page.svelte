@@ -26,8 +26,20 @@
   let daysOfWeek = [];   // array of 0-6 per split day
 
   // Step 4 (review)
-  let previewData = null;
+  let previewData = [];
   let previewLoading = false;
+  let previewError = '';
+  let editedDays = {};   // { dayIndex: [exerciseId, ...] } — tracks swaps
+
+  // Swap modal
+  let showSwapModal = false;
+  let swapDayIdx = null;
+  let swapExIdx = null;
+  let swapMuscle = '';
+  let swapSearch = '';
+  let swapExercises = [];
+  let allExercises = [];
+  let loadingAllExercises = false;
 
   const DOW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const ALL_MUSCLES = ['chest', 'back', 'quads', 'hamstrings', 'glutes', 'shoulders',
@@ -93,26 +105,44 @@
     return group ? group.templates : [];
   }
 
+  function buildPayload() {
+    const p = {
+      goal: selectedGoal,
+      weeks: selectedWeeks,
+      periodization_type: selectedPeriodization,
+      start_date: startDate,
+      name: mesoName,
+      days_of_week: daysOfWeek,
+    };
+    if (isCustom) {
+      p.custom_days = customDays;
+    } else {
+      p.split_slug = selectedSplit.slug;
+    }
+    return p;
+  }
+
   async function goToReview() {
     step = 4;
+    previewData = [];
+    editedDays = {};
+    previewError = '';
+    previewLoading = true;
+    try {
+      previewData = await api.programs.previewMesocycle(buildPayload());
+    } catch (e) {
+      previewError = e.message;
+    }
+    previewLoading = false;
   }
 
   async function createMesocycle() {
     creating = true;
     error = null;
     try {
-      const payload = {
-        goal: selectedGoal,
-        weeks: selectedWeeks,
-        periodization_type: selectedPeriodization,
-        start_date: startDate,
-        name: mesoName,
-        days_of_week: daysOfWeek,
-      };
-      if (isCustom) {
-        payload.custom_days = customDays;
-      } else {
-        payload.split_slug = selectedSplit.slug;
+      const payload = buildPayload();
+      if (Object.keys(editedDays).length > 0) {
+        payload.day_exercises = editedDays;
       }
       await api.programs.createMesocycle(payload);
       goto('/program');
@@ -120,6 +150,54 @@
       error = e.message;
     }
     creating = false;
+  }
+
+  async function openSwapModal(dayIdx, exIdx, muscle) {
+    swapDayIdx = dayIdx;
+    swapExIdx = exIdx;
+    swapMuscle = muscle || '';
+    swapSearch = '';
+    showSwapModal = true;
+    if (allExercises.length === 0) {
+      loadingAllExercises = true;
+      try {
+        allExercises = await api.exercises.list();
+      } catch (e) { /* ignore */ }
+      loadingAllExercises = false;
+    }
+    filterSwap();
+  }
+
+  function filterSwap() {
+    swapExercises = allExercises.filter(ex => {
+      let muscles = ex.primary_muscles;
+      if (typeof muscles === 'string') { try { muscles = JSON.parse(muscles); } catch { muscles = []; } }
+      if (!Array.isArray(muscles)) muscles = [];
+      const matchesMuscle = !swapMuscle || muscles.includes(swapMuscle);
+      const matchesSearch = !swapSearch || ex.name.toLowerCase().includes(swapSearch.toLowerCase());
+      return matchesMuscle && matchesSearch;
+    });
+  }
+
+  function confirmSwap(newEx) {
+    let muscles = newEx.primary_muscles;
+    if (typeof muscles === 'string') { try { muscles = JSON.parse(muscles); } catch { muscles = []; } }
+    if (!Array.isArray(muscles)) muscles = [];
+    const primaryMuscle = muscles[0] || null;
+
+    const day = previewData[swapDayIdx];
+    const newExercises = day.exercises.map((ex, i) =>
+      i === swapExIdx
+        ? { ...ex, exercise_id: newEx.id, exercise_name: newEx.name, primary_muscle: primaryMuscle }
+        : ex
+    );
+
+    previewData = previewData.map((d, i) =>
+      i === swapDayIdx ? { ...d, exercises: newExercises } : d
+    );
+
+    editedDays = { ...editedDays, [swapDayIdx]: newExercises.map(e => e.exercise_id) };
+    showSwapModal = false;
   }
 
   function stepLabel(n) {
@@ -321,61 +399,131 @@
     </div>
 
   {:else if step === 4}
-    <!-- Step 4: Review -->
+    <!-- Step 4: Review exercises -->
     <div class="card">
       <div class="flex items-center gap-3 mb-4">
         <button class="btn-ghost btn-sm" on:click={() => step = 3}>← Back</button>
-        <div class="section-title">Review & Generate</div>
+        <div class="section-title">Review Exercises</div>
       </div>
 
-      <div style="margin-bottom:20px; display:flex; flex-direction:column; gap:8px;">
-        <div class="flex justify-between" style="font-size:13px;">
-          <span style="color:var(--text-muted);">Name</span>
-          <span style="font-weight:600;">{mesoName}</span>
-        </div>
-        <div class="flex justify-between" style="font-size:13px;">
-          <span style="color:var(--text-muted);">Split</span>
-          <span>{isCustom ? 'Custom' : selectedSplit?.name}</span>
-        </div>
-        <div class="flex justify-between" style="font-size:13px;">
-          <span style="color:var(--text-muted);">Goal</span>
-          <span style="text-transform:capitalize;">{selectedGoal}</span>
-        </div>
-        <div class="flex justify-between" style="font-size:13px;">
-          <span style="color:var(--text-muted);">Periodization</span>
-          <span>{PERIODIZATIONS.find(p => p.key === selectedPeriodization)?.label ?? selectedPeriodization}</span>
-        </div>
-        <div class="flex justify-between" style="font-size:13px;">
-          <span style="color:var(--text-muted);">Duration</span>
-          <span>{selectedWeeks} weeks (week {selectedWeeks} = deload)</span>
-        </div>
-        <div class="flex justify-between" style="font-size:13px;">
-          <span style="color:var(--text-muted);">Start date</span>
-          <span>{startDate}</span>
-        </div>
-        <div class="flex justify-between" style="font-size:13px;">
-          <span style="color:var(--text-muted);">Training days</span>
-          <span>
-            {#each (isCustom ? customDays : (selectedSplit?.days ?? [])) as day, i}
-              {day.name} ({DOW_LABELS[daysOfWeek[i]]})
-              {#if i < (isCustom ? customDays.length : selectedSplit?.days?.length ?? 0) - 1}, {/if}
-            {/each}
-          </span>
-        </div>
+      <!-- Compact settings summary -->
+      <div style="display:grid; grid-template-columns:auto 1fr; gap:4px 16px; margin-bottom:20px; font-size:12px; padding:12px; background:var(--surface-2); border-radius:6px; border:1px solid var(--border);">
+        <span style="color:var(--text-muted);">Name</span><span style="font-weight:600; color:var(--text);">{mesoName}</span>
+        <span style="color:var(--text-muted);">Split</span><span style="color:var(--text);">{isCustom ? 'Custom' : selectedSplit?.name}</span>
+        <span style="color:var(--text-muted);">Goal</span><span style="text-transform:capitalize; color:var(--text);">{selectedGoal}</span>
+        <span style="color:var(--text-muted);">Duration</span><span style="color:var(--text);">{selectedWeeks} weeks · week {selectedWeeks} = deload · starts {startDate}</span>
       </div>
 
-      <div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:12px; margin-bottom:20px; font-size:12px; color:var(--text-muted); line-height:1.6;">
-        Exercises will be auto-selected based on your available equipment and volume landmarks, starting at MEV and progressing toward MRV over the cycle. You can adjust exercises after creation.
+      <!-- Exercise preview by day -->
+      <div style="margin-bottom:20px;">
+        <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+          Exercises
+          <span style="font-size:11px; font-weight:400; color:var(--text-muted);">week 1 targets · swap any before generating</span>
+        </div>
+
+        {#if previewLoading}
+          <div style="display:flex; align-items:center; gap:10px; padding:20px 0; color:var(--text-muted); font-size:13px;">
+            <div class="spinner" style="width:16px; height:16px;"></div>
+            Building exercise plan...
+          </div>
+        {:else if previewError}
+          <div style="color:var(--danger); font-size:12px; margin-bottom:8px;">{previewError}</div>
+        {:else}
+          {#each previewData as day}
+            <div style="margin-bottom:18px;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--border);">
+                <span style="font-size:12px; font-weight:700; color:var(--primary);">{day.day_name}</span>
+                <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                  {#each day.muscle_focus as m}
+                    <span style="padding:2px 6px; border-radius:3px; background:var(--surface-2); color:var(--text-muted); font-size:10px; text-transform:capitalize;">{m}</span>
+                  {/each}
+                </div>
+              </div>
+              {#if day.exercises.length === 0}
+                <div style="font-size:12px; color:var(--text-faint); padding:6px 0;">No exercises matched your equipment for this day.</div>
+              {:else}
+                {#each day.exercises as ex, exIdx}
+                  <div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-faint);">
+                    <span style="flex:1; font-size:13px; color:var(--text);">{ex.exercise_name}</span>
+                    <span style="font-size:11px; color:var(--text-muted); white-space:nowrap;">{ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max} @RIR{ex.target_rir}</span>
+                    <button
+                      on:click={() => openSwapModal(day.day_index, exIdx, ex.primary_muscle)}
+                      title="Swap exercise"
+                      style="padding:3px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-muted); font-size:12px; cursor:pointer; flex-shrink:0;"
+                    >⇄</button>
+                  </div>
+                {/each}
+              {/if}
+            </div>
+          {/each}
+        {/if}
       </div>
 
       {#if error}
         <div style="color:var(--danger); font-size:13px; margin-bottom:12px;">{error}</div>
       {/if}
 
-      <button class="btn-primary" on:click={createMesocycle} disabled={creating}
+      <button class="btn-primary" on:click={createMesocycle} disabled={creating || previewLoading}
         style="padding:12px 28px; font-size:15px;">
         {creating ? 'Building...' : 'Generate Mesocycle'}
       </button>
     </div>
   {/if}
 </div>
+
+<!-- Swap exercise modal -->
+{#if showSwapModal}
+  <div
+    style="position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; display:flex; align-items:flex-end; justify-content:center;"
+    on:click|self={() => showSwapModal = false}
+    role="dialog" aria-modal="true"
+  >
+    <div style="background:var(--surface); border-radius:12px 12px 0 0; width:100%; max-width:600px; max-height:72vh; display:flex; flex-direction:column; padding:20px;">
+      <div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:14px;">Swap Exercise</div>
+
+      <input
+        bind:value={swapSearch}
+        on:input={filterSwap}
+        placeholder="Search exercises..."
+        style="margin-bottom:10px;"
+      />
+
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+        <button
+          on:click={() => { swapMuscle = ''; filterSwap(); }}
+          style="padding:3px 10px; border-radius:12px; border:1px solid {swapMuscle === '' ? 'var(--primary)' : 'var(--border)'}; background:{swapMuscle === '' ? 'rgba(232,160,64,0.15)' : 'transparent'}; color:{swapMuscle === '' ? 'var(--primary)' : 'var(--text-muted)'}; font-size:11px; cursor:pointer;"
+        >All</button>
+        {#each ALL_MUSCLES as m}
+          <button
+            on:click={() => { swapMuscle = m; filterSwap(); }}
+            style="padding:3px 10px; border-radius:12px; border:1px solid {swapMuscle === m ? 'var(--primary)' : 'var(--border)'}; background:{swapMuscle === m ? 'rgba(232,160,64,0.15)' : 'transparent'}; color:{swapMuscle === m ? 'var(--primary)' : 'var(--text-muted)'}; font-size:11px; cursor:pointer; text-transform:capitalize;"
+          >{m}</button>
+        {/each}
+      </div>
+
+      {#if loadingAllExercises}
+        <div class="spinner" style="width:18px; height:18px; margin:20px auto;"></div>
+      {:else}
+        <div style="overflow-y:auto; flex:1;">
+          {#each swapExercises.slice(0, 80) as ex}
+            <button
+              on:click={() => confirmSwap(ex)}
+              style="width:100%; text-align:left; padding:10px 8px; border-bottom:1px solid var(--border-faint); background:transparent; cursor:pointer; display:flex; gap:10px; align-items:center; border-radius:0;"
+            >
+              <div style="flex:1;">
+                <div style="font-size:13px; font-weight:500; color:var(--text);">{ex.name}</div>
+                <div style="font-size:11px; color:var(--text-muted); text-transform:capitalize;">
+                  {Array.isArray(ex.primary_muscles) ? ex.primary_muscles.join(', ') : (ex.primary_muscles ?? '')}
+                  {ex.mechanics ? ' · ' + ex.mechanics : ''}
+                </div>
+              </div>
+            </button>
+          {/each}
+          {#if swapExercises.length === 0}
+            <div style="color:var(--text-muted); font-size:13px; padding:16px 0;">No exercises found.</div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
