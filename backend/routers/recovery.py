@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 from sqlmodel import Session, select
 from database import get_session
-from models import WorkoutSet, WorkoutSession, Exercise, WeeklyCheckin
+from models import WorkoutSet, WorkoutSession, Exercise, WeeklyCheckin, BodyMeasurement
 from routers.volume import _parse_muscles
 
 router = APIRouter(prefix="/api", tags=["recovery"])
@@ -108,6 +108,7 @@ class CheckinCreate(BaseModel):
     stress: int
     soreness: int
     notes: Optional[str] = ""
+    body_weight: Optional[float] = None
 
 
 def _current_week_start() -> str:
@@ -159,4 +160,25 @@ def submit_checkin(body: CheckinCreate, db: Session = Depends(get_session)):
             notes=body.notes or "",
         ))
     db.commit()
+
+    if body.body_weight is not None:
+        today = date.today().isoformat()
+        existing_bm = db.exec(
+            select(BodyMeasurement).where(
+                BodyMeasurement.user_id == USER_ID,
+                BodyMeasurement.date == today,
+            )
+        ).first()
+        if existing_bm:
+            existing_bm.body_weight = body.body_weight
+            db.add(existing_bm)
+        else:
+            db.add(BodyMeasurement(
+                user_id=USER_ID,
+                date=today,
+                body_weight=body.body_weight,
+                notes="",
+            ))
+        db.commit()
+
     return {"ok": True, "week_start": week_start}

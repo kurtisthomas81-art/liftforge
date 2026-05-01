@@ -47,6 +47,7 @@ class UserProfile(SQLModel, table=True):
     user_id: int = Field(default=1, unique=True, index=True)
     display_name: str = Field(default="Lifter")
     unit_preference: str = Field(default="lbs")    # lbs|kg
+    sex: Optional[str] = Field(default=None)       # male|female
     experience_level: str = Field(default="intermediate")  # beginner|intermediate|advanced
     default_rest_seconds: int = Field(default=90)
     liftsaur_api_token: Optional[str] = Field(default=None)

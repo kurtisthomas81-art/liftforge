@@ -5,6 +5,7 @@
 
   let displayName = '';
   let unitPreference = 'lbs';
+  let sex = null;
   let experienceLevel = 'intermediate';
   let equipment = new Set();
   let defaultRestSeconds = 90;
@@ -100,6 +101,7 @@
     const p = await api.profile.get();
     displayName = p.display_name;
     unitPreference = p.unit_preference;
+    sex = p.sex ?? null;
     experienceLevel = p.experience_level;
     defaultRestSeconds = p.default_rest_seconds ?? 90;
     preferredSessionMinutes = p.preferred_session_minutes ?? 60;
@@ -117,7 +119,7 @@
   async function saveProfile() {
     saving = true;
     try {
-      await api.profile.update({ display_name: displayName, unit_preference: unitPreference, experience_level: experienceLevel, default_rest_seconds: defaultRestSeconds, preferred_session_minutes: preferredSessionMinutes });
+      await api.profile.update({ display_name: displayName, unit_preference: unitPreference, sex, experience_level: experienceLevel, default_rest_seconds: defaultRestSeconds, preferred_session_minutes: preferredSessionMinutes });
       await refreshProfile();
       saved = true; setTimeout(() => saved = false, 2500);
     } catch {}
@@ -229,6 +231,16 @@
     <div class="unit-toggle">
       <button class="unit-btn" class:active={unitPreference === 'lbs'} on:click={() => unitPreference = 'lbs'}>lbs</button>
       <button class="unit-btn" class:active={unitPreference === 'kg'} on:click={() => unitPreference = 'kg'}>kg</button>
+    </div>
+  </div>
+
+  <div class="setting-row">
+    <div class="setting-lbl">Sex
+      <div class="setting-hint">Used for strength level grading</div>
+    </div>
+    <div class="unit-toggle">
+      <button class="unit-btn" class:active={sex === 'male'} on:click={() => sex = 'male'}>Male</button>
+      <button class="unit-btn" class:active={sex === 'female'} on:click={() => sex = 'female'}>Female</button>
     </div>
   </div>
 
@@ -463,6 +475,7 @@
   }
   .setting-row:last-of-type { border-bottom:none; }
   .setting-lbl { font-size:13px; color:var(--text); }
+  .setting-hint { font-size:10px; color:var(--muted); margin-top:2px; font-weight:400; }
 
   /* Unit toggle */
   .unit-toggle { display:flex; background:var(--surf-2); border:1px solid var(--bdr-2); border-radius:6px; overflow:hidden; }

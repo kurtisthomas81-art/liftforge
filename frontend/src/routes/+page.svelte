@@ -17,7 +17,7 @@
   // Weekly check-in
   let checkinDue = false;
   let checkinDismissed = false;
-  let checkinData = { energy: 3, sleep_quality: 3, stress: 3, soreness: 3, notes: '' };
+  let checkinData = { energy: 3, sleep_quality: 3, stress: 3, soreness: 3, notes: '', body_weight: null };
   let submittingCheckin = false;
   let checkinDone = false;
 
@@ -202,6 +202,16 @@
           </div>
         </div>
       {/each}
+      <div class="checkin-row" style="margin-top:4px;">
+        <div class="checkin-lbl">Body Weight <span style="font-size:10px; color:var(--muted);">({$userProfile?.unit_preference ?? 'lbs'}) optional</span></div>
+        <input
+          type="number"
+          min="50" max="500" step="0.1"
+          bind:value={checkinData.body_weight}
+          placeholder="—"
+          style="width:72px; text-align:right; font-size:13px; padding:4px 8px;"
+        />
+      </div>
       <button class="btn-primary checkin-submit" on:click={submitCheckin} disabled={submittingCheckin}>
         {submittingCheckin ? 'Saving…' : 'Submit'}
       </button>
