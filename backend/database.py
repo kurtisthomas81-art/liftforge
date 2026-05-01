@@ -28,10 +28,13 @@ def migrate_db():
     with engine.connect() as conn:
         for table, col, typedef in new_cols:
             try:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}"))
-                conn.commit()
+                existing = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+                col_names = [row[1] for row in existing]
+                if col not in col_names:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}"))
+                    conn.commit()
             except Exception:
-                pass  # column already exists
+                pass
 
 
 def get_session():

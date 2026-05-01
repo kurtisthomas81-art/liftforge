@@ -14,6 +14,7 @@
   let savingEquip = false;
   let saved = false;
   let savedEquip = false;
+  let saveError = '';
 
   let landmarks = [];
   let savingLandmarks = false;
@@ -118,11 +119,14 @@
 
   async function saveProfile() {
     saving = true;
+    saveError = '';
     try {
       await api.profile.update({ display_name: displayName, unit_preference: unitPreference, sex, experience_level: experienceLevel, default_rest_seconds: defaultRestSeconds, preferred_session_minutes: preferredSessionMinutes });
       await refreshProfile();
       saved = true; setTimeout(() => saved = false, 2500);
-    } catch {}
+    } catch (e) {
+      saveError = e.message || 'Save failed';
+    }
     saving = false;
   }
 
@@ -279,6 +283,9 @@
     </button>
     {#if saved}<span class="saved-badge">Saved!</span>{/if}
   </div>
+  {#if saveError}
+    <div style="font-size:12px; color:var(--accent); margin-top:6px; word-break:break-all;">{saveError}</div>
+  {/if}
 </div>
 
 <!-- Equipment -->
