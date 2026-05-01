@@ -8,7 +8,8 @@ from database import get_session
 from models import (
     SplitTemplate, SplitDay,
     Mesocycle, MesocycleWeek, PlannedSession, PlannedExercise,
-    WorkoutSession, WorkoutSet, Exercise, UserEquipment, MuscleVolumeLandmark
+    WorkoutSession, WorkoutSet, Exercise, UserEquipment, MuscleVolumeLandmark,
+    UserProfile,
 )
 
 router = APIRouter(prefix="/api/programs", tags=["programs"])
@@ -144,6 +145,7 @@ class MesocycleCreate(BaseModel):
     # For custom splits
     custom_days: Optional[list[dict]] = None  # [{"name": "Push", "muscle_focus": [...]}]
     periodization_type: str = "standard"  # standard|linear|dup|block
+    session_minutes: Optional[int] = None
     # Optional exercise overrides from wizard preview (day_index -> [exercise_id, ...])
     day_exercises: Optional[dict[str, list[int]]] = None
 
@@ -212,7 +214,7 @@ def _build_planned_sessions(
 
 
 def _resolve_meso_resources(payload: MesocycleCreate, session: Session) -> tuple:
-    """Return (template_data, user_equipment, landmarks, exercises_db) for engine calls."""
+    """Return (template, days, template_data, user_equipment, landmarks, exercises_db, experience_level)."""
     template = None
     days = []
 
@@ -281,13 +283,16 @@ def _resolve_meso_resources(payload: MesocycleCreate, session: Session) -> tuple
             ]
         }
 
-    return template, days, template_data, user_equipment, landmarks, exercises_db
+    profile = session.exec(select(UserProfile).where(UserProfile.user_id == USER_ID)).first()
+    experience_level = profile.experience_level if profile else "intermediate"
+
+    return template, days, template_data, user_equipment, landmarks, exercises_db, experience_level
 
 
 @router.post("/mesocycles/preview")
 def preview_mesocycle_endpoint(payload: MesocycleCreate, session: Session = Depends(get_session)):
     from engine.meso_builder import preview_mesocycle
-    _, _, template_data, user_equipment, landmarks, exercises_db = _resolve_meso_resources(payload, session)
+    _, _, template_data, user_equipment, landmarks, exercises_db, experience_level = _resolve_meso_resources(payload, session)
     return preview_mesocycle(
         split_template=template_data,
         goal=payload.goal,
@@ -296,6 +301,8 @@ def preview_mesocycle_endpoint(payload: MesocycleCreate, session: Session = Depe
         exercises_db=exercises_db,
         landmarks=landmarks,
         periodization_type=payload.periodization_type,
+        session_minutes=payload.session_minutes,
+        experience_level=experience_level,
     )
 
 
@@ -313,7 +320,7 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
         session.add(old)
     session.commit()
 
-    template, days, template_data, user_equipment, landmarks, exercises_db = _resolve_meso_resources(payload, session)
+    template, days, template_data, user_equipment, landmarks, exercises_db, experience_level = _resolve_meso_resources(payload, session)
 
     days_lookup: dict[int, int] = {d.day_number: d.id for d in days}
     if template:
@@ -360,6 +367,8 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
         exercises_db=exercises_db,
         periodization_type=payload.periodization_type,
         day_exercises=day_exercises_override,
+        session_minutes=payload.session_minutes,
+        experience_level=experience_level,
     )
 
     dow_list = list(payload.days_of_week)

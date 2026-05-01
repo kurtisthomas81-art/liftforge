@@ -140,16 +140,16 @@ Intelligent program generation that accounts for session time, lifter experience
 
 Overall level = weakest lift (Caliber-style — you're only as strong as your weakest link).
 
-### 6C — Smart Mesocycle Builder
+### 6C — Smart Mesocycle Builder ✅ COMPLETE
 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | ~~Wizard exercise preview + swap~~ | ✅ Done | Step 4 shows auto-selected exercises per day; swap any before generating; overrides passed to engine |
-| Session duration in wizard | — | Step 3 pulls `preferred_session_minutes` from profile as default (30/45/60/75/90 min slider); overrideable per mesocycle |
-| Time-budget exercise cap | — | Engine computes `max_exercises_per_session` from duration + goal rest period (hypertrophy: ~8.75 min/exercise; strength: ~11.75 min/exercise); compounds prioritized, session capped before isolation work |
-| Level-aware exercise selection | — | Beginners: compounds only, 3–4 exercises max, 12–15 reps, stay at MEV. Intermediate: mostly compounds + some isolation, standard reps, normal progression. Advanced: full range, all periodization styles. |
-| Level-aware volume progression | — | Beginners start at MEV and progress slowly (MEV + 1 set/week). Intermediate use standard MEV→MRV ramp. Advanced can push to full MRV with steeper weekly jumps. |
-| Periodization gating by level | — | Linear periodization recommended (and pre-selected) for beginners. All types available for intermediate+. DUP/Block locked behind intermediate+ with tooltip explaining why. |
+| ~~Session duration in wizard~~ | ✅ Done | Step 3 pulls `preferred_session_minutes` from profile as default (30/45/60/75/90 min slider); overrideable per mesocycle |
+| ~~Time-budget exercise cap~~ | ✅ Done | Engine computes `max_exercises_per_session` from duration + goal (hypertrophy: ~8.75 min/ex; strength: ~11.75 min/ex); compounds prioritized, session capped before isolation work |
+| ~~Level-aware exercise selection~~ | ✅ Done | Beginners: compounds only, max 4 exercises, 12–15 reps. Intermediate: compounds + isolation, standard reps. Advanced: full range. |
+| ~~Level-aware volume progression~~ | ✅ Done | Beginners: MEV + 1 set/week. Intermediate: MEV + 2/week (standard). Advanced: MEV + 3/week toward full MRV. |
+| ~~Periodization gating by level~~ | ✅ Done | Linear pre-selected for beginners. DUP/Block locked with lock icon + tooltip for beginners; unlock at Intermediate. |
 
 ---
 

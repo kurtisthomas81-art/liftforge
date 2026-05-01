@@ -21,9 +21,11 @@
   let selectedGoal = 'hypertrophy';
   let selectedWeeks = 5;
   let selectedPeriodization = 'standard';
+  let selectedDuration = 60;
   let startDate = new Date().toISOString().slice(0, 10);
   let mesoName = '';
   let daysOfWeek = [];   // array of 0-6 per split day
+  let experienceLevel = 'intermediate';
 
   // Step 4 (review)
   let previewData = [];
@@ -58,13 +60,20 @@
 
   onMount(async () => {
     try {
-      const raw = await api.programs.getSplits();
+      const [raw, profile] = await Promise.all([
+        api.programs.getSplits(),
+        api.profile.get().catch(() => null),
+      ]);
       splitGroups = raw;
+      if (profile) {
+        selectedDuration = profile.preferred_session_minutes ?? 60;
+        experienceLevel = profile.experience_level ?? 'intermediate';
+        if (experienceLevel === 'beginner') selectedPeriodization = 'linear';
+      }
     } catch (e) {
       error = e.message;
     }
     loading = false;
-    // Default name
     const now = new Date();
     mesoName = `Mesocycle ${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`;
   });
@@ -110,6 +119,7 @@
       goal: selectedGoal,
       weeks: selectedWeeks,
       periodization_type: selectedPeriodization,
+      session_minutes: selectedDuration,
       start_date: startDate,
       name: mesoName,
       days_of_week: daysOfWeek,
@@ -336,20 +346,41 @@
         </div>
       </div>
 
+      <!-- Session Duration -->
+      <div style="margin-bottom:20px;">
+        <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">
+          Session Duration
+          <span style="font-size:11px; color:var(--text-faint); margin-left:4px;">caps exercise count to fit your schedule</span>
+        </label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          {#each [30, 45, 60, 75, 90] as mins}
+            <button
+              on:click={() => selectedDuration = mins}
+              style="padding:10px 16px; border-radius:6px; border:2px solid {selectedDuration === mins ? 'var(--primary)' : 'var(--border)'}; background:{selectedDuration === mins ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:{selectedDuration === mins ? 'var(--primary)' : 'var(--text)'}; font-weight:700; font-size:13px; cursor:pointer; transition:all 0.15s;"
+            >{mins} min</button>
+          {/each}
+        </div>
+      </div>
+
       <!-- Periodization -->
       <div style="margin-bottom:20px;">
         <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Periodization Style</label>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
           {#each PERIODIZATIONS as p}
+            {@const locked = experienceLevel === 'beginner' && (p.key === 'dup' || p.key === 'block')}
             <button
-              on:click={() => selectedPeriodization = p.key}
-              style="text-align:left; padding:12px; border-radius:6px; border:2px solid {selectedPeriodization === p.key ? 'var(--primary)' : 'var(--border)'}; background:{selectedPeriodization === p.key ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:{selectedPeriodization === p.key ? 'var(--primary)' : 'var(--text)'}; cursor:pointer; transition:all 0.15s;"
+              on:click={() => { if (!locked) selectedPeriodization = p.key; }}
+              title={locked ? 'Unlocks at Intermediate level' : ''}
+              style="text-align:left; padding:12px; border-radius:6px; border:2px solid {selectedPeriodization === p.key ? 'var(--primary)' : 'var(--border)'}; background:{selectedPeriodization === p.key ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:{locked ? 'var(--text-faint)' : selectedPeriodization === p.key ? 'var(--primary)' : 'var(--text)'}; cursor:{locked ? 'not-allowed' : 'pointer'}; transition:all 0.15s; opacity:{locked ? 0.5 : 1}; position:relative;"
             >
-              <div style="font-weight:700; font-size:13px; margin-bottom:3px;">{p.label}</div>
+              <div style="font-weight:700; font-size:13px; margin-bottom:3px;">{p.label}{locked ? ' 🔒' : ''}</div>
               <div style="font-size:11px; opacity:0.75; line-height:1.4;">{p.desc}</div>
             </button>
           {/each}
         </div>
+        {#if experienceLevel === 'beginner'}
+          <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">DUP & Block unlock at Intermediate. Linear is recommended to build your base.</div>
+        {/if}
       </div>
 
       <!-- Weeks -->
@@ -412,6 +443,7 @@
         <span style="color:var(--text-muted);">Split</span><span style="color:var(--text);">{isCustom ? 'Custom' : selectedSplit?.name}</span>
         <span style="color:var(--text-muted);">Goal</span><span style="text-transform:capitalize; color:var(--text);">{selectedGoal}</span>
         <span style="color:var(--text-muted);">Duration</span><span style="color:var(--text);">{selectedWeeks} weeks · week {selectedWeeks} = deload · starts {startDate}</span>
+        <span style="color:var(--text-muted);">Session</span><span style="color:var(--text);">{selectedDuration} min · {experienceLevel} level</span>
       </div>
 
       <!-- Exercise preview by day -->

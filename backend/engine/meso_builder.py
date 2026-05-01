@@ -85,6 +85,8 @@ def _select_exercises(
     exercises_db: list[dict],
     goal: str,
     max_per_muscle: int = 3,
+    max_total: Optional[int] = None,
+    compounds_only: bool = False,
 ) -> list[dict]:
     """
     For each muscle in the list, pick the best exercises respecting equipment
@@ -95,19 +97,23 @@ def _select_exercises(
     result: list[dict] = []
 
     for muscle in muscles:
+        if max_total is not None and len(result) >= max_total:
+            break
+
         candidates = [
             ex for ex in exercises_db
             if muscle in ex.get("primary_muscles", [])
             and set(ex.get("equipment_required", [])).issubset(available_equipment)
         ]
 
-        # Sort: compound first, then by id (stable ordering)
         compounds = [e for e in candidates if e.get("mechanics") == "compound"]
         isolations = [e for e in candidates if e.get("mechanics") == "isolation"]
+        ordered = compounds if compounds_only else (compounds + isolations)
 
-        ordered = compounds + isolations
         count = 0
         for ex in ordered:
+            if max_total is not None and len(result) >= max_total:
+                break
             if count >= max_per_muscle:
                 break
             if ex["id"] in selected_ids:
@@ -119,9 +125,23 @@ def _select_exercises(
     return result
 
 
-def _sets_for_week(mev: int, week_number: int, mrv: int) -> int:
-    """Weekly sets for a muscle = MEV + (week-1)*2, capped at MRV."""
-    return min(mev + (week_number - 1) * 2, mrv)
+def _sets_for_week(mev: int, week_number: int, mrv: int, experience_level: str = "intermediate") -> int:
+    """Weekly sets for a muscle, progressing by experience level."""
+    if experience_level == "beginner":
+        increment = 1
+    elif experience_level == "advanced":
+        increment = 3
+    else:
+        increment = 2
+    return min(mev + (week_number - 1) * increment, mrv)
+
+
+def _exercise_budget(session_minutes: Optional[int], goal: str) -> Optional[int]:
+    """Max exercises from time budget. None = no cap."""
+    if not session_minutes:
+        return None
+    min_per = 11.75 if goal == "strength" else 8.75
+    return max(3, int(session_minutes / min_per))
 
 
 def _deload_sets(normal_sets: int, mev: int) -> int:
@@ -136,6 +156,8 @@ def preview_mesocycle(
     exercises_db: list[dict],
     landmarks: dict,
     periodization_type: str = "standard",
+    session_minutes: Optional[int] = None,
+    experience_level: str = "intermediate",
 ) -> list[dict]:
     """
     Returns per-day exercise selection (week-1 parameters) without persisting.
@@ -143,6 +165,10 @@ def preview_mesocycle(
     """
     equip_set = set(available_equipment)
     days = split_template.get("days", [])
+    is_beginner = experience_level == "beginner"
+    compounds_only = is_beginner
+    time_cap = _exercise_budget(session_minutes, goal)
+    max_total = min(time_cap, 4) if is_beginner else time_cap
 
     # Sessions per muscle across all days (needed for per-session set calc)
     sessions_per_muscle: dict[str, int] = {}
@@ -165,9 +191,18 @@ def preview_mesocycle(
             except Exception:
                 muscles = []
 
-        day_muscle_count = len(muscles)
-        max_per_muscle = 1 if day_muscle_count >= 7 else (2 if day_muscle_count >= 4 else 3)
-        exercises_for_day = _select_exercises(muscles, equip_set, exercises_db, goal, max_per_muscle=max_per_muscle)
+        if is_beginner:
+            max_per_muscle = 1
+        else:
+            day_muscle_count = len(muscles)
+            max_per_muscle = 1 if day_muscle_count >= 7 else (2 if day_muscle_count >= 4 else 3)
+
+        exercises_for_day = _select_exercises(
+            muscles, equip_set, exercises_db, goal,
+            max_per_muscle=max_per_muscle,
+            max_total=max_total,
+            compounds_only=compounds_only,
+        )
 
         preview_exercises = []
         for ex in exercises_for_day:
@@ -181,12 +216,15 @@ def preview_mesocycle(
             lm = landmarks.get(primary, {"mev": 8, "mav_low": 12, "mav_high": 20, "mrv": 22})
             mev = lm.get("mev", 8)
             mrv = lm.get("mrv", 22)
-            weekly_sets = _sets_for_week(mev, 1, mrv)
+            weekly_sets = _sets_for_week(mev, 1, mrv, experience_level)
             num_sessions = sessions_per_muscle.get(primary, 1)
             per_session = min(max(2, math.ceil(weekly_sets / num_sessions)), 6)
 
             mechanics = ex.get("mechanics", "compound")
-            if periodization_type == "linear":
+            if is_beginner:
+                reps_min, reps_max = (12, 15)
+                rir = 2
+            elif periodization_type == "linear":
                 reps_min, reps_max = _rep_range_linear(goal, 1, weeks)
                 rir = 3
             elif periodization_type == "dup":
@@ -228,6 +266,8 @@ def generate_mesocycle(
     exercises_db: list[dict],   # list of dicts with id, name, primary_muscles, mechanics, equipment_required
     periodization_type: str = "standard",
     day_exercises: Optional[dict[int, list[int]]] = None,  # day_index -> [exercise_id, ...]
+    session_minutes: Optional[int] = None,
+    experience_level: str = "intermediate",
 ) -> list[dict]:
     """
     Returns a list of week dicts:
@@ -263,6 +303,10 @@ def generate_mesocycle(
     equip_set = set(available_equipment)
     days = split_template.get("days", [])
     ex_by_id = {ex["id"]: ex for ex in exercises_db}
+    is_beginner = experience_level == "beginner"
+    compounds_only = is_beginner
+    time_cap = _exercise_budget(session_minutes, goal)
+    max_total = min(time_cap, 4) if is_beginner else time_cap
 
     result = []
     for week_num in range(1, weeks + 1):
@@ -281,13 +325,17 @@ def generate_mesocycle(
             if day_exercises and day_idx in day_exercises:
                 exercises_for_day = [ex_by_id[eid] for eid in day_exercises[day_idx] if eid in ex_by_id]
             else:
-                # Determine max_per_muscle based on how many muscles are in the day
-                # Full body days get 1-2 per muscle, focused days get up to 3
-                day_muscle_count = len(muscles)
-                max_per_muscle = 1 if day_muscle_count >= 7 else (2 if day_muscle_count >= 4 else 3)
+                if is_beginner:
+                    max_per_muscle = 1
+                else:
+                    day_muscle_count = len(muscles)
+                    max_per_muscle = 1 if day_muscle_count >= 7 else (2 if day_muscle_count >= 4 else 3)
 
                 exercises_for_day = _select_exercises(
-                    muscles, equip_set, exercises_db, goal, max_per_muscle=max_per_muscle
+                    muscles, equip_set, exercises_db, goal,
+                    max_per_muscle=max_per_muscle,
+                    max_total=max_total,
+                    compounds_only=compounds_only,
                 )
 
             # Distribute sets from weekly volume across sessions that hit each muscle
@@ -321,15 +369,14 @@ def generate_mesocycle(
 
                 # Weekly sets for this muscle in this week
                 if is_deload:
-                    prev_week_sets = _sets_for_week(mev, week_num - 1, mrv)
+                    prev_week_sets = _sets_for_week(mev, week_num - 1, mrv, experience_level)
                     weekly_sets = _deload_sets(prev_week_sets, mev)
                 else:
-                    weekly_sets = _sets_for_week(mev, week_num, mrv)
+                    weekly_sets = _sets_for_week(mev, week_num, mrv, experience_level)
 
                 # Per-session sets = weekly_sets / sessions_per_muscle
                 num_sessions = sessions_per_muscle.get(primary, 1)
                 per_session = max(2, math.ceil(weekly_sets / num_sessions))
-                # Cap per-session sets to reasonable range
                 per_session = min(per_session, 6)
 
                 mechanics = ex.get("mechanics", "compound")
@@ -338,6 +385,9 @@ def generate_mesocycle(
                 if is_deload:
                     reps_min, reps_max = _rep_range_for_goal(goal, mechanics)
                     rir = 3
+                elif is_beginner:
+                    reps_min, reps_max = (12, 15)
+                    rir = 2
                 elif periodization_type == "linear":
                     reps_min, reps_max = _rep_range_linear(goal, week_num, weeks)
                     progress = (week_num - 1) / max(weeks - 2, 1)
