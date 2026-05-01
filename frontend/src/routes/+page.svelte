@@ -152,7 +152,7 @@
       <div class="brand-label">LiftForge</div>
       <div class="greeting">
         {greeting()}<br/>
-        <em>{$userProfile?.name?.split(' ')[0] ?? 'Athlete'}.</em>
+        <em>{$userProfile?.display_name?.split(' ')[0] ?? 'Athlete'}.</em>
       </div>
     </div>
     <div class="hdr-right">
