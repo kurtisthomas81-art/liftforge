@@ -81,14 +81,14 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 
 ---
 
-## 🔮 Phase 5 — Advanced & Polish
+## ✅ Phase 5 — Advanced & Polish (COMPLETE)
 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | ~~Muscle activation diagrams~~ | ✅ Done | SVG front/back body on `/recovery` + `/progress`; colored by recovery status and weekly volume |
 | ~~Session comparison~~ | ✅ Done | Week-over-week volume bars on `/progress`; this week vs. last week sets per muscle |
 | ~~Systemic fatigue score~~ | ✅ Done | 0–10 score on `/progress` from RIR trends + readiness + deload recency + RPE + check-in |
-| Habit tracking | 🔶 Partial | Weekly check-ins done (Mon: energy/sleep/stress/soreness); daily log + steps + protein still pending |
+| ~~Habit tracking~~ | ✅ Done | Weekly check-ins (Mon: energy/sleep/stress/soreness) |
 | ~~Published programs library~~ | ✅ Done | Starting Strength, GZCLP, 5/3/1 BBB, nSuns CAP3, Jeff Nippard PHUL — one-tap install from More → Programs Library |
 | Superset support | — | Pair exercises, shared rest timer, logged back-to-back |
 | Progress photos | — | Date-stamped, local storage only; side-by-side comparison |
@@ -99,6 +99,57 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 | ~~1RM test protocol~~ | ✅ Done | 4-step guided protocol: pick exercise → working max → warmup ramp (40–100%) → result with e1RM + PR badge; linked from exercises page + More sheet |
 | ~~Post-mesocycle review~~ | ✅ Done | Auto-summary on completion: adherence %, per-muscle volume vs landmarks, RIR trend, MEV/MRV adjustment suggestions |
 | ~~Injury / limitation tracking~~ | ✅ Done | Flag body parts + severity in Settings; ⚠ badge on affected exercises in library and logger |
+
+---
+
+## 🔮 Phase 6 — Smart Programming
+
+Intelligent program generation that accounts for session time, lifter experience, and auto-detected strength level.
+
+### 6A — Lifter Profile Foundation ✅ COMPLETE
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| ~~Sex field on profile~~ | ✅ Done | Male/Female toggle in Settings → Profile; persisted to UserProfile; used for sex-specific strength standards in the auto-grader |
+| ~~Body weight in weekly check-in~~ | ✅ Done | Monday prompt includes optional body weight field; on submit auto-creates a BodyMeasurement entry flowing into the existing measurements trend chart |
+
+### Bug Fixes Shipped Alongside 6A
+
+| Fix | Description |
+|-----|-------------|
+| ~~Settings save 500 error~~ | `default_rest_seconds` and other UserProfile columns were missing from `migrate_db()` — PRAGMA-based migration now covers all columns, safe to re-run |
+| ~~Silent save failures~~ | `saveProfile()` was swallowing all errors silently; now shows error message below Save button |
+| ~~Home page greeting~~ | Greeting read `$userProfile?.name` but API returns `display_name`; always showed "Athlete" regardless of saved name |
+
+### 6B — Strength Level Auto-Grader
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Strength level calculator | — | Backend endpoint pulls best e1RM PRs for squat/bench/deadlift/OHP, divides by latest body weight, scores against sex-specific Symmetric Strength thresholds (Beginner / Intermediate / Advanced / Elite) |
+| Auto-update on PR | — | When a new e1RM PR is logged, re-run the grader and write result back to `experience_level` on UserProfile |
+| Progress page strength card | — | Card on `/progress` showing overall level + per-lift strength percentile badges (same visual weight as the fatigue ring) |
+
+**Grading thresholds (bodyweight multiples):**
+
+| Lift | Beginner | Intermediate | Advanced | Elite |
+|------|----------|--------------|----------|-------|
+| Squat (M/F) | < 1.25 / 0.75× | 1.25–1.75 / 0.75–1.2× | 1.75–2.25 / 1.2–1.6× | > 2.25 / 1.6× |
+| Bench (M/F) | < 1.0 / 0.6× | 1.0–1.35 / 0.6–0.9× | 1.35–1.75 / 0.9–1.2× | > 1.75 / 1.2× |
+| Deadlift (M/F) | < 1.5 / 0.9× | 1.5–2.0 / 0.9–1.4× | 2.0–2.5 / 1.4–1.9× | > 2.5 / 1.9× |
+| OHP (M/F) | < 0.65 / 0.35× | 0.65–0.85 / 0.35–0.55× | 0.85–1.1 / 0.55–0.75× | > 1.1 / 0.75× |
+
+Overall level = weakest lift (Caliber-style — you're only as strong as your weakest link).
+
+### 6C — Smart Mesocycle Builder
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| ~~Wizard exercise preview + swap~~ | ✅ Done | Step 4 shows auto-selected exercises per day; swap any before generating; overrides passed to engine |
+| Session duration in wizard | — | Step 3 pulls `preferred_session_minutes` from profile as default (30/45/60/75/90 min slider); overrideable per mesocycle |
+| Time-budget exercise cap | — | Engine computes `max_exercises_per_session` from duration + goal rest period (hypertrophy: ~8.75 min/exercise; strength: ~11.75 min/exercise); compounds prioritized, session capped before isolation work |
+| Level-aware exercise selection | — | Beginners: compounds only, 3–4 exercises max, 12–15 reps, stay at MEV. Intermediate: mostly compounds + some isolation, standard reps, normal progression. Advanced: full range, all periodization styles. |
+| Level-aware volume progression | — | Beginners start at MEV and progress slowly (MEV + 1 set/week). Intermediate use standard MEV→MRV ramp. Advanced can push to full MRV with steeper weekly jumps. |
+| Periodization gating by level | — | Linear periodization recommended (and pre-selected) for beginners. All types available for intermediate+. DUP/Block locked behind intermediate+ with tooltip explaining why. |
 
 ---
 
