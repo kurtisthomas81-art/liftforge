@@ -20,6 +20,10 @@ def migrate_db():
     new_cols = [
         ("workoutsession", "readiness_rating", "INTEGER"),
         ("workoutsession", "post_session_rpe", "INTEGER"),
+        ("userprofile", "display_name", "TEXT DEFAULT 'Lifter'"),
+        ("userprofile", "unit_preference", "TEXT DEFAULT 'lbs'"),
+        ("userprofile", "experience_level", "TEXT DEFAULT 'intermediate'"),
+        ("userprofile", "default_rest_seconds", "INTEGER DEFAULT 90"),
         ("userprofile", "liftsaur_api_token", "TEXT"),
         ("userprofile", "preferred_session_minutes", "INTEGER DEFAULT 60"),
         ("userprofile", "sex", "TEXT"),
