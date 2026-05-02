@@ -121,13 +121,13 @@ Intelligent program generation that accounts for session time, lifter experience
 | ~~Silent save failures~~ | `saveProfile()` was swallowing all errors silently; now shows error message below Save button |
 | ~~Home page greeting~~ | Greeting read `$userProfile?.name` but API returns `display_name`; always showed "Athlete" regardless of saved name |
 
-### 6B — Strength Level Auto-Grader
+### 6B — Strength Level Auto-Grader ✅ COMPLETE
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Strength level calculator | — | Backend endpoint pulls best e1RM PRs for squat/bench/deadlift/OHP, divides by latest body weight, scores against sex-specific Symmetric Strength thresholds (Beginner / Intermediate / Advanced / Elite) |
-| Auto-update on PR | — | When a new e1RM PR is logged, re-run the grader and write result back to `experience_level` on UserProfile |
-| Progress page strength card | — | Card on `/progress` showing overall level + per-lift strength percentile badges (same visual weight as the fatigue ring) |
+| ~~Strength level calculator~~ | ✅ Done | `GET /api/profile/strength-level` — pulls best e1RM PRs for squat/bench/deadlift/OHP, divides by body weight, scores against sex-specific Symmetric Strength thresholds |
+| ~~Auto-update on PR~~ | ✅ Done | `POST /api/prs/check/{session_id}` triggers grader after any e1RM PR; writes result back to `experience_level` on UserProfile |
+| ~~Progress page strength card~~ | ✅ Done | Card on `/progress` showing overall level + per-lift badges with progress bars to next threshold |
 
 **Grading thresholds (bodyweight multiples):**
 
