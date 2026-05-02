@@ -151,6 +151,22 @@ Overall level = weakest lift (Caliber-style — you're only as strong as your we
 | ~~Level-aware volume progression~~ | ✅ Done | Beginners: MEV + 1 set/week. Intermediate: MEV + 2/week (standard). Advanced: MEV + 3/week toward full MRV. |
 | ~~Periodization gating by level~~ | ✅ Done | Linear pre-selected for beginners. DUP/Block locked with lock icon + tooltip for beginners; unlock at Intermediate. |
 
+### 6D — Engine Overhaul ✅ COMPLETE
+
+Rewrote `meso_builder.py` and `generate_session()` to produce physiologically sound, realistic workouts.
+
+| Fix | Status | Description |
+|-----|--------|-------------|
+| ~~Realistic time budgets~~ | ✅ Done | 90s/compound set + 45s/isolation set + 10-min warmup reserve. Never cuts exercises — reduces sets/reps first, silent 10% inflation as last resort |
+| ~~Prescribed rest per exercise~~ | ✅ Done | 3 min compounds, 2 min isolations, 1 min 15 sec supersets — included in session response |
+| ~~Dynamic warm-up sets~~ | ✅ Done | 3 sets before first heavy compound, 2 before first compound, 1 before first isolation, 0 if muscle already warm from a prior exercise |
+| ~~Secondary muscle volume credit~~ | ✅ Done | Bench press credits triceps at 50%; reduces or eliminates need for direct isolation work |
+| ~~High-fatigue compound blocking~~ | ✅ Done | No squat + deadlift in same session — any second axial-load compound is blocked regardless of pattern |
+| ~~Same-primary compound blocking~~ | ✅ Done | Max 1 compound per primary muscle group per session (bench+incline blocked; bench+OHP allowed; pullup+lat pulldown blocked; pullup+row allowed) |
+| ~~Push/pull compound balance~~ | ✅ Done | Push and pull compound counts stay within 1 of each other throughout selection |
+| ~~Muscle frequency warnings~~ | ✅ Done | `frequency_warnings` in preview response flags any muscle hit < 2x/week |
+| ~~Exercise ordering~~ | ✅ Done | High-fatigue compounds first → medium compounds → isolations (CNS-optimal order) |
+
 ---
 
 ## 🔮 Phase 7 — Intelligence & Automation
