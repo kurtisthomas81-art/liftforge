@@ -400,6 +400,49 @@
     swapping = false;
   }
 
+  // Superset pairing
+  let pairTarget = null; // exercise group currently selected for pairing
+
+  async function startPairing(group) {
+    if (pairTarget && pairTarget.exercise_id === group.exercise_id) {
+      pairTarget = null;
+      return;
+    }
+    if (pairTarget) {
+      // Second click — create the pair
+      try {
+        await api.sessions.pairExercises(session.id, [pairTarget.exercise_id, group.exercise_id]);
+        pairTarget = null;
+        await loadSession();
+      } catch {}
+    } else {
+      pairTarget = group;
+    }
+  }
+
+  async function unpairGroup(group) {
+    try {
+      await api.sessions.unpairExercises(session.id, group);
+      await loadSession();
+    } catch {}
+  }
+
+  // Build display groups: solo exercises and superset pairs
+  $: displayGroups = (() => {
+    const groups = [];
+    const seenSS = new Set();
+    for (const ex of exercises) {
+      if (!ex.superset_group) {
+        groups.push({ type: 'solo', exercise: ex });
+      } else if (!seenSS.has(ex.superset_group)) {
+        seenSS.add(ex.superset_group);
+        const partners = exercises.filter(e => e.superset_group === ex.superset_group);
+        groups.push({ type: 'superset', group: ex.superset_group, exercises: partners });
+      }
+    }
+    return groups;
+  })();
+
   // Plate calculator
   let plateCalcSetId = null;
   let plateCalcWeight = '';
@@ -498,6 +541,7 @@
         <div class="rest-info">
           <div class="rest-title">Rest Timer</div>
           <div class="rest-sub">{restRemaining > 0 ? 'Take a breath…' : 'Ready to go!'}</div>
+          {#if restExerciseName}<div class="rest-label">{restExerciseName}</div>{/if}
           <div class="rest-btns">
             <button class="rest-adj" on:click={() => addRestTime(30)}>+30s</button>
             <button class="rest-adj" on:click={() => addRestTime(60)}>+60s</button>
@@ -535,112 +579,225 @@
       </div>
     {/if}
 
+    <!-- Pairing banner -->
+    {#if pairTarget}
+      <div class="pair-banner">
+        <span>Tap "SS" on another exercise to pair with <strong>{pairTarget.exercise_name}</strong></span>
+        <button class="pair-cancel-btn" on:click={() => pairTarget = null}>Cancel</button>
+      </div>
+    {/if}
+
     <!-- Exercise blocks -->
-    {#each exercises as group (group.exercise_id)}
-      <div class="ex-block">
-        <!-- Exercise header -->
-        <div class="ex-hdr">
-          <div class="ex-hdr-left">
-            <div class="ex-name">{group.exercise_name}</div>
-            {#if overloadSuggestions[group.exercise_id]}
-              <div class="overload-hint">{overloadSuggestions[group.exercise_id]}</div>
-            {/if}
+    {#each displayGroups as item (item.type === 'solo' ? 'solo-' + item.exercise.exercise_id : 'ss-' + item.group)}
+      {#if item.type === 'superset'}
+        <!-- Superset card -->
+        <div class="superset-block">
+          <div class="ss-header">
+            <span class="ss-badge">SS</span>
+            <span class="ss-names">{item.exercises.map(e => e.exercise_name).join(' + ')}</span>
+            <button class="ss-unpair-btn" on:click={() => unpairGroup(item.group)}>Ungroup</button>
           </div>
-          <div class="ex-actions">
-            <button class="ex-action-btn" on:click={() => openSwapModal(group)}>⇄</button>
-            <button class="ex-action-btn" on:click={() => togglePrev(group.exercise_id)}>
-              {showPrev[group.exercise_id] ? '▲' : '▼'}
-            </button>
-          </div>
-        </div>
-
-        <!-- Previous session reference -->
-        {#if showPrev[group.exercise_id]}
-          <div class="prev-ref">
-            {#if prevSessions[group.exercise_id]}
-              <div class="prev-date">Last: {formatDate(prevSessions[group.exercise_id].date)}</div>
-              <div class="prev-sets">
-                {#each prevSessions[group.exercise_id].sets as ps}
-                  <span class="prev-set-chip">{ps.weight ?? 'BW'}×{ps.reps}{ps.rir != null ? ' R' + ps.rir : ''}</span>
-                {/each}
-              </div>
-            {:else}
-              <span class="prev-empty">No previous data</span>
-            {/if}
-          </div>
-        {/if}
-
-        <!-- Set rows -->
-        <div class="sets-block">
-          <!-- Column headers -->
-          <div class="sets-cols-hdr">
-            <span>#</span>
-            <span style="flex:1">Weight × Reps</span>
-            <span style="width:44px;text-align:center">RPE</span>
-            <span style="width:28px"></span>
-          </div>
-
-          {#each group.sets as s (s.id)}
-            {@const isDone = doneIds.has(s.id)}
-            <!-- Set row -->
-            <div class="set-row" class:done={isDone} class:warmup={s.set_type === 'warmup'}>
-              <div class="set-num">
-                <button class="warmup-btn" class:is-warmup={s.set_type === 'warmup'}
-                  title={s.set_type === 'warmup' ? 'Working set' : 'Warm-up'}
-                  on:click={() => toggleWarmup(s.id, s.set_type)}>W</button>
-              </div>
-              <div class="set-inputs">
-                <input type="number" min="0" step="2.5"
-                  value={s.weight ?? ''}
-                  placeholder="BW"
-                  class="set-input weight-input"
-                  on:change={e => updateSetField(s.id, 'weight', e.target.value)}
-                />
-                <span class="set-times">×</span>
-                <input type="number" min="1" step="1"
-                  value={s.reps}
-                  class="set-input reps-input"
-                  on:change={e => updateSetField(s.id, 'reps', e.target.value)}
-                />
-              </div>
-              <div class="set-rpe-cell">
-                {#if isDone}
-                  <button class="rpe-val-btn" class:has-rpe={s.rir != null}
-                    on:click|stopPropagation={() => rpeSetId = rpeSetId === s.id ? null : s.id}>
-                    {s.rir != null ? 10 - s.rir : '—'}
-                  </button>
-                {:else}
-                  <span class="rpe-empty">—</span>
-                {/if}
-              </div>
-              <div class="set-check-cell">
-                <!-- svelte-ignore a11y-click-events-have-key-events -->
-                <!-- svelte-ignore a11y-no-static-element-interactions -->
-                <div class="set-check" class:checked={isDone}
-                  on:click={() => toggleDone(s.id, group.exercise_name, s.weight, s.reps)}>
-                  {#if isDone}<span class="check-mark">✓</span>{/if}
+          {#each item.exercises as group (group.exercise_id)}
+            {@const ssLabel = item.exercises.map(e => e.exercise_name).join(' + ')}
+            <div class="ex-block ss-ex-block">
+              <div class="ex-hdr">
+                <div class="ex-hdr-left">
+                  <div class="ex-name">{group.exercise_name}</div>
+                  {#if overloadSuggestions[group.exercise_id]}
+                    <div class="overload-hint">{overloadSuggestions[group.exercise_id]}</div>
+                  {/if}
                 </div>
-                <button class="del-btn" on:click={() => deleteSet(s.id)}>✕</button>
+                <div class="ex-actions">
+                  <button class="ex-action-btn" on:click={() => openSwapModal(group)}>⇄</button>
+                  <button class="ex-action-btn" on:click={() => togglePrev(group.exercise_id)}>
+                    {showPrev[group.exercise_id] ? '▲' : '▼'}
+                  </button>
+                </div>
+              </div>
+              {#if showPrev[group.exercise_id]}
+                <div class="prev-ref">
+                  {#if prevSessions[group.exercise_id]}
+                    <div class="prev-date">Last: {formatDate(prevSessions[group.exercise_id].date)}</div>
+                    <div class="prev-sets">
+                      {#each prevSessions[group.exercise_id].sets as ps}
+                        <span class="prev-set-chip">{ps.weight ?? 'BW'}×{ps.reps}{ps.rir != null ? ' R' + ps.rir : ''}</span>
+                      {/each}
+                    </div>
+                  {:else}
+                    <span class="prev-empty">No previous data</span>
+                  {/if}
+                </div>
+              {/if}
+              <div class="sets-block">
+                <div class="sets-cols-hdr">
+                  <span>#</span>
+                  <span style="flex:1">Weight × Reps</span>
+                  <span style="width:44px;text-align:center">RPE</span>
+                  <span style="width:28px"></span>
+                </div>
+                {#each group.sets as s (s.id)}
+                  {@const isDone = doneIds.has(s.id)}
+                  <div class="set-row" class:done={isDone} class:warmup={s.set_type === 'warmup'}>
+                    <div class="set-num">
+                      <button class="warmup-btn" class:is-warmup={s.set_type === 'warmup'}
+                        title={s.set_type === 'warmup' ? 'Working set' : 'Warm-up'}
+                        on:click={() => toggleWarmup(s.id, s.set_type)}>W</button>
+                    </div>
+                    <div class="set-inputs">
+                      <input type="number" min="0" step="2.5" value={s.weight ?? ''} placeholder="BW"
+                        class="set-input weight-input"
+                        on:change={e => updateSetField(s.id, 'weight', e.target.value)} />
+                      <span class="set-times">×</span>
+                      <input type="number" min="1" step="1" value={s.reps}
+                        class="set-input reps-input"
+                        on:change={e => updateSetField(s.id, 'reps', e.target.value)} />
+                    </div>
+                    <div class="set-rpe-cell">
+                      {#if isDone}
+                        <button class="rpe-val-btn" class:has-rpe={s.rir != null}
+                          on:click|stopPropagation={() => rpeSetId = rpeSetId === s.id ? null : s.id}>
+                          {s.rir != null ? 10 - s.rir : '—'}
+                        </button>
+                      {:else}
+                        <span class="rpe-empty">—</span>
+                      {/if}
+                    </div>
+                    <div class="set-check-cell">
+                      <!-- svelte-ignore a11y-click-events-have-key-events -->
+                      <!-- svelte-ignore a11y-no-static-element-interactions -->
+                      <div class="set-check" class:checked={isDone}
+                        on:click={() => toggleDone(s.id, ssLabel, s.weight, s.reps)}>
+                        {#if isDone}<span class="check-mark">✓</span>{/if}
+                      </div>
+                      <button class="del-btn" on:click={() => deleteSet(s.id)}>✕</button>
+                    </div>
+                  </div>
+                  {#if rpeSetId === s.id}
+                    <div class="rpe-picker">
+                      <div class="rpe-picker-label">Rate of perceived exertion:</div>
+                      <div class="rpe-picker-btns">
+                        {#each [6,7,8,9,10] as n}
+                          <button class="rpe-btn" style="border-color:{rpeColor(n)};color:{rpeColor(n)};background:{rpeColor(n)}22"
+                            on:click={() => setRowRpe(s.id, n)}>{n}</button>
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
+                {/each}
+                <button class="add-set-btn" on:click={() => addSet(group.exercise_id, group.exercise_name)}>+ Add Set</button>
               </div>
             </div>
+          {/each}
+        </div>
+      {:else}
+        {@const group = item.exercise}
+        <div class="ex-block">
+          <!-- Exercise header -->
+          <div class="ex-hdr">
+            <div class="ex-hdr-left">
+              <div class="ex-name">{group.exercise_name}</div>
+              {#if overloadSuggestions[group.exercise_id]}
+                <div class="overload-hint">{overloadSuggestions[group.exercise_id]}</div>
+              {/if}
+            </div>
+            <div class="ex-actions">
+              <button class="ex-action-btn ss-pair-btn"
+                class:ss-pair-active={pairTarget?.exercise_id === group.exercise_id}
+                title="Pair as superset"
+                on:click={() => startPairing(group)}>SS</button>
+              <button class="ex-action-btn" on:click={() => openSwapModal(group)}>⇄</button>
+              <button class="ex-action-btn" on:click={() => togglePrev(group.exercise_id)}>
+                {showPrev[group.exercise_id] ? '▲' : '▼'}
+              </button>
+            </div>
+          </div>
 
-            <!-- Inline RPE picker -->
-            {#if rpeSetId === s.id}
-              <div class="rpe-picker">
-                <div class="rpe-picker-label">Rate of perceived exertion:</div>
-                <div class="rpe-picker-btns">
-                  {#each [6,7,8,9,10] as n}
-                    <button class="rpe-btn" style="border-color:{rpeColor(n)};color:{rpeColor(n)};background:{rpeColor(n)}22"
-                      on:click={() => setRowRpe(s.id, n)}>{n}</button>
+          <!-- Previous session reference -->
+          {#if showPrev[group.exercise_id]}
+            <div class="prev-ref">
+              {#if prevSessions[group.exercise_id]}
+                <div class="prev-date">Last: {formatDate(prevSessions[group.exercise_id].date)}</div>
+                <div class="prev-sets">
+                  {#each prevSessions[group.exercise_id].sets as ps}
+                    <span class="prev-set-chip">{ps.weight ?? 'BW'}×{ps.reps}{ps.rir != null ? ' R' + ps.rir : ''}</span>
                   {/each}
                 </div>
-              </div>
-            {/if}
-          {/each}
+              {:else}
+                <span class="prev-empty">No previous data</span>
+              {/if}
+            </div>
+          {/if}
 
-          <button class="add-set-btn" on:click={() => addSet(group.exercise_id, group.exercise_name)}>+ Add Set</button>
+          <!-- Set rows -->
+          <div class="sets-block">
+            <div class="sets-cols-hdr">
+              <span>#</span>
+              <span style="flex:1">Weight × Reps</span>
+              <span style="width:44px;text-align:center">RPE</span>
+              <span style="width:28px"></span>
+            </div>
+
+            {#each group.sets as s (s.id)}
+              {@const isDone = doneIds.has(s.id)}
+              <div class="set-row" class:done={isDone} class:warmup={s.set_type === 'warmup'}>
+                <div class="set-num">
+                  <button class="warmup-btn" class:is-warmup={s.set_type === 'warmup'}
+                    title={s.set_type === 'warmup' ? 'Working set' : 'Warm-up'}
+                    on:click={() => toggleWarmup(s.id, s.set_type)}>W</button>
+                </div>
+                <div class="set-inputs">
+                  <input type="number" min="0" step="2.5"
+                    value={s.weight ?? ''}
+                    placeholder="BW"
+                    class="set-input weight-input"
+                    on:change={e => updateSetField(s.id, 'weight', e.target.value)}
+                  />
+                  <span class="set-times">×</span>
+                  <input type="number" min="1" step="1"
+                    value={s.reps}
+                    class="set-input reps-input"
+                    on:change={e => updateSetField(s.id, 'reps', e.target.value)}
+                  />
+                </div>
+                <div class="set-rpe-cell">
+                  {#if isDone}
+                    <button class="rpe-val-btn" class:has-rpe={s.rir != null}
+                      on:click|stopPropagation={() => rpeSetId = rpeSetId === s.id ? null : s.id}>
+                      {s.rir != null ? 10 - s.rir : '—'}
+                    </button>
+                  {:else}
+                    <span class="rpe-empty">—</span>
+                  {/if}
+                </div>
+                <div class="set-check-cell">
+                  <!-- svelte-ignore a11y-click-events-have-key-events -->
+                  <!-- svelte-ignore a11y-no-static-element-interactions -->
+                  <div class="set-check" class:checked={isDone}
+                    on:click={() => toggleDone(s.id, group.exercise_name, s.weight, s.reps)}>
+                    {#if isDone}<span class="check-mark">✓</span>{/if}
+                  </div>
+                  <button class="del-btn" on:click={() => deleteSet(s.id)}>✕</button>
+                </div>
+              </div>
+
+              <!-- Inline RPE picker -->
+              {#if rpeSetId === s.id}
+                <div class="rpe-picker">
+                  <div class="rpe-picker-label">Rate of perceived exertion:</div>
+                  <div class="rpe-picker-btns">
+                    {#each [6,7,8,9,10] as n}
+                      <button class="rpe-btn" style="border-color:{rpeColor(n)};color:{rpeColor(n)};background:{rpeColor(n)}22"
+                        on:click={() => setRowRpe(s.id, n)}>{n}</button>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+            {/each}
+
+            <button class="add-set-btn" on:click={() => addSet(group.exercise_id, group.exercise_name)}>+ Add Set</button>
+          </div>
         </div>
-      </div>
+      {/if}
     {/each}
 
     <!-- Empty exercises state -->
@@ -1178,5 +1335,107 @@
   .rpe-modal-btn.selected {
     border-color:var(--rc); background:color-mix(in srgb, var(--rc) 15%, transparent);
     color:var(--rc); font-weight:700;
+  }
+
+  /* Superset */
+  .superset-block {
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .ss-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .ss-badge {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 2px 5px;
+    flex-shrink: 0;
+  }
+  .ss-names {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 600;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ss-unpair-btn {
+    font-size: 11px;
+    padding: 3px 8px;
+    border: 1px solid var(--bdr);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .ss-ex-block {
+    border: none;
+    border-radius: 0;
+    margin: 0;
+    border-bottom: 1px solid var(--faint);
+  }
+  .ss-ex-block:last-child { border-bottom: none; }
+
+  /* Pair button on solo exercises */
+  .ss-pair-btn {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    border-color: var(--bdr);
+  }
+  .ss-pair-btn.ss-pair-active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+
+  /* Pairing banner */
+  .pair-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .pair-cancel-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+    border: 1px solid var(--bdr);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  /* Rest label */
+  .rest-label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
   }
 </style>

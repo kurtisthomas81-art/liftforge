@@ -90,7 +90,7 @@ Full mobile-first redesign replacing the original dark-orange sidebar UI.
 | ~~Systemic fatigue score~~ | ✅ Done | 0–10 score on `/progress` from RIR trends + readiness + deload recency + RPE + check-in |
 | ~~Habit tracking~~ | ✅ Done | Weekly check-ins (Mon: energy/sleep/stress/soreness) |
 | ~~Published programs library~~ | ✅ Done | Starting Strength, GZCLP, 5/3/1 BBB, nSuns CAP3, Jeff Nippard PHUL — one-tap install from More → Programs Library |
-| Superset support | — | Pair exercises, shared rest timer, logged back-to-back |
+| ~~Superset support~~ | ✅ Done | Pair any two exercises via SS button; combined card with red accent border; shared rest timer shows both names; pairings persist to templates |
 | Progress photos | — | Date-stamped, local storage only; side-by-side comparison |
 | ~~Training notes search~~ | ✅ Done | Full-text search across session names, session notes, set notes — `/search` route + More sheet |
 | ~~1RM percent calculator~~ | ✅ Done | 1RM % tab on Plates page — enter max, get table of 50–100% weights rounded to 2.5 |

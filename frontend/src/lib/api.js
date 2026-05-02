@@ -43,6 +43,10 @@ export const api = {
       request('DELETE', `/sessions/${sessionId}/sets/${setId}`),
     swapExercise: (sessionId, oldId, newId) =>
       request('POST', `/sessions/${sessionId}/swap-exercise`, { old_exercise_id: oldId, new_exercise_id: newId }),
+    pairExercises: (sessionId, exerciseIds) =>
+      request('POST', `/sessions/${sessionId}/pair-exercises`, { exercise_ids: exerciseIds }),
+    unpairExercises: (sessionId, group) =>
+      request('DELETE', `/sessions/${sessionId}/pair-exercises/${group}`),
   },
 
   history: {

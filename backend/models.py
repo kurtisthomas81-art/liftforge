@@ -40,6 +40,7 @@ class WorkoutSet(SQLModel, table=True):
     rir: Optional[int] = Field(default=None)        # 0-4, nullable
     notes: Optional[str] = Field(default=None)
     set_type: str = Field(default="straight")       # straight|warmup|drop|rest_pause
+    superset_group: Optional[int] = Field(default=None)  # exercises sharing same int are paired
 
 
 class UserProfile(SQLModel, table=True):
@@ -143,6 +144,7 @@ class PlannedExercise(SQLModel, table=True):
     target_reps_max: int
     target_rir: int = Field(default=2)
     notes: str = Field(default="")
+    superset_group: Optional[int] = Field(default=None)
 
 
 # ── Phase 3 tables ─────────────────────────────────────────────────────────────
@@ -165,6 +167,7 @@ class TemplateExercise(SQLModel, table=True):
     target_reps_max: int = Field(default=12)
     target_rir: int = Field(default=2)
     notes: str = Field(default="")
+    superset_group: Optional[int] = Field(default=None)
 
 
 class WeeklyCheckin(SQLModel, table=True):

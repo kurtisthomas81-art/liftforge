@@ -28,6 +28,9 @@ def migrate_db():
         ("userprofile", "preferred_session_minutes", "INTEGER DEFAULT 60"),
         ("userprofile", "sex", "TEXT"),
         ("mesocycle", "periodization_type", "TEXT DEFAULT 'standard'"),
+        ("workoutset", "superset_group", "INTEGER"),
+        ("plannedexercise", "superset_group", "INTEGER"),
+        ("templateexercise", "superset_group", "INTEGER"),
     ]
     with engine.connect() as conn:
         for table, col, typedef in new_cols:

@@ -38,6 +38,7 @@ class SetCreate(BaseModel):
     rir: Optional[int] = None
     notes: Optional[str] = None
     set_type: str = "straight"
+    superset_group: Optional[int] = None
 
 
 class SetUpdate(BaseModel):
@@ -61,6 +62,7 @@ def _serialize_set(ws: WorkoutSet) -> dict:
         "rir": ws.rir,
         "notes": ws.notes,
         "set_type": ws.set_type,
+        "superset_group": ws.superset_group,
     }
 
 
@@ -331,6 +333,7 @@ def get_session_detail(session_id: int, session: Session = Depends(get_session))
             exercise_map[ws.exercise_id] = {
                 "exercise_id": ws.exercise_id,
                 "exercise_name": ex.name if ex else "Unknown",
+                "superset_group": ws.superset_group,
                 "sets": [],
             }
         exercise_map[ws.exercise_id]["sets"].append(_serialize_set(ws))
@@ -359,6 +362,7 @@ def add_set(
         rir=payload.rir,
         notes=payload.notes,
         set_type=payload.set_type,
+        superset_group=payload.superset_group,
     )
     session.add(ws)
     session.commit()
@@ -445,6 +449,66 @@ def swap_exercise(
     return {"ok": True, "swapped": len(sets)}
 
 
+class PairExercisesPayload(BaseModel):
+    exercise_ids: list[int]
+
+
+@router.post("/{session_id}/pair-exercises")
+def pair_exercises(
+    session_id: int,
+    payload: PairExercisesPayload,
+    session: Session = Depends(get_session),
+):
+    if len(payload.exercise_ids) != 2:
+        raise HTTPException(status_code=400, detail="Exactly 2 exercise_ids required")
+    wk = session.get(WorkoutSession, session_id)
+    if not wk:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Find next unused superset_group for this session
+    existing = session.exec(
+        select(WorkoutSet).where(WorkoutSet.session_id == session_id)
+    ).all()
+    used_groups = {ws.superset_group for ws in existing if ws.superset_group is not None}
+    group_id = max(used_groups, default=0) + 1
+
+    for ex_id in payload.exercise_ids:
+        sets = session.exec(
+            select(WorkoutSet).where(
+                WorkoutSet.session_id == session_id,
+                WorkoutSet.exercise_id == ex_id,
+            )
+        ).all()
+        for ws in sets:
+            ws.superset_group = group_id
+            session.add(ws)
+    session.commit()
+    return {"superset_group": group_id}
+
+
+@router.delete("/{session_id}/pair-exercises/{group}")
+def unpair_exercises(
+    session_id: int,
+    group: int,
+    session: Session = Depends(get_session),
+):
+    wk = session.get(WorkoutSession, session_id)
+    if not wk:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    sets = session.exec(
+        select(WorkoutSet).where(
+            WorkoutSet.session_id == session_id,
+            WorkoutSet.superset_group == group,
+        )
+    ).all()
+    for ws in sets:
+        ws.superset_group = None
+        session.add(ws)
+    session.commit()
+    return {"ok": True}
+
+
 class SaveAsTemplatePayload(BaseModel):
     name: str
 
@@ -489,6 +553,7 @@ def save_session_as_template(
             target_reps_max=12,
             target_rir=2,
             notes="",
+            superset_group=ex_sets[0].superset_group,
         )
         session.add(te)
     session.commit()

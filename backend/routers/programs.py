@@ -90,6 +90,7 @@ def _serialize_planned_exercise(pe: PlannedExercise, exercise_name: str = "") ->
         "target_reps_max": pe.target_reps_max,
         "target_rir": pe.target_rir,
         "notes": pe.notes,
+        "superset_group": pe.superset_group,
     }
 
 
@@ -163,6 +164,7 @@ class PlannedExerciseCreate(BaseModel):
     target_reps_max: int
     target_rir: int = 2
     notes: str = ""
+    superset_group: Optional[int] = None
 
 
 def _build_planned_sessions(
@@ -845,6 +847,7 @@ def update_planned_exercises(
             target_reps_max=ex_data.target_reps_max,
             target_rir=ex_data.target_rir,
             notes=ex_data.notes,
+            superset_group=ex_data.superset_group,
         )
         session.add(pe)
     session.commit()

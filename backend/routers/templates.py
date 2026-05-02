@@ -22,6 +22,7 @@ class TemplateExerciseIn(BaseModel):
     target_reps_max: int = 12
     target_rir: int = 2
     notes: str = ""
+    superset_group: Optional[int] = None
 
 
 class TemplateCreate(BaseModel):
@@ -72,6 +73,7 @@ def _serialize_template_detail(tpl: WorkoutTemplate, te_list: list, session: Ses
             "target_reps_max": te.target_reps_max,
             "target_rir": te.target_rir,
             "notes": te.notes,
+            "superset_group": te.superset_group,
         })
     return {
         "id": tpl.id,
@@ -140,6 +142,7 @@ def create_template(payload: TemplateCreate, session: Session = Depends(get_sess
             target_reps_max=ex_in.target_reps_max,
             target_rir=ex_in.target_rir,
             notes=ex_in.notes,
+            superset_group=ex_in.superset_group,
         )
         session.add(te)
         te_list.append(te)
@@ -184,6 +187,7 @@ def update_template(template_id: int, payload: TemplateUpdate, session: Session 
                 target_reps_max=ex_in.target_reps_max,
                 target_rir=ex_in.target_rir,
                 notes=ex_in.notes,
+                superset_group=ex_in.superset_group,
             )
             session.add(te)
             te_list.append(te)
@@ -245,6 +249,7 @@ def start_from_template(template_id: int, session: Session = Depends(get_session
             set_number=1,
             reps=0,
             set_type="straight",
+            superset_group=te.superset_group,
         )
         session.add(ws)
     session.commit()
