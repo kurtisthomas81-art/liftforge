@@ -153,6 +153,17 @@ Overall level = weakest lift (Caliber-style — you're only as strong as your we
 
 ---
 
+## 🔮 Phase 7 — Intelligence & Automation
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| AI Coach Upgrade | — | Deeper Ollama context: current mesocycle, fatigue score, PRs, weak lifts. Form cues, deload recommendations, auto-generated session summaries |
+| Advanced Analytics | — | Strength-to-bodyweight trends over time, volume sweet spot detection (where did you PR most?), predicted 1RM trajectory charts |
+| Autoregulation | — | RIR-driven weight auto-adjustments mid-mesocycle. Consistently logging RIR 0–1 → engine bumps weight next session automatically. True reactive programming |
+| Notifications / Reminders | — | PWA push notifications for workout reminders, rest day alerts, muscle-group nudges ("haven't trained legs in 5 days") |
+
+---
+
 ## Architecture Notes
 
 ```
