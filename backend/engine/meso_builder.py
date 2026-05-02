@@ -228,6 +228,7 @@ def _select_exercises(
     selected_ids: set[int] = set()
     result: list[dict] = []
     pattern_counts: dict[str, int] = {}
+    compound_primaries: set[str] = set()  # first primary already covered by a compound
     push_count = 0
     pull_count = 0
 
@@ -260,9 +261,15 @@ def _select_exercises(
             pattern = ex.get("movement_pattern", "")
             fatigue = _movement_fatigue(pattern)
 
-            # Never stack two exercises of the same high-fatigue pattern (squat+squat, hinge+hinge)
-            if fatigue == "high" and pattern_counts.get(pattern, 0) >= 1:
+            # Never stack any two high-fatigue compounds (squat+deadlift devastates CNS)
+            if fatigue == "high" and any(pattern_counts.get(p, 0) > 0 for p in HIGH_FATIGUE_PATTERNS):
                 continue
+
+            # Max 1 compound per primary muscle group (no bench+incline bench, no pullup+lat pulldown)
+            if mechanics == "compound":
+                first_primary = (_parse_list(ex.get("primary_muscles", [])) or [None])[0]
+                if first_primary and first_primary in compound_primaries:
+                    continue
 
             # Push/pull balance: neither side runs more than 1 compound ahead of the other
             force = ex.get("force", "")
@@ -278,6 +285,9 @@ def _select_exercises(
 
             pattern_counts[pattern] = pattern_counts.get(pattern, 0) + 1
             if mechanics == "compound":
+                first_primary = (_parse_list(ex.get("primary_muscles", [])) or [None])[0]
+                if first_primary:
+                    compound_primaries.add(first_primary)
                 if force == "push":
                     push_count += 1
                 elif force == "pull":
