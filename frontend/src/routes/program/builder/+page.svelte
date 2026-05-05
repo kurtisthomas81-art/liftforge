@@ -85,27 +85,13 @@
     return 'default';
   }
 
-  async function initCustomDays() {
+  function initCustomDays() {
     const days = isCustom ? customDays : (selectedSplit?.days ?? []);
-    const sessions = days.map((day, i) => {
-      const type = inferDayType(day.name);
-      const variant = ['A', 'B', 'C'][i % numVariants];
-      const slots = DEFAULT_SLOTS_BY_TYPE[type] ?? DEFAULT_SLOTS_BY_TYPE.default;
-      return { day_name: day.name, slots, variant };
-    });
-    customLoading = true;
-    customError = '';
-    try {
-      customDayExercises = await api.programs.previewCustomSlots({
-        sessions,
-        goal: selectedGoal,
-        experience_level: experienceLevel,
-        num_variants: numVariants,
-      });
-    } catch (e) {
-      customError = e.message;
-    }
-    customLoading = false;
+    customDayExercises = days.map((day, i) => ({
+      day_name: day.name,
+      variant: ['A', 'B', 'C'][i % numVariants],
+      exercises: [],
+    }));
   }
 
   async function refreshPrescriptions() {
@@ -282,7 +268,7 @@
 
   async function goToReview() {
     if (sessionMode === 'custom_slots') {
-      await initCustomDays();
+      initCustomDays();
       step = 5;
     } else {
       step = 5;
