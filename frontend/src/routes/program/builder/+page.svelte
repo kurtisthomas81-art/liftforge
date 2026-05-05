@@ -38,19 +38,15 @@
   let editedDays = {};           // { dayIndex: [exerciseId, ...] } — tracks swaps
 
   // Step 5 — Custom slots mode
-  let customSlotSessions = [];   // [{ day_name, slots: [str], variant: str }]
-  let slotValidations = {};      // { dayIdx: validation result from API }
-  let validatingSlots = {};      // { dayIdx: bool }
-  let customPreviewData = [];    // exercise assignments from previewCustomSlots
-  let customPreviewLoading = false;
-  let customPreviewError = '';
-  let addingSlotForDay = null;   // dayIdx of open slot picker, or null
-
-  // Per-slot exercise picker
-  let pickingExercise = null;           // { dayIdx, slotIdx } | null
-  let loadingSlotExercises = false;
-  let slotExerciseCandidates = [];      // exercises filtered for the open picker
-  let slotExerciseSearch = '';
+  let customDayExercises = [];     // [{day_name, variant, exercises: [{exercise_id, exercise_name, sub_pattern, target_sets, target_reps_min, target_reps_max, target_rir, ...}]}]
+  let customLoading = false;       // initial auto-populate loading
+  let customError = '';
+  let refreshingPrescriptions = false;
+  let addingExerciseToDayIdx = null;  // which day's "Add exercise" picker is open
+  let addExerciseSearch = '';
+  let addExerciseFilter = '';
+  let addExerciseCandidates = [];
+  let loadingAddExercises = false;
 
   const SLOT_OPTIONS = [
     { key: 'knee_dominant',   label: 'Knee Dominant',    example: 'Squat · Lunge · Leg Press',       fatigue: 'high',   color: '#c0392b' },
@@ -89,85 +85,90 @@
     return 'default';
   }
 
-  function initCustomSlots() {
+  async function initCustomDays() {
     const days = isCustom ? customDays : (selectedSplit?.days ?? []);
-    customSlotSessions = days.map((day, i) => {
+    const sessions = days.map((day, i) => {
       const type = inferDayType(day.name);
       const variant = ['A', 'B', 'C'][i % numVariants];
-      const slots = [...(DEFAULT_SLOTS_BY_TYPE[type] ?? DEFAULT_SLOTS_BY_TYPE.default)];
-      return { day_name: day.name, slots, slot_exercises: Array(slots.length).fill(null), variant };
+      const slots = DEFAULT_SLOTS_BY_TYPE[type] ?? DEFAULT_SLOTS_BY_TYPE.default;
+      return { day_name: day.name, slots, variant };
     });
-    slotValidations = {};
-    customPreviewData = [];
-  }
-
-  function addSlot(dayIdx, slotKey) {
-    customSlotSessions[dayIdx].slots = [...customSlotSessions[dayIdx].slots, slotKey];
-    customSlotSessions[dayIdx].slot_exercises = [...(customSlotSessions[dayIdx].slot_exercises || []), null];
-    customSlotSessions = [...customSlotSessions];
-    validateDaySlots(dayIdx);
-  }
-
-  function removeSlot(dayIdx, slotIdx) {
-    customSlotSessions[dayIdx].slots = customSlotSessions[dayIdx].slots.filter((_, i) => i !== slotIdx);
-    customSlotSessions[dayIdx].slot_exercises = (customSlotSessions[dayIdx].slot_exercises || []).filter((_, i) => i !== slotIdx);
-    customSlotSessions = [...customSlotSessions];
-    validateDaySlots(dayIdx);
-  }
-
-  async function openExercisePicker(dayIdx, slotIdx) {
-    pickingExercise = { dayIdx, slotIdx };
-    slotExerciseSearch = '';
-    loadingSlotExercises = true;
-    const slotKey = customSlotSessions[dayIdx].slots[slotIdx];
+    customLoading = true;
+    customError = '';
     try {
-      slotExerciseCandidates = await api.exercises.list({ sub_pattern: slotKey });
-    } catch (e) {
-      slotExerciseCandidates = [];
-    }
-    loadingSlotExercises = false;
-  }
-
-  function pinExercise(exercise) {
-    const { dayIdx, slotIdx } = pickingExercise;
-    customSlotSessions[dayIdx].slot_exercises[slotIdx] = exercise;
-    customSlotSessions = [...customSlotSessions];
-    pickingExercise = null;
-  }
-
-  function clearPinnedExercise(dayIdx, slotIdx) {
-    customSlotSessions[dayIdx].slot_exercises[slotIdx] = null;
-    customSlotSessions = [...customSlotSessions];
-  }
-
-  async function validateDaySlots(dayIdx) {
-    validatingSlots = { ...validatingSlots, [dayIdx]: true };
-    try {
-      const result = await api.programs.validateSlots({
-        slots: customSlotSessions[dayIdx].slots,
-        goal: selectedGoal,
-        experience_level: experienceLevel,
-      });
-      slotValidations = { ...slotValidations, [dayIdx]: result };
-    } catch (e) { /* silent */ }
-    validatingSlots = { ...validatingSlots, [dayIdx]: false };
-  }
-
-  async function previewCustom() {
-    customPreviewLoading = true;
-    customPreviewError = '';
-    customPreviewData = [];
-    try {
-      customPreviewData = await api.programs.previewCustomSlots({
-        sessions: customSlotSessions,
+      customDayExercises = await api.programs.previewCustomSlots({
+        sessions,
         goal: selectedGoal,
         experience_level: experienceLevel,
         num_variants: numVariants,
       });
     } catch (e) {
-      customPreviewError = e.message;
+      customError = e.message;
     }
-    customPreviewLoading = false;
+    customLoading = false;
+  }
+
+  async function refreshPrescriptions() {
+    if (!customDayExercises.length) return;
+    refreshingPrescriptions = true;
+    try {
+      const sessions = customDayExercises.map(day => ({
+        day_name: day.day_name,
+        variant: day.variant,
+        slots: (day.exercises || []).map(e => e.sub_pattern || ''),
+        slot_exercises: (day.exercises || []).map(e => e.exercise_id),
+      }));
+      customDayExercises = await api.programs.previewCustomSlots({
+        sessions,
+        goal: selectedGoal,
+        experience_level: experienceLevel,
+        num_variants: numVariants,
+      });
+    } catch (e) { /* silent */ }
+    refreshingPrescriptions = false;
+  }
+
+  function removeExerciseFromDay(dayIdx, exIdx) {
+    customDayExercises[dayIdx].exercises = customDayExercises[dayIdx].exercises.filter((_, i) => i !== exIdx);
+    customDayExercises = [...customDayExercises];
+    refreshPrescriptions();
+  }
+
+  async function openAddExercise(dayIdx) {
+    addingExerciseToDayIdx = dayIdx;
+    addExerciseSearch = '';
+    addExerciseFilter = '';
+    if (allExercises.length === 0) {
+      loadingAddExercises = true;
+      try { allExercises = await api.exercises.list(); } catch (e) { /* ignore */ }
+      loadingAddExercises = false;
+    }
+    filterAddExercises();
+  }
+
+  function filterAddExercises() {
+    addExerciseCandidates = allExercises.filter(ex => {
+      const muscles = Array.isArray(ex.primary_muscles) ? ex.primary_muscles : [];
+      const matchesMuscle = !addExerciseFilter || muscles.includes(addExerciseFilter);
+      const matchesSearch = !addExerciseSearch || ex.name.toLowerCase().includes(addExerciseSearch.toLowerCase());
+      return matchesMuscle && matchesSearch;
+    });
+  }
+
+  async function confirmAddExercise(exercise) {
+    const dayIdx = addingExerciseToDayIdx;
+    addingExerciseToDayIdx = null;
+    const newEx = {
+      exercise_id: exercise.id,
+      exercise_name: exercise.name,
+      primary_muscle: Array.isArray(exercise.primary_muscles) ? exercise.primary_muscles[0] : null,
+      mechanics: exercise.mechanics,
+      sub_pattern: exercise.sub_pattern || '',
+      target_sets: 3, target_reps_min: 8, target_reps_max: 12, target_rir: 2,
+    };
+    customDayExercises[dayIdx].exercises = [...(customDayExercises[dayIdx].exercises || []), newEx];
+    customDayExercises = [...customDayExercises];
+    await refreshPrescriptions();
   }
 
   // Swap modal
@@ -269,11 +270,11 @@
       p.split_slug = selectedSplit.slug;
     }
     if (sessionMode === 'custom_slots') {
-      p.custom_slot_sessions = customSlotSessions.map(s => ({
-        day_name: s.day_name,
-        slots: s.slots,
-        variant: s.variant,
-        slot_exercises: (s.slot_exercises || []).map(e => e?.id ?? null),
+      p.custom_slot_sessions = customDayExercises.map(day => ({
+        day_name: day.day_name,
+        variant: day.variant,
+        slots: (day.exercises || []).map(e => e.sub_pattern || ''),
+        slot_exercises: (day.exercises || []).map(e => e.exercise_id),
       }));
     }
     return p;
@@ -281,9 +282,7 @@
 
   async function goToReview() {
     if (sessionMode === 'custom_slots') {
-      initCustomSlots();
-      // Validate all days upfront
-      await Promise.all(customSlotSessions.map((_, i) => validateDaySlots(i)));
+      await initCustomDays();
       step = 5;
     } else {
       step = 5;
@@ -658,144 +657,66 @@
       </div>
 
       {#if sessionMode === 'custom_slots'}
-        <!-- ── Custom slot builder ─────────────────────────────────── -->
-        <div style="margin-bottom:20px;">
-          <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:12px;">
-            Session Structure
-            <span style="font-size:11px; font-weight:400; color:var(--text-muted);">· add/remove movement pattern slots per day</span>
+        <!-- ── Custom mode: exercise list per day ─── -->
+        {#if customLoading}
+          <div style="display:flex; align-items:center; gap:10px; padding:24px 0; color:var(--text-muted); font-size:13px;">
+            <div class="spinner" style="width:16px; height:16px;"></div>
+            Building your workout plan...
           </div>
+        {:else if customError}
+          <div style="color:var(--danger); font-size:13px; margin-bottom:12px;">{customError}</div>
+        {:else}
+          {#if refreshingPrescriptions}
+            <div style="font-size:11px; color:var(--text-faint); margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+              <div class="spinner" style="width:10px; height:10px;"></div>
+              Updating prescriptions...
+            </div>
+          {/if}
 
-          {#each customSlotSessions as sess, dayIdx}
-            <div style="margin-bottom:16px; padding:14px; background:var(--surface-2); border-radius:8px; border:1px solid var(--border);">
+          {#each customDayExercises as day, dayIdx}
+            <div style="margin-bottom:16px; border:1px solid var(--border); border-radius:10px; overflow:hidden;">
               <!-- Day header -->
-              <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-                <span style="font-size:13px; font-weight:700; color:var(--primary);">{sess.day_name}</span>
+              <div style="display:flex; align-items:center; gap:8px; padding:11px 14px; background:var(--surface-2); border-bottom:1px solid var(--border);">
+                <span style="font-size:13px; font-weight:700; color:var(--primary);">{day.day_name}</span>
                 {#if numVariants > 1}
-                  <span style="padding:1px 7px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--primary); font-size:10px; font-weight:700; border:1px solid rgba(232,160,64,0.3);">{sess.variant}</span>
+                  <span style="padding:1px 7px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--primary); font-size:10px; font-weight:700; border:1px solid rgba(232,160,64,0.3);">{day.variant}</span>
                 {/if}
+                <span style="font-size:11px; color:var(--text-faint); margin-left:auto;">{day.exercises?.length ?? 0} exercises</span>
               </div>
 
-              <!-- Slot chips -->
-              <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-                {#each sess.slots as slotKey, slotIdx}
-                  {@const opt = SLOT_OPTIONS.find(o => o.key === slotKey)}
-                  {@const pinned = sess.slot_exercises?.[slotIdx]}
-                  <div style="display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:20px; background:{opt?.color ?? '#555'}22; border:1px solid {pinned ? (opt?.color ?? '#555') : (opt?.color ?? '#555') + '55'};">
-                    <div style="display:flex; flex-direction:column; gap:1px;">
-                      <span style="font-size:12px; color:{opt?.color ?? 'var(--text)'}; font-weight:600; line-height:1.2;">{opt?.label ?? slotKey}</span>
-                      {#if pinned}
-                        <span style="font-size:10px; color:var(--text-muted); line-height:1.2;">{pinned.name}</span>
-                      {/if}
-                    </div>
-                    <button
-                      on:click={() => openExercisePicker(dayIdx, slotIdx)}
-                      style="background:none; border:none; color:{opt?.color ?? 'var(--text-muted)'}; cursor:pointer; font-size:12px; line-height:1; padding:0 1px; opacity:0.75;"
-                      title="Pick exercise"
-                    >✎</button>
-                    {#if pinned}
-                      <button
-                        on:click={() => clearPinnedExercise(dayIdx, slotIdx)}
-                        style="background:none; border:none; color:{opt?.color ?? 'var(--text-muted)'}; cursor:pointer; font-size:15px; line-height:1; padding:0; opacity:0.65;"
-                        title="Clear pinned exercise"
-                      >×</button>
+              <!-- Exercise rows -->
+              {#each (day.exercises ?? []) as ex, exIdx}
+                <div style="display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--border-faint);">
+                  <span style="font-size:11px; color:var(--text-faint); min-width:14px; text-align:right; flex-shrink:0;">{exIdx + 1}</span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:13px; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{ex.exercise_name}</div>
+                    {#if ex.sub_pattern}
+                      <div style="font-size:10px; color:var(--text-faint); margin-top:2px; text-transform:capitalize;">{ex.sub_pattern.replace(/_/g, ' ')}</div>
                     {/if}
-                    <button
-                      on:click={() => removeSlot(dayIdx, slotIdx)}
-                      style="background:none; border:none; color:{opt?.color ?? 'var(--text-muted)'}; cursor:pointer; font-size:15px; line-height:1; padding:0 0 0 1px; opacity:0.4;"
-                      title="Remove slot"
-                    >⊗</button>
                   </div>
-                {/each}
-
-                <!-- Add slot toggle -->
-                <button
-                  on:click={() => addingSlotForDay = addingSlotForDay === dayIdx ? null : dayIdx}
-                  style="padding:5px 12px; border-radius:20px; border:1px dashed var(--border); background:transparent; color:var(--text-muted); font-size:12px; cursor:pointer; transition:border-color 0.15s;"
-                >+ Add slot</button>
-              </div>
-
-              <!-- Inline slot picker -->
-              {#if addingSlotForDay === dayIdx}
-                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; padding:10px; background:var(--surface); border-radius:6px; border:1px solid var(--border);">
-                  {#each SLOT_OPTIONS as opt}
-                    <button
-                      on:click={() => { addSlot(dayIdx, opt.key); addingSlotForDay = null; }}
-                      style="padding:5px 12px; border-radius:16px; border:1px solid {opt.color}55; background:{opt.color}18; color:var(--text); font-size:11px; cursor:pointer; transition:all 0.1s;"
-                      title={opt.example}
-                    >
-                      {opt.label}
-                      {#if opt.key === 'core'}<span style="color:var(--text-faint); font-size:10px;"> (optional)</span>{/if}
-                    </button>
-                  {/each}
+                  <span style="font-size:12px; font-weight:600; color:var(--primary); white-space:nowrap; flex-shrink:0;">
+                    {ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max}
+                    <span style="font-weight:400; color:var(--text-muted);">@RIR{ex.target_rir}</span>
+                  </span>
+                  <button
+                    on:click={() => removeExerciseFromDay(dayIdx, exIdx)}
+                    style="background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:18px; line-height:1; padding:0 2px; flex-shrink:0; opacity:0.6;"
+                    title="Remove"
+                  >×</button>
                 </div>
-              {/if}
+              {/each}
 
-              <!-- Validation summary -->
-              {#if validatingSlots[dayIdx]}
-                <div style="font-size:11px; color:var(--text-faint);">Checking...</div>
-              {:else if slotValidations[dayIdx]}
-                {@const v = slotValidations[dayIdx]}
-                <div style="font-size:11px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; color:var(--text-muted); border-top:1px solid var(--border-faint); padding-top:8px;">
-                  <span>~{v.total_estimated_minutes} min</span>
-                  {#if v.push_pull_balance}
-                    <span style="color:{v.push_pull_balance.balanced ? '#5a9' : '#e8a040'};">
-                      Push {v.push_pull_balance.push} · Pull {v.push_pull_balance.pull} {v.push_pull_balance.balanced ? '✓' : '⚠'}
-                    </span>
-                  {/if}
-                  {#if v.muscle_coverage?.length}
-                    <span style="color:var(--text-faint);">
-                      {v.muscle_coverage.slice(0, 4).join(', ')}{v.muscle_coverage.length > 4 ? ` +${v.muscle_coverage.length - 4} more` : ''}
-                    </span>
-                  {/if}
-                </div>
-                {#if v.warnings?.length}
-                  <div style="margin-top:6px;">
-                    {#each v.warnings as w}
-                      <div style="font-size:11px; color:#e8a040; display:flex; align-items:flex-start; gap:5px; margin-top:3px;">
-                        <span style="flex-shrink:0;">⚠</span><span>{w.message}</span>
-                      </div>
-                    {/each}
-                  </div>
-                {/if}
-              {/if}
+              <!-- Add exercise row -->
+              <button
+                on:click={() => openAddExercise(dayIdx)}
+                style="width:100%; padding:11px 14px; text-align:left; background:transparent; border:none; color:var(--text-muted); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:8px; transition:background 0.1s;"
+              >
+                <span style="font-size:20px; line-height:1; color:var(--primary); font-weight:300;">+</span>
+                Add exercise
+              </button>
             </div>
           {/each}
-        </div>
-
-        <!-- Preview exercise assignments -->
-        <div style="margin-bottom:20px;">
-          <button
-            on:click={previewCustom}
-            disabled={customPreviewLoading}
-            style="padding:10px 20px; border-radius:6px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:13px; font-weight:600; cursor:pointer; margin-bottom:14px; opacity:{customPreviewLoading ? 0.6 : 1};"
-          >
-            {customPreviewLoading ? 'Loading...' : 'Preview Exercise Assignments →'}
-          </button>
-
-          {#if customPreviewError}
-            <div style="color:var(--danger); font-size:12px; margin-bottom:8px;">{customPreviewError}</div>
-          {/if}
-
-          {#if customPreviewData.length > 0}
-            <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:10px;">Exercise Assignments</div>
-            {#each customPreviewData as day}
-              <div style="margin-bottom:16px;">
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--border);">
-                  <span style="font-size:12px; font-weight:700; color:var(--primary);">{day.day_name}</span>
-                  {#if day.variant && numVariants > 1}
-                    <span style="padding:1px 7px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--primary); font-size:10px; font-weight:700; border:1px solid rgba(232,160,64,0.3);">{day.variant}</span>
-                  {/if}
-                </div>
-                {#each day.exercises as ex}
-                  <div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-faint);">
-                    <span style="flex:1; font-size:13px; color:var(--text);">{ex.exercise_name}</span>
-                    <span style="font-size:11px; color:var(--text-muted); white-space:nowrap;">{ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max} @RIR{ex.target_rir}</span>
-                  </div>
-                {/each}
-              </div>
-            {/each}
-          {/if}
-        </div>
+        {/if}
 
       {:else}
         <!-- ── Auto mode: exercise preview ─────────────────────────── -->
@@ -852,7 +773,7 @@
       {/if}
 
       <button class="btn-primary" on:click={createMesocycle}
-        disabled={creating || (sessionMode === 'auto' ? previewLoading : customPreviewLoading)}
+        disabled={creating || (sessionMode === 'auto' ? previewLoading : customLoading)}
         style="padding:12px 28px; font-size:15px;">
         {creating ? 'Building...' : 'Generate Mesocycle'}
       </button>
@@ -860,45 +781,44 @@
   {/if}
 </div>
 
-<!-- Exercise picker modal (custom slot pinning) -->
-{#if pickingExercise !== null}
+<!-- Add exercise modal (custom mode) -->
+{#if addingExerciseToDayIdx !== null}
   <div
     style="position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1001; display:flex; align-items:flex-end; justify-content:center;"
-    on:click|self={() => pickingExercise = null}
+    on:click|self={() => addingExerciseToDayIdx = null}
     role="dialog" aria-modal="true"
   >
-    <div style="background:var(--surface); border-radius:12px 12px 0 0; width:100%; max-width:600px; max-height:72vh; display:flex; flex-direction:column; padding:20px;">
-      <div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px;">
-        Pick Exercise
-      </div>
-      <div style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">
-        {SLOT_OPTIONS.find(o => o.key === customSlotSessions[pickingExercise.dayIdx]?.slots[pickingExercise.slotIdx])?.label ?? ''}
-        {#if SLOT_OPTIONS.find(o => o.key === customSlotSessions[pickingExercise.dayIdx]?.slots[pickingExercise.slotIdx])?.example}
-          · {SLOT_OPTIONS.find(o => o.key === customSlotSessions[pickingExercise.dayIdx]?.slots[pickingExercise.slotIdx]).example}
-        {/if}
-      </div>
+    <div style="background:var(--surface); border-radius:12px 12px 0 0; width:100%; max-width:600px; max-height:75vh; display:flex; flex-direction:column; padding:20px;">
+      <div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:12px;">Add Exercise</div>
 
       <input
-        bind:value={slotExerciseSearch}
-        placeholder="Search..."
+        bind:value={addExerciseSearch}
+        on:input={filterAddExercises}
+        placeholder="Search exercises..."
         style="margin-bottom:10px;"
       />
 
-      <!-- "App picks" option -->
-      <button
-        on:click={() => { clearPinnedExercise(pickingExercise.dayIdx, pickingExercise.slotIdx); pickingExercise = null; }}
-        style="width:100%; text-align:left; padding:10px 8px; border-bottom:1px solid var(--border-faint); background:transparent; cursor:pointer; font-size:13px; color:var(--text-muted); border-radius:0;"
-      >
-        App picks automatically
-      </button>
+      <!-- Muscle filter chips -->
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+        <button
+          on:click={() => { addExerciseFilter = ''; filterAddExercises(); }}
+          style="padding:3px 10px; border-radius:12px; border:1px solid {addExerciseFilter === '' ? 'var(--primary)' : 'var(--border)'}; background:{addExerciseFilter === '' ? 'rgba(232,160,64,0.15)' : 'transparent'}; color:{addExerciseFilter === '' ? 'var(--primary)' : 'var(--text-muted)'}; font-size:11px; cursor:pointer;"
+        >All</button>
+        {#each ALL_MUSCLES as m}
+          <button
+            on:click={() => { addExerciseFilter = m; filterAddExercises(); }}
+            style="padding:3px 10px; border-radius:12px; border:1px solid {addExerciseFilter === m ? 'var(--primary)' : 'var(--border)'}; background:{addExerciseFilter === m ? 'rgba(232,160,64,0.15)' : 'transparent'}; color:{addExerciseFilter === m ? 'var(--primary)' : 'var(--text-muted)'}; font-size:11px; cursor:pointer; text-transform:capitalize;"
+          >{m}</button>
+        {/each}
+      </div>
 
-      {#if loadingSlotExercises}
+      {#if loadingAddExercises}
         <div class="spinner" style="width:18px; height:18px; margin:20px auto;"></div>
       {:else}
         <div style="overflow-y:auto; flex:1;">
-          {#each slotExerciseCandidates.filter(e => !slotExerciseSearch || e.name.toLowerCase().includes(slotExerciseSearch.toLowerCase())).slice(0, 60) as ex}
+          {#each addExerciseCandidates.slice(0, 80) as ex}
             <button
-              on:click={() => pinExercise(ex)}
+              on:click={() => confirmAddExercise(ex)}
               style="width:100%; text-align:left; padding:10px 8px; border-bottom:1px solid var(--border-faint); background:transparent; cursor:pointer; display:flex; gap:10px; align-items:center; border-radius:0;"
             >
               <div style="flex:1;">
@@ -907,9 +827,12 @@
                   {Array.isArray(ex.primary_muscles) ? ex.primary_muscles.join(', ') : ''}{ex.mechanics ? ' · ' + ex.mechanics : ''}
                 </div>
               </div>
+              {#if ex.sub_pattern}
+                <span style="font-size:10px; color:var(--text-faint); text-transform:capitalize; flex-shrink:0;">{ex.sub_pattern.replace(/_/g, ' ')}</span>
+              {/if}
             </button>
           {/each}
-          {#if slotExerciseCandidates.filter(e => !slotExerciseSearch || e.name.toLowerCase().includes(slotExerciseSearch.toLowerCase())).length === 0}
+          {#if addExerciseCandidates.length === 0}
             <div style="color:var(--text-muted); font-size:13px; padding:16px 0;">No exercises found.</div>
           {/if}
         </div>
