@@ -31,6 +31,9 @@ def migrate_db():
         ("workoutset", "superset_group", "INTEGER"),
         ("plannedexercise", "superset_group", "INTEGER"),
         ("templateexercise", "superset_group", "INTEGER"),
+        ("exercise", "sub_pattern", "TEXT DEFAULT ''"),
+        ("mesocycle", "num_variants", "INTEGER DEFAULT 2"),
+        ("mesocycle", "session_counter", "INTEGER DEFAULT 0"),
     ]
     with engine.connect() as conn:
         for table, col, typedef in new_cols:

@@ -17,6 +17,7 @@ class Exercise(SQLModel, table=True):
     notes: str = Field(default="")
     substitution_ids: str = Field(default="[]") # JSON list of int
     is_custom: bool = Field(default=False)
+    sub_pattern: str = Field(default="")        # hip_dominant|knee_dominant|horizontal_push|vertical_push|horizontal_pull|vertical_pull|core|""
 
 
 class WorkoutSession(SQLModel, table=True):
@@ -116,6 +117,8 @@ class Mesocycle(SQLModel, table=True):
     start_date: Optional[str] = Field(default=None)  # ISO date string
     deload_week: int = Field(default=5)
     periodization_type: str = Field(default="standard")  # standard|linear|dup|block
+    num_variants: int = Field(default=2)        # 1=no variation, 2=A/B, 3=A/B/C
+    session_counter: int = Field(default=0)     # incremented each time a session is started
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 

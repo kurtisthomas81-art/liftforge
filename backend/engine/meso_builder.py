@@ -28,8 +28,52 @@ WARMUP_BUDGET_SECONDS = 600  # 10-min flat reserve for general session warm-up
 HIGH_FATIGUE_PATTERNS = {"squat", "hinge"}  # axial load, high CNS demand
 SECONDARY_CREDIT_FACTOR = 0.5              # secondary muscles credited at 50% of sets
 ISO_CRITICAL_MUSCLES = {                   # muscles rarely covered as secondary in compounds
-    "biceps", "calves", "abs", "rear_delts", "forearms"
+    "biceps", "calves", "rear_delts", "forearms"
 }
+CORE_MUSCLES = {"abs", "core"}             # never auto-populated; optional accessory slot only
+
+# ── Pattern × Goal prescription matrix ────────────────────────────────────────
+# Each entry: {fatigue, hypertrophy/strength/recomp: {sets:(min,max), reps:(min,max)}, beginner_rir:(conservative,standard)}
+PATTERN_PRESCRIPTION: dict[str, dict] = {
+    "hip_dominant":    {"fatigue": "high",   "hypertrophy": {"sets": (2, 3), "reps": (5, 8)},   "strength": {"sets": (2, 3), "reps": (3, 5)},   "recomp": {"sets": (2, 3), "reps": (5, 8)},   "beginner_rir": (4, 3)},
+    "knee_dominant":   {"fatigue": "high",   "hypertrophy": {"sets": (3, 4), "reps": (5, 10)},  "strength": {"sets": (3, 5), "reps": (3, 6)},   "recomp": {"sets": (3, 4), "reps": (6, 10)},  "beginner_rir": (3, 3)},
+    "horizontal_push": {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
+    "vertical_push":   {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
+    "horizontal_pull": {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
+    "vertical_pull":   {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
+    "core":            {"fatigue": "low",    "hypertrophy": {"sets": (2, 3), "reps": (12, 20)}, "strength": {"sets": (2, 3), "reps": (12, 20)}, "recomp": {"sets": (2, 3), "reps": (12, 20)}, "beginner_rir": (2, 1)},
+    "":                {"fatigue": "low",    "hypertrophy": {"sets": (2, 3), "reps": (12, 20)}, "strength": {"sets": (2, 3), "reps": (12, 20)}, "recomp": {"sets": (2, 3), "reps": (12, 20)}, "beginner_rir": (2, 1)},
+}
+
+
+def _rep_set_for_pattern(
+    sub_pattern: str,
+    goal: str,
+    is_beginner: bool,
+    week_number: int,
+    weeks_total: int,
+) -> tuple[int, int, int, int]:
+    """Returns (sets, reps_min, reps_max, rir) for a slot, goal, and experience level.
+
+    Beginners start at MEV (lower set bound, conservative RIR).
+    Intermediate/advanced ramp sets from min→max across working weeks.
+    """
+    rx = PATTERN_PRESCRIPTION.get(sub_pattern, PATTERN_PRESCRIPTION[""])
+    goal_key = goal if goal in ("hypertrophy", "strength", "recomp") else "hypertrophy"
+    goal_rx = rx[goal_key]
+    sets_min, sets_max = goal_rx["sets"]
+    reps_min, reps_max = goal_rx["reps"]
+
+    if is_beginner:
+        rir = rx["beginner_rir"][0]
+        sets = sets_min
+    else:
+        working_weeks = max(weeks_total - 1, 1)
+        progress = min(1.0, (week_number - 1) / max(working_weeks - 1, 1))
+        sets = round(sets_min + progress * (sets_max - sets_min))
+        rir = 1 if goal == "strength" else 2
+
+    return sets, reps_min, reps_max, rir
 
 
 # ── Existing rep / periodization helpers (unchanged) ──────────────────────────
@@ -233,6 +277,8 @@ def _select_exercises(
     pull_count = 0
 
     for muscle in muscles:
+        if muscle in CORE_MUSCLES:
+            continue  # core is optional accessory only; never auto-assigned
         at_max = max_total is not None and len(result) >= max_total
         is_critical = muscle in ISO_CRITICAL_MUSCLES
         if at_max and not is_critical:
@@ -303,6 +349,132 @@ def _select_exercises(
     return result
 
 
+# ── Slot-based session structure ──────────────────────────────────────────────
+
+VARIANT_PUSH_PULL: dict[str, tuple[str, str]] = {
+    "A": ("horizontal_push", "horizontal_pull"),
+    "B": ("vertical_push",   "vertical_pull"),
+    "C": ("horizontal_push", "horizontal_pull"),  # different exercise via variant_index=2
+}
+
+SESSION_SLOT_TEMPLATES: dict[str, list[str]] = {
+    "full_body":   ["knee_dominant", "hip_dominant", "{push}", "{pull}"],
+    "push":        ["horizontal_push", "vertical_push"],
+    "pull":        ["horizontal_pull", "vertical_pull"],
+    "legs":        ["knee_dominant", "hip_dominant"],
+    "lower":       ["knee_dominant", "hip_dominant"],
+    "upper":       ["horizontal_push", "vertical_push", "horizontal_pull", "vertical_pull"],
+    "upper_lower": ["knee_dominant", "hip_dominant", "{push}", "{pull}"],  # fallback, resolved per day
+    "chest":       ["horizontal_push"],
+    "back":        ["horizontal_pull", "vertical_pull"],
+    "shoulders":   ["vertical_push"],
+    "arms":        [],
+    "custom":      ["knee_dominant", "hip_dominant", "{push}", "{pull}"],
+    "default":     ["knee_dominant", "hip_dominant", "{push}", "{pull}"],
+}
+
+
+def _infer_day_split_type(day_name: str) -> str:
+    n = day_name.lower()
+    if "full body" in n or "full_body" in n:
+        return "full_body"
+    if "push" in n:
+        return "push"
+    if "pull" in n:
+        return "pull"
+    if "leg" in n:
+        return "legs"
+    if "lower" in n:
+        return "lower"
+    if "upper" in n:
+        return "upper"
+    if "chest" in n:
+        return "chest"
+    if "back" in n:
+        return "back"
+    if "shoulder" in n:
+        return "shoulders"
+    if "arm" in n or "bicep" in n or "tricep" in n:
+        return "arms"
+    return "default"
+
+
+def _build_slot_template(split_type: str, day_name: str, variant_letter: str) -> list[str]:
+    """Return ordered sub_pattern slot list for a session. Push/pull resolve by variant."""
+    day_type = _infer_day_split_type(day_name)
+
+    # For upper_lower splits, resolve per-day type from name
+    if split_type in ("upper_lower",):
+        effective_type = day_type
+    else:
+        effective_type = split_type if split_type in SESSION_SLOT_TEMPLATES else day_type
+
+    template = SESSION_SLOT_TEMPLATES.get(effective_type, SESSION_SLOT_TEMPLATES["default"])
+    push_slot, pull_slot = VARIANT_PUSH_PULL.get(variant_letter, VARIANT_PUSH_PULL["A"])
+
+    result = []
+    for slot in template:
+        if slot == "{push}":
+            result.append(push_slot)
+        elif slot == "{pull}":
+            result.append(pull_slot)
+        else:
+            result.append(slot)
+    return result
+
+
+def _select_for_slot(
+    slot: str,
+    available_equipment: set[str],
+    exercises_db: list[dict],
+    excluded_ids: set[int],
+    experience_level: str,
+    variant_index: int = 0,
+) -> Optional[dict]:
+    """Pick one exercise for a slot, cycling through candidates by variant_index."""
+    candidates = [
+        ex for ex in exercises_db
+        if ex.get("sub_pattern") == slot
+        and set(_parse_list(ex.get("equipment_required", []))).issubset(available_equipment)
+        and ex["id"] not in excluded_ids
+    ]
+    if experience_level == "beginner":
+        candidates = [e for e in candidates if e.get("mechanics") == "compound"]
+    candidates.sort(key=lambda e: e["name"])
+    if not candidates:
+        return None
+    return candidates[variant_index % len(candidates)]
+
+
+def _select_session_exercises(
+    slots: list[str],
+    available_equipment: set[str],
+    exercises_db: list[dict],
+    experience_level: str,
+    variant_letter: str,
+    max_total: Optional[int],
+) -> list[dict]:
+    """Fill each slot with one exercise. Structural slot list prevents axial-load stacking."""
+    variant_index = {"A": 0, "B": 1, "C": 2}.get(variant_letter, 0)
+    result: list[dict] = []
+    selected_ids: set[int] = set()
+
+    for slot in slots:
+        if max_total is not None and len(result) >= max_total:
+            break
+        ex = _select_for_slot(slot, available_equipment, exercises_db, selected_ids,
+                               experience_level, variant_index)
+        if ex:
+            result.append(ex)
+            selected_ids.add(ex["id"])
+
+    return result
+
+
+def _variant_letter(session_index: int, num_variants: int) -> str:
+    return ["A", "B", "C"][session_index % max(num_variants, 1)]
+
+
 # ── Volume helpers ─────────────────────────────────────────────────────────────
 
 def _sets_for_week(mev: int, week_number: int, mrv: int, experience_level: str = "intermediate") -> int:
@@ -327,15 +499,16 @@ def preview_mesocycle(
     periodization_type: str = "standard",
     session_minutes: Optional[int] = None,
     experience_level: str = "intermediate",
+    num_variants: int = 2,
 ) -> list[dict]:
     """
     Returns per-day exercise selection (week-1 parameters) without persisting.
-    Each entry: {day_index, day_name, muscle_focus, exercises, frequency_warnings}
+    Each entry: {day_index, day_name, muscle_focus, exercises, frequency_warnings, variant}
     """
     equip_set = set(available_equipment)
+    split_type = split_template.get("split_type", "full_body")
     days = split_template.get("days", [])
     is_beginner = experience_level == "beginner"
-    compounds_only = is_beginner
     time_cap = _exercise_budget(session_minutes, goal)
     max_total = min(time_cap, 4) if is_beginner else time_cap
 
@@ -361,18 +534,10 @@ def preview_mesocycle(
     result = []
     for idx, day in enumerate(days):
         muscles = _parse_list(day.get("muscle_focus", []))
-
-        if is_beginner:
-            max_per_muscle = 1
-        else:
-            n = len(muscles)
-            max_per_muscle = 1 if n >= 7 else (2 if n >= 4 else 3)
-
-        exercises_for_day = _select_exercises(
-            muscles, equip_set, exercises_db, goal,
-            max_per_muscle=max_per_muscle,
-            max_total=max_total,
-            compounds_only=compounds_only,
+        variant = _variant_letter(idx, num_variants)
+        slots = _build_slot_template(split_type, day["name"], variant)
+        exercises_for_day = _select_session_exercises(
+            slots, equip_set, exercises_db, experience_level, variant, max_total
         )
 
         activated_muscles: set[str] = set()
@@ -397,9 +562,9 @@ def preview_mesocycle(
             warmup_sets = _warmup_sets_needed(ex, activated_muscles)
             rest_seconds = _rest_for_exercise(ex)
 
+            sub_pattern = ex.get("sub_pattern", "")
             if is_beginner:
-                reps_min, reps_max = (12, 15)
-                rir = 2
+                _, reps_min, reps_max, rir = _rep_set_for_pattern(sub_pattern, goal, True, 1, weeks)
             elif periodization_type == "linear":
                 reps_min, reps_max = _rep_range_linear(goal, 1, weeks)
                 rir = 3
@@ -418,6 +583,7 @@ def preview_mesocycle(
                 "primary_muscle": primary,
                 "mechanics": mechanics,
                 "movement_pattern": ex.get("movement_pattern", ""),
+                "sub_pattern": sub_pattern,
                 "target_sets": per_session,
                 "target_reps_min": reps_min,
                 "target_reps_max": reps_max,
@@ -443,6 +609,7 @@ def preview_mesocycle(
             "muscle_focus": muscles,
             "exercises": preview_exercises,
             "frequency_warnings": frequency_warnings,
+            "variant": variant,
         })
 
     return result
@@ -462,6 +629,7 @@ def generate_mesocycle(
     day_exercises: Optional[dict[int, list[int]]] = None,
     session_minutes: Optional[int] = None,
     experience_level: str = "intermediate",
+    num_variants: int = 2,
 ) -> list[dict]:
     """
     Returns list of week dicts with planned sessions and exercises.
@@ -469,10 +637,10 @@ def generate_mesocycle(
     Sets are reduced (never exercises dropped) if session_minutes is exceeded.
     """
     equip_set = set(available_equipment)
+    split_type = split_template.get("split_type", "full_body")
     days = split_template.get("days", [])
     ex_by_id = {ex["id"]: ex for ex in exercises_db}
     is_beginner = experience_level == "beginner"
-    compounds_only = is_beginner
     time_cap = _exercise_budget(session_minutes, goal)
     max_total = min(time_cap, 4) if is_beginner else time_cap
 
@@ -483,6 +651,8 @@ def generate_mesocycle(
             sessions_per_muscle[m] = sessions_per_muscle.get(m, 0) + 1
 
     result = []
+    global_session_idx = 0
+
     for week_num in range(1, weeks + 1):
         is_deload = (week_num == deload_week)
         week_sessions = []
@@ -490,23 +660,17 @@ def generate_mesocycle(
         for day in days:
             muscles = _parse_list(day.get("muscle_focus", []))
             day_idx = day["day_number"] - 1
+            variant = _variant_letter(global_session_idx, num_variants)
+            global_session_idx += 1
 
             if day_exercises and day_idx in day_exercises:
                 exercises_for_day = [
                     ex_by_id[eid] for eid in day_exercises[day_idx] if eid in ex_by_id
                 ]
             else:
-                if is_beginner:
-                    max_per_muscle = 1
-                else:
-                    n = len(muscles)
-                    max_per_muscle = 1 if n >= 7 else (2 if n >= 4 else 3)
-
-                exercises_for_day = _select_exercises(
-                    muscles, equip_set, exercises_db, goal,
-                    max_per_muscle=max_per_muscle,
-                    max_total=max_total,
-                    compounds_only=compounds_only,
+                slots = _build_slot_template(split_type, day["name"], variant)
+                exercises_for_day = _select_session_exercises(
+                    slots, equip_set, exercises_db, experience_level, variant, max_total
                 )
 
             session_exercises = []
@@ -537,12 +701,12 @@ def generate_mesocycle(
                 rest_seconds = _rest_for_exercise(ex)
                 session_label = ""
 
+                sub_pattern = ex.get("sub_pattern", "")
                 if is_deload:
                     reps_min, reps_max = _rep_range_for_goal(goal, mechanics)
                     rir = 3
                 elif is_beginner:
-                    reps_min, reps_max = (12, 15)
-                    rir = 2
+                    _, reps_min, reps_max, rir = _rep_set_for_pattern(sub_pattern, goal, True, week_num, weeks)
                 elif periodization_type == "linear":
                     reps_min, reps_max = _rep_range_linear(goal, week_num, weeks)
                     progress = (week_num - 1) / max(weeks - 2, 1)

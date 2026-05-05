@@ -34,6 +34,30 @@ app.include_router(goals.router)
 app.include_router(injuries.router)
 
 
+def _backfill_sub_patterns(session: Session) -> None:
+    """Compute and write sub_pattern for any exercises that don't have one yet."""
+    import json as _json
+    from seed_data import _compute_sub_pattern
+    needs_backfill = [ex for ex in session.exec(select(Exercise)).all() if not ex.sub_pattern]
+    if not needs_backfill:
+        return
+    for ex in needs_backfill:
+        try:
+            pm = _json.loads(ex.primary_muscles)
+        except Exception:
+            pm = []
+        ex.sub_pattern = _compute_sub_pattern(
+            ex.movement_pattern or "",
+            ex.force or "",
+            pm,
+            ex.mechanics or "",
+            ex.name,
+        )
+        session.add(ex)
+    session.commit()
+    print(f"Backfilled sub_pattern for {len(needs_backfill)} exercises.")
+
+
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
@@ -56,6 +80,9 @@ def on_startup():
         if not landmark_count:
             from seed_data import seed_landmarks
             seed_landmarks(session)
+
+        # Backfill sub_pattern for exercises seeded before this field existed
+        _backfill_sub_patterns(session)
 
 
 @app.get("/api/health")

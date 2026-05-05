@@ -27,7 +27,10 @@
   let daysOfWeek = [];   // array of 0-6 per split day
   let experienceLevel = 'intermediate';
 
-  // Step 4 (review)
+  // Step 3 (variant picker — new)
+  let numVariants = 2;   // 1=A only, 2=A/B, 3=A/B/C
+
+  // Step 5 (review — was step 4)
   let previewData = [];
   let previewLoading = false;
   let previewError = '';
@@ -90,7 +93,7 @@
   function selectSplit(split) {
     isCustom = false;
     selectedSplit = split;
-    step = 3;
+    step = 3;  // step 3 = variant picker
   }
 
   function selectCustom() {
@@ -123,6 +126,7 @@
       start_date: startDate,
       name: mesoName,
       days_of_week: daysOfWeek,
+      num_variants: numVariants,
     };
     if (isCustom) {
       p.custom_days = customDays;
@@ -133,7 +137,7 @@
   }
 
   async function goToReview() {
-    step = 4;
+    step = 5;
     previewData = [];
     editedDays = {};
     previewError = '';
@@ -226,12 +230,12 @@
 
   <!-- Step indicator -->
   <div style="display:flex; align-items:center; gap:0; margin-bottom:28px;">
-    {#each [1,2,3,4] as n}
+    {#each [1,2,3,4,5] as n}
       <div style="display:flex; align-items:center; flex:1;">
         <div style="width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; background:{step >= n ? 'var(--primary)' : 'var(--surface-2)'}; color:{step >= n ? '#000' : 'var(--text-muted)'}; border:2px solid {step >= n ? 'var(--primary)' : 'var(--border)'}; flex-shrink:0; transition:all 0.2s;">
           {stepLabel(n)}
         </div>
-        {#if n < 4}
+        {#if n < 5}
           <div style="flex:1; height:2px; background:{step > n ? 'var(--primary)' : 'var(--border)'}; transition:background 0.2s;"></div>
         {/if}
       </div>
@@ -318,15 +322,49 @@
             </div>
           {/each}
           <button class="btn-primary" on:click={() => step = 3}>Continue →</button>
+          <!-- step 3 is variant picker; custom flow also goes through it -->
         </div>
       {/if}
     </div>
 
   {:else if step === 3}
-    <!-- Step 3: Goal & duration -->
+    <!-- Step 3: Variation style -->
     <div class="card">
       <div class="flex items-center gap-3 mb-4">
         <button class="btn-ghost btn-sm" on:click={() => step = 2}>← Back</button>
+        <div class="section-title">Workout Variation</div>
+      </div>
+
+      <div style="margin-bottom:24px;">
+        <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">How much exercise variety do you want?</label>
+        <div style="display:flex; gap:10px; flex-direction:column;">
+          {#each [
+            { val: 1, label: 'A — No variation', desc: 'Same exercises every session. Best for pure beginners learning movement patterns.' },
+            { val: 2, label: 'A/B rotation', desc: 'Two alternating workouts. Horizontal push/pull one session, vertical the next. Recommended.' },
+            { val: 3, label: 'A/B/C rotation', desc: 'Three unique workouts cycling continuously. More variety across the mesocycle.' },
+          ] as opt}
+            <button
+              on:click={() => numVariants = opt.val}
+              style="text-align:left; padding:14px 16px; border-radius:8px; border:2px solid {numVariants === opt.val ? 'var(--primary)' : 'var(--border)'}; background:{numVariants === opt.val ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:var(--text); cursor:pointer; transition:all 0.15s;"
+            >
+              <div style="font-weight:700; font-size:13px; color:{numVariants === opt.val ? 'var(--primary)' : 'var(--text)'}; margin-bottom:3px;">{opt.label}</div>
+              <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">{opt.desc}</div>
+            </button>
+          {/each}
+        </div>
+        <div style="font-size:11px; color:var(--text-faint); margin-top:10px;">
+          Sessions loop continuously by workout index — A/B with 3 days/week gives A→B→A, then B→A→B the next week.
+        </div>
+      </div>
+
+      <button class="btn-primary" on:click={() => step = 4}>Continue →</button>
+    </div>
+
+  {:else if step === 4}
+    <!-- Step 4: Goal & duration (was step 3) -->
+    <div class="card">
+      <div class="flex items-center gap-3 mb-4">
+        <button class="btn-ghost btn-sm" on:click={() => step = 3}>← Back</button>
         <div class="section-title">Goal & Duration</div>
       </div>
 
@@ -429,11 +467,11 @@
       <button class="btn-primary" on:click={goToReview}>Review Exercises →</button>
     </div>
 
-  {:else if step === 4}
-    <!-- Step 4: Review exercises -->
+  {:else if step === 5}
+    <!-- Step 5: Review exercises (was step 4) -->
     <div class="card">
       <div class="flex items-center gap-3 mb-4">
-        <button class="btn-ghost btn-sm" on:click={() => step = 3}>← Back</button>
+        <button class="btn-ghost btn-sm" on:click={() => step = 4}>← Back</button>
         <div class="section-title">Review Exercises</div>
       </div>
 
@@ -444,6 +482,7 @@
         <span style="color:var(--text-muted);">Goal</span><span style="text-transform:capitalize; color:var(--text);">{selectedGoal}</span>
         <span style="color:var(--text-muted);">Duration</span><span style="color:var(--text);">{selectedWeeks} weeks · week {selectedWeeks} = deload · starts {startDate}</span>
         <span style="color:var(--text-muted);">Session</span><span style="color:var(--text);">{selectedDuration} min · {experienceLevel} level</span>
+        <span style="color:var(--text-muted);">Variation</span><span style="color:var(--text);">{numVariants === 1 ? 'A — same every session' : numVariants === 2 ? 'A/B rotation' : 'A/B/C rotation'}</span>
       </div>
 
       <!-- Exercise preview by day -->
@@ -465,6 +504,9 @@
             <div style="margin-bottom:18px;">
               <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--border);">
                 <span style="font-size:12px; font-weight:700; color:var(--primary);">{day.day_name}</span>
+                {#if day.variant && numVariants > 1}
+                  <span style="padding:1px 7px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--primary); font-size:10px; font-weight:700; border:1px solid rgba(232,160,64,0.3);">{day.variant}</span>
+                {/if}
                 <div style="display:flex; gap:4px; flex-wrap:wrap;">
                   {#each day.muscle_focus as m}
                     <span style="padding:2px 6px; border-radius:3px; background:var(--surface-2); color:var(--text-muted); font-size:10px; text-transform:capitalize;">{m}</span>

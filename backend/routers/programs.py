@@ -149,11 +149,27 @@ class MesocycleCreate(BaseModel):
     session_minutes: Optional[int] = None
     # Optional exercise overrides from wizard preview (day_index -> [exercise_id, ...])
     day_exercises: Optional[dict[str, list[int]]] = None
+    num_variants: int = 2   # 1=no variation, 2=A/B, 3=A/B/C
 
 
 class MesocycleUpdate(BaseModel):
     name: Optional[str] = None
     status: Optional[str] = None
+
+
+class SlotValidationPayload(BaseModel):
+    slots: list[str]
+    equipment: Optional[list[str]] = None
+    goal: str = "hypertrophy"
+    experience_level: str = "intermediate"
+
+
+class CustomSlotPreviewPayload(BaseModel):
+    sessions: list[dict]   # [{day_name: str, slots: [str], variant: str}]
+    goal: str = "hypertrophy"
+    equipment: Optional[list[str]] = None
+    experience_level: str = "intermediate"
+    num_variants: int = 2
 
 
 class PlannedExerciseCreate(BaseModel):
@@ -254,6 +270,10 @@ def _resolve_meso_resources(payload: MesocycleCreate, session: Session) -> tuple
         except Exception:
             pm = []
         try:
+            sm = json.loads(ex.secondary_muscles) if ex.secondary_muscles else []
+        except Exception:
+            sm = []
+        try:
             eq = json.loads(ex.equipment_required)
         except Exception:
             eq = []
@@ -261,12 +281,17 @@ def _resolve_meso_resources(payload: MesocycleCreate, session: Session) -> tuple
             "id": ex.id,
             "name": ex.name,
             "primary_muscles": pm,
+            "secondary_muscles": sm,
             "mechanics": ex.mechanics,
             "equipment_required": eq,
+            "movement_pattern": ex.movement_pattern or "",
+            "force": ex.force or "",
+            "sub_pattern": getattr(ex, "sub_pattern", "") or "",
         })
 
     if template:
         template_data = {
+            "split_type": template.split_type,
             "days": [
                 {"day_number": d.day_number, "id": d.id, "name": d.name, "muscle_focus": d.muscle_focus}
                 for d in days
@@ -274,6 +299,7 @@ def _resolve_meso_resources(payload: MesocycleCreate, session: Session) -> tuple
         }
     else:
         template_data = {
+            "split_type": "custom",
             "days": [
                 {
                     "day_number": i + 1,
@@ -291,6 +317,158 @@ def _resolve_meso_resources(payload: MesocycleCreate, session: Session) -> tuple
     return template, days, template_data, user_equipment, landmarks, exercises_db, experience_level
 
 
+@router.post("/mesocycles/validate-slots")
+def validate_slot_list(payload: SlotValidationPayload, session: Session = Depends(get_session)):
+    """Return per-slot prescriptions, warnings, balance info, and estimated session time."""
+    from engine.meso_builder import PATTERN_PRESCRIPTION, _rep_set_for_pattern, COMPOUND_SET_SECONDS, REST_COMPOUND, REST_ISOLATION, ISOLATION_SET_SECONDS
+
+    all_exercises = session.exec(select(Exercise)).all()
+    available = set(payload.equipment) if payload.equipment else {
+        "bodyweight", "dumbbells", "barbell", "bench", "rack", "cable_machine", "machine"
+    }
+
+    SLOT_MUSCLES = {
+        "knee_dominant":   ["quads", "glutes", "hamstrings"],
+        "hip_dominant":    ["hamstrings", "glutes", "lower_back"],
+        "horizontal_push": ["chest", "triceps", "shoulders"],
+        "vertical_push":   ["shoulders", "triceps"],
+        "horizontal_pull": ["back", "lats", "biceps"],
+        "vertical_pull":   ["lats", "biceps"],
+        "core":            ["abs", "core"],
+        "":                [],
+    }
+    SLOT_FATIGUE = {sp: rx["fatigue"] for sp, rx in PATTERN_PRESCRIPTION.items()}
+
+    is_beginner = payload.experience_level == "beginner"
+    warnings = []
+    slot_details = []
+    push_count = 0
+    pull_count = 0
+    muscle_coverage: list[str] = []
+    total_minutes = 10  # warmup reserve
+
+    axial_slots = [s for s in payload.slots if s in ("knee_dominant", "hip_dominant")]
+    if len(axial_slots) > 1:
+        warnings.append({
+            "type": "axial_overload",
+            "message": "Two high-fatigue compounds (e.g. squat + deadlift) in one session — high CNS demand. Consider splitting across days.",
+            "severity": "warning",
+        })
+
+    for slot in payload.slots:
+        sets, reps_min, reps_max, rir = _rep_set_for_pattern(slot, payload.goal, is_beginner, 1, 5)
+        fatigue = SLOT_FATIGUE.get(slot, "low")
+        rest = REST_COMPOUND if fatigue in ("high", "medium") else REST_ISOLATION
+        set_time = COMPOUND_SET_SECONDS if fatigue in ("high", "medium") else ISOLATION_SET_SECONDS
+        est_minutes = round((sets * (set_time + rest)) / 60)
+        total_minutes += est_minutes
+
+        muscles = SLOT_MUSCLES.get(slot, [])
+        for m in muscles:
+            if m not in muscle_coverage:
+                muscle_coverage.append(m)
+
+        if slot in ("horizontal_push", "vertical_push"):
+            push_count += 1
+        if slot in ("horizontal_pull", "vertical_pull"):
+            pull_count += 1
+
+        slot_details.append({
+            "slot": slot,
+            "prescription": {"sets": sets, "reps_min": reps_min, "reps_max": reps_max, "rir": rir},
+            "estimated_minutes": est_minutes,
+            "primary_muscles_covered": muscles,
+        })
+
+    if abs(push_count - pull_count) > 1:
+        warnings.append({
+            "type": "push_pull_imbalance",
+            "message": f"Push: {push_count} compound(s), Pull: {pull_count} compound(s) — aim for a 1:1 ratio.",
+            "severity": "warning",
+        })
+
+    return {
+        "warnings": warnings,
+        "slots": slot_details,
+        "push_pull_balance": {"push": push_count, "pull": pull_count, "balanced": abs(push_count - pull_count) <= 1},
+        "total_estimated_minutes": total_minutes,
+        "muscle_coverage": muscle_coverage,
+    }
+
+
+@router.post("/mesocycles/preview-custom-slots")
+def preview_custom_slots(payload: CustomSlotPreviewPayload, session: Session = Depends(get_session)):
+    """Return exercise assignments for user-defined slot lists. Same shape as /mesocycles/preview."""
+    from engine.meso_builder import (
+        _select_session_exercises, _rep_set_for_pattern,
+        _warmup_sets_needed, _rest_for_exercise, _fit_to_time,
+        _apply_secondary_credits, _parse_list,
+    )
+
+    all_exercises = session.exec(select(Exercise)).all()
+    exercises_db = []
+    for ex in all_exercises:
+        try:
+            pm = json.loads(ex.primary_muscles)
+        except Exception:
+            pm = []
+        try:
+            sm = json.loads(ex.secondary_muscles) if ex.secondary_muscles else []
+        except Exception:
+            sm = []
+        try:
+            eq = json.loads(ex.equipment_required)
+        except Exception:
+            eq = []
+        exercises_db.append({
+            "id": ex.id, "name": ex.name, "primary_muscles": pm, "secondary_muscles": sm,
+            "mechanics": ex.mechanics, "equipment_required": eq,
+            "movement_pattern": ex.movement_pattern or "",
+            "force": ex.force or "", "sub_pattern": getattr(ex, "sub_pattern", "") or "",
+        })
+
+    available = set(payload.equipment) if payload.equipment else {
+        "bodyweight", "dumbbells", "barbell", "bench", "rack", "cable_machine", "machine"
+    }
+    is_beginner = payload.experience_level == "beginner"
+    result = []
+
+    for sess_def in payload.sessions:
+        slots = sess_def.get("slots", [])
+        variant = sess_def.get("variant", "A")
+        day_name = sess_def.get("day_name", "Custom")
+        exercises_for_day = _select_session_exercises(slots, available, exercises_db, payload.experience_level, variant, None)
+
+        activated_muscles: set[str] = set()
+        secondary_credits: dict[str, float] = {}
+        preview_exercises = []
+
+        for ex in exercises_for_day:
+            primaries = _parse_list(ex.get("primary_muscles", []))
+            primary = primaries[0] if primaries else None
+            sub_pattern = ex.get("sub_pattern", "")
+            sets, reps_min, reps_max, rir = _rep_set_for_pattern(sub_pattern, payload.goal, is_beginner, 1, 5)
+            warmup_sets = _warmup_sets_needed(ex, activated_muscles)
+            rest_seconds = _rest_for_exercise(ex)
+
+            preview_exercises.append({
+                "exercise_id": ex["id"], "exercise_name": ex["name"],
+                "primary_muscle": primary, "mechanics": ex.get("mechanics", "compound"),
+                "movement_pattern": ex.get("movement_pattern", ""), "sub_pattern": sub_pattern,
+                "target_sets": sets, "target_reps_min": reps_min, "target_reps_max": reps_max,
+                "target_rir": rir, "warmup_sets": warmup_sets, "rest_seconds": rest_seconds,
+            })
+            for m in primaries:
+                activated_muscles.add(m)
+            _apply_secondary_credits(ex, secondary_credits, sets)
+
+        result.append({
+            "day_name": day_name, "variant": variant, "slots": slots, "exercises": preview_exercises,
+        })
+
+    return result
+
+
 @router.post("/mesocycles/preview")
 def preview_mesocycle_endpoint(payload: MesocycleCreate, session: Session = Depends(get_session)):
     from engine.meso_builder import preview_mesocycle
@@ -305,6 +483,7 @@ def preview_mesocycle_endpoint(payload: MesocycleCreate, session: Session = Depe
         periodization_type=payload.periodization_type,
         session_minutes=payload.session_minutes,
         experience_level=experience_level,
+        num_variants=payload.num_variants,
     )
 
 
@@ -350,6 +529,8 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
         start_date=start,
         deload_week=deload_week,
         periodization_type=payload.periodization_type,
+        num_variants=payload.num_variants,
+        session_counter=0,
     )
     session.add(meso)
     session.commit()
@@ -371,6 +552,7 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
         day_exercises=day_exercises_override,
         session_minutes=payload.session_minutes,
         experience_level=experience_level,
+        num_variants=payload.num_variants,
     )
 
     dow_list = list(payload.days_of_week)
@@ -1056,6 +1238,14 @@ def start_planned_session(id: int, session: Session = Depends(get_session)):
 
     ps.session_id = wk.id
     session.add(ps)
+
+    # Increment mesocycle session counter (drives A/B/C variant tracking)
+    if week:
+        meso = session.get(Mesocycle, week.mesocycle_id)
+        if meso:
+            meso.session_counter = (meso.session_counter or 0) + 1
+            session.add(meso)
+
     session.commit()
 
     return {

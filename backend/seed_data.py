@@ -1575,9 +1575,73 @@ def _build_substitution_map(exercises: list[dict]) -> dict[str, list[int]]:
     return subs
 
 
+def _compute_sub_pattern(movement_pattern: str, force: str, primary_muscles: list, mechanics: str, name: str) -> str:
+    """Derive the slot sub_pattern from existing exercise fields. Used at seed time and for backfill."""
+    name_lower = name.lower()
+
+    if movement_pattern == "hinge":
+        return "hip_dominant"
+
+    if movement_pattern == "squat":
+        return "knee_dominant"
+
+    if movement_pattern == "core":
+        return "core"
+
+    if movement_pattern == "isolation":
+        return ""
+
+    if movement_pattern == "push":
+        # Leg press: push movement but knee-dominant pattern
+        if any(m in ("quads", "glutes", "hamstrings") for m in primary_muscles) and "chest" not in primary_muscles:
+            return "knee_dominant"
+        # Tricep-primary or isolation mechanics → accessory
+        if mechanics == "isolation":
+            return ""
+        if primary_muscles and primary_muscles[0] == "triceps":
+            return ""
+        # Vertical push: shoulder-primary compounds (OHP, Arnold, Push Press)
+        if any(m in ("shoulders", "deltoids") for m in primary_muscles):
+            return "vertical_push"
+        # Horizontal push: chest-primary compounds
+        if any(m in ("chest",) for m in primary_muscles):
+            return "horizontal_push"
+        return "horizontal_push"
+
+    if movement_pattern == "pull":
+        # Curl / isolation → accessory
+        if mechanics == "isolation":
+            return ""
+        if primary_muscles and primary_muscles[0] == "biceps":
+            return ""
+        # Rear-delt / shoulder compound with no back/lats → isolation-equivalent
+        if (any(m in ("rear_delts", "shoulders", "traps") for m in primary_muscles)
+                and not any(m in ("back", "lats") for m in primary_muscles)):
+            return ""
+        # Vertical pull by name
+        if any(w in name_lower for w in ("pull-up", "pullup", "pull up", "chin-up", "chinup", "pulldown", "pull-down")):
+            return "vertical_pull"
+        # Lats-only primary without back label → vertical
+        if primary_muscles and primary_muscles[0] == "lats" and "back" not in primary_muscles:
+            return "vertical_pull"
+        # Back/lats → horizontal pull (rows)
+        if any(m in ("back", "lats") for m in primary_muscles):
+            return "horizontal_pull"
+        return ""
+
+    return ""
+
+
 def seed(session: Session) -> None:
     subs_map = _build_substitution_map(EXERCISES)
     for idx, ex_data in enumerate(EXERCISES, start=1):
+        sub_pat = _compute_sub_pattern(
+            ex_data["movement_pattern"],
+            ex_data["force"],
+            ex_data["primary_muscles"],
+            ex_data["mechanics"],
+            ex_data["name"],
+        )
         ex = Exercise(
             name=ex_data["name"],
             aliases=json.dumps(ex_data.get("aliases", [])),
@@ -1591,6 +1655,7 @@ def seed(session: Session) -> None:
             notes=ex_data.get("notes", ""),
             substitution_ids=json.dumps(subs_map.get(str(idx), [])),
             is_custom=False,
+            sub_pattern=sub_pat,
         )
         session.add(ex)
     session.commit()
