@@ -46,6 +46,12 @@
   let customPreviewError = '';
   let addingSlotForDay = null;   // dayIdx of open slot picker, or null
 
+  // Per-slot exercise picker
+  let pickingExercise = null;           // { dayIdx, slotIdx } | null
+  let loadingSlotExercises = false;
+  let slotExerciseCandidates = [];      // exercises filtered for the open picker
+  let slotExerciseSearch = '';
+
   const SLOT_OPTIONS = [
     { key: 'knee_dominant',   label: 'Knee Dominant',    example: 'Squat · Lunge · Leg Press',       fatigue: 'high',   color: '#c0392b' },
     { key: 'hip_dominant',    label: 'Hip Dominant',     example: 'Deadlift · RDL · Hip Thrust',     fatigue: 'high',   color: '#c0392b' },
@@ -88,7 +94,8 @@
     customSlotSessions = days.map((day, i) => {
       const type = inferDayType(day.name);
       const variant = ['A', 'B', 'C'][i % numVariants];
-      return { day_name: day.name, slots: [...(DEFAULT_SLOTS_BY_TYPE[type] ?? DEFAULT_SLOTS_BY_TYPE.default)], variant };
+      const slots = [...(DEFAULT_SLOTS_BY_TYPE[type] ?? DEFAULT_SLOTS_BY_TYPE.default)];
+      return { day_name: day.name, slots, slot_exercises: Array(slots.length).fill(null), variant };
     });
     slotValidations = {};
     customPreviewData = [];
@@ -96,14 +103,41 @@
 
   function addSlot(dayIdx, slotKey) {
     customSlotSessions[dayIdx].slots = [...customSlotSessions[dayIdx].slots, slotKey];
+    customSlotSessions[dayIdx].slot_exercises = [...(customSlotSessions[dayIdx].slot_exercises || []), null];
     customSlotSessions = [...customSlotSessions];
     validateDaySlots(dayIdx);
   }
 
   function removeSlot(dayIdx, slotIdx) {
     customSlotSessions[dayIdx].slots = customSlotSessions[dayIdx].slots.filter((_, i) => i !== slotIdx);
+    customSlotSessions[dayIdx].slot_exercises = (customSlotSessions[dayIdx].slot_exercises || []).filter((_, i) => i !== slotIdx);
     customSlotSessions = [...customSlotSessions];
     validateDaySlots(dayIdx);
+  }
+
+  async function openExercisePicker(dayIdx, slotIdx) {
+    pickingExercise = { dayIdx, slotIdx };
+    slotExerciseSearch = '';
+    loadingSlotExercises = true;
+    const slotKey = customSlotSessions[dayIdx].slots[slotIdx];
+    try {
+      slotExerciseCandidates = await api.exercises.list({ sub_pattern: slotKey });
+    } catch (e) {
+      slotExerciseCandidates = [];
+    }
+    loadingSlotExercises = false;
+  }
+
+  function pinExercise(exercise) {
+    const { dayIdx, slotIdx } = pickingExercise;
+    customSlotSessions[dayIdx].slot_exercises[slotIdx] = exercise;
+    customSlotSessions = [...customSlotSessions];
+    pickingExercise = null;
+  }
+
+  function clearPinnedExercise(dayIdx, slotIdx) {
+    customSlotSessions[dayIdx].slot_exercises[slotIdx] = null;
+    customSlotSessions = [...customSlotSessions];
   }
 
   async function validateDaySlots(dayIdx) {
@@ -235,7 +269,12 @@
       p.split_slug = selectedSplit.slug;
     }
     if (sessionMode === 'custom_slots') {
-      p.custom_slot_sessions = customSlotSessions;
+      p.custom_slot_sessions = customSlotSessions.map(s => ({
+        day_name: s.day_name,
+        slots: s.slots,
+        variant: s.variant,
+        slot_exercises: (s.slot_exercises || []).map(e => e?.id ?? null),
+      }));
     }
     return p;
   }
@@ -640,13 +679,31 @@
               <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
                 {#each sess.slots as slotKey, slotIdx}
                   {@const opt = SLOT_OPTIONS.find(o => o.key === slotKey)}
-                  <div style="display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:20px; background:{opt?.color ?? '#555'}22; border:1px solid {opt?.color ?? '#555'}55;">
-                    <span style="font-size:12px; color:{opt?.color ?? 'var(--text)'}; font-weight:600;">{opt?.label ?? slotKey}</span>
+                  {@const pinned = sess.slot_exercises?.[slotIdx]}
+                  <div style="display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:20px; background:{opt?.color ?? '#555'}22; border:1px solid {pinned ? (opt?.color ?? '#555') : (opt?.color ?? '#555') + '55'};">
+                    <div style="display:flex; flex-direction:column; gap:1px;">
+                      <span style="font-size:12px; color:{opt?.color ?? 'var(--text)'}; font-weight:600; line-height:1.2;">{opt?.label ?? slotKey}</span>
+                      {#if pinned}
+                        <span style="font-size:10px; color:var(--text-muted); line-height:1.2;">{pinned.name}</span>
+                      {/if}
+                    </div>
+                    <button
+                      on:click={() => openExercisePicker(dayIdx, slotIdx)}
+                      style="background:none; border:none; color:{opt?.color ?? 'var(--text-muted)'}; cursor:pointer; font-size:12px; line-height:1; padding:0 1px; opacity:0.75;"
+                      title="Pick exercise"
+                    >✎</button>
+                    {#if pinned}
+                      <button
+                        on:click={() => clearPinnedExercise(dayIdx, slotIdx)}
+                        style="background:none; border:none; color:{opt?.color ?? 'var(--text-muted)'}; cursor:pointer; font-size:15px; line-height:1; padding:0; opacity:0.65;"
+                        title="Clear pinned exercise"
+                      >×</button>
+                    {/if}
                     <button
                       on:click={() => removeSlot(dayIdx, slotIdx)}
-                      style="background:none; border:none; color:{opt?.color ?? 'var(--text-muted)'}; cursor:pointer; font-size:15px; line-height:1; padding:0 0 0 2px; opacity:0.65;"
+                      style="background:none; border:none; color:{opt?.color ?? 'var(--text-muted)'}; cursor:pointer; font-size:15px; line-height:1; padding:0 0 0 1px; opacity:0.4;"
                       title="Remove slot"
-                    >×</button>
+                    >⊗</button>
                   </div>
                 {/each}
 
@@ -802,6 +859,64 @@
     </div>
   {/if}
 </div>
+
+<!-- Exercise picker modal (custom slot pinning) -->
+{#if pickingExercise !== null}
+  <div
+    style="position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1001; display:flex; align-items:flex-end; justify-content:center;"
+    on:click|self={() => pickingExercise = null}
+    role="dialog" aria-modal="true"
+  >
+    <div style="background:var(--surface); border-radius:12px 12px 0 0; width:100%; max-width:600px; max-height:72vh; display:flex; flex-direction:column; padding:20px;">
+      <div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:4px;">
+        Pick Exercise
+      </div>
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">
+        {SLOT_OPTIONS.find(o => o.key === customSlotSessions[pickingExercise.dayIdx]?.slots[pickingExercise.slotIdx])?.label ?? ''}
+        {#if SLOT_OPTIONS.find(o => o.key === customSlotSessions[pickingExercise.dayIdx]?.slots[pickingExercise.slotIdx])?.example}
+          · {SLOT_OPTIONS.find(o => o.key === customSlotSessions[pickingExercise.dayIdx]?.slots[pickingExercise.slotIdx]).example}
+        {/if}
+      </div>
+
+      <input
+        bind:value={slotExerciseSearch}
+        placeholder="Search..."
+        style="margin-bottom:10px;"
+      />
+
+      <!-- "App picks" option -->
+      <button
+        on:click={() => { clearPinnedExercise(pickingExercise.dayIdx, pickingExercise.slotIdx); pickingExercise = null; }}
+        style="width:100%; text-align:left; padding:10px 8px; border-bottom:1px solid var(--border-faint); background:transparent; cursor:pointer; font-size:13px; color:var(--text-muted); border-radius:0;"
+      >
+        App picks automatically
+      </button>
+
+      {#if loadingSlotExercises}
+        <div class="spinner" style="width:18px; height:18px; margin:20px auto;"></div>
+      {:else}
+        <div style="overflow-y:auto; flex:1;">
+          {#each slotExerciseCandidates.filter(e => !slotExerciseSearch || e.name.toLowerCase().includes(slotExerciseSearch.toLowerCase())).slice(0, 60) as ex}
+            <button
+              on:click={() => pinExercise(ex)}
+              style="width:100%; text-align:left; padding:10px 8px; border-bottom:1px solid var(--border-faint); background:transparent; cursor:pointer; display:flex; gap:10px; align-items:center; border-radius:0;"
+            >
+              <div style="flex:1;">
+                <div style="font-size:13px; font-weight:500; color:var(--text);">{ex.name}</div>
+                <div style="font-size:11px; color:var(--text-muted); text-transform:capitalize;">
+                  {Array.isArray(ex.primary_muscles) ? ex.primary_muscles.join(', ') : ''}{ex.mechanics ? ' · ' + ex.mechanics : ''}
+                </div>
+              </div>
+            </button>
+          {/each}
+          {#if slotExerciseCandidates.filter(e => !slotExerciseSearch || e.name.toLowerCase().includes(slotExerciseSearch.toLowerCase())).length === 0}
+            <div style="color:var(--text-muted); font-size:13px; padding:16px 0;">No exercises found.</div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <!-- Swap exercise modal -->
 {#if showSwapModal}

@@ -630,6 +630,8 @@ def generate_mesocycle(
     session_minutes: Optional[int] = None,
     experience_level: str = "intermediate",
     num_variants: int = 2,
+    session_mode: str = "auto",
+    custom_slot_sessions: Optional[list[dict]] = None,
 ) -> list[dict]:
     """
     Returns list of week dicts with planned sessions and exercises.
@@ -664,9 +666,33 @@ def generate_mesocycle(
             global_session_idx += 1
 
             if day_exercises and day_idx in day_exercises:
+                # Auto-mode preview swaps always take priority
                 exercises_for_day = [
                     ex_by_id[eid] for eid in day_exercises[day_idx] if eid in ex_by_id
                 ]
+            elif session_mode == "custom_slots" and custom_slot_sessions:
+                # Custom slot path: cycle by global session index, respect pinned IDs.
+                # global_session_idx already incremented above, so subtract 1 for current session.
+                sess_def = custom_slot_sessions[(global_session_idx - 1) % len(custom_slot_sessions)]
+                slots = sess_def.get("slots", [])
+                slot_exercise_ids = sess_def.get("slot_exercises", [])
+                variant_index = {"A": 0, "B": 1, "C": 2}.get(variant, 0)
+                exercises_for_day = []
+                selected_ids: set[int] = set()
+                for i, slot_key in enumerate(slots):
+                    pinned_id = slot_exercise_ids[i] if i < len(slot_exercise_ids) else None
+                    if pinned_id and pinned_id in ex_by_id:
+                        ex_candidate = ex_by_id[pinned_id]
+                        exercises_for_day.append(ex_candidate)
+                        selected_ids.add(ex_candidate["id"])
+                    else:
+                        ex_candidate = _select_for_slot(
+                            slot_key, equip_set, exercises_db, selected_ids,
+                            experience_level, variant_index,
+                        )
+                        if ex_candidate:
+                            exercises_for_day.append(ex_candidate)
+                            selected_ids.add(ex_candidate["id"])
             else:
                 slots = _build_slot_template(split_type, day["name"], variant)
                 exercises_for_day = _select_session_exercises(

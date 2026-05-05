@@ -15,6 +15,7 @@ def _serialize(ex: Exercise) -> dict:
         "name": ex.name,
         "aliases": json.loads(ex.aliases),
         "movement_pattern": ex.movement_pattern,
+        "sub_pattern": getattr(ex, "sub_pattern", "") or "",
         "primary_muscles": json.loads(ex.primary_muscles),
         "secondary_muscles": json.loads(ex.secondary_muscles),
         "equipment_required": json.loads(ex.equipment_required),
@@ -32,6 +33,7 @@ def list_exercises(
     equipment: Optional[str] = Query(None),
     muscle: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    sub_pattern: Optional[str] = Query(None),
     session: Session = Depends(get_session),
 ):
     stmt = select(Exercise)
@@ -54,6 +56,8 @@ def list_exercises(
             alias_match = any(q in a.lower() for a in aliases)
             if not (name_match or alias_match):
                 continue
+        if sub_pattern and (getattr(ex, "sub_pattern", "") or "") != sub_pattern:
+            continue
 
         result.append(_serialize(ex))
 

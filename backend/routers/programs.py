@@ -150,6 +150,8 @@ class MesocycleCreate(BaseModel):
     # Optional exercise overrides from wizard preview (day_index -> [exercise_id, ...])
     day_exercises: Optional[dict[str, list[int]]] = None
     num_variants: int = 2   # 1=no variation, 2=A/B, 3=A/B/C
+    session_mode: str = "auto"  # "auto" | "custom_slots"
+    custom_slot_sessions: Optional[list[dict]] = None  # [{day_name, slots, slot_exercises, variant}]
 
 
 class MesocycleUpdate(BaseModel):
@@ -400,7 +402,7 @@ def validate_slot_list(payload: SlotValidationPayload, session: Session = Depend
 def preview_custom_slots(payload: CustomSlotPreviewPayload, session: Session = Depends(get_session)):
     """Return exercise assignments for user-defined slot lists. Same shape as /mesocycles/preview."""
     from engine.meso_builder import (
-        _select_session_exercises, _rep_set_for_pattern,
+        _select_session_exercises, _select_for_slot, _rep_set_for_pattern,
         _warmup_sets_needed, _rest_for_exercise, _fit_to_time,
         _apply_secondary_credits, _parse_list,
     )
@@ -427,6 +429,7 @@ def preview_custom_slots(payload: CustomSlotPreviewPayload, session: Session = D
             "force": ex.force or "", "sub_pattern": getattr(ex, "sub_pattern", "") or "",
         })
 
+    ex_by_id = {ex["id"]: ex for ex in exercises_db}
     available = set(payload.equipment) if payload.equipment else {
         "bodyweight", "dumbbells", "barbell", "bench", "rack", "cable_machine", "machine"
     }
@@ -435,9 +438,26 @@ def preview_custom_slots(payload: CustomSlotPreviewPayload, session: Session = D
 
     for sess_def in payload.sessions:
         slots = sess_def.get("slots", [])
+        slot_exercise_ids = sess_def.get("slot_exercises", [])
         variant = sess_def.get("variant", "A")
         day_name = sess_def.get("day_name", "Custom")
-        exercises_for_day = _select_session_exercises(slots, available, exercises_db, payload.experience_level, variant, None)
+
+        # Build per-slot exercises respecting any pinned IDs
+        exercises_for_day = []
+        selected_ids: set[int] = set()
+        variant_index = {"A": 0, "B": 1, "C": 2}.get(variant, 0)
+        for i, slot in enumerate(slots):
+            pinned_id = slot_exercise_ids[i] if i < len(slot_exercise_ids) else None
+            if pinned_id and pinned_id in ex_by_id:
+                ex = ex_by_id[pinned_id]
+                exercises_for_day.append(ex)
+                selected_ids.add(ex["id"])
+            else:
+                ex = _select_for_slot(slot, available, exercises_db, selected_ids,
+                                      payload.experience_level, variant_index)
+                if ex:
+                    exercises_for_day.append(ex)
+                    selected_ids.add(ex["id"])
 
         activated_muscles: set[str] = set()
         secondary_credits: dict[str, float] = {}
@@ -553,6 +573,8 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
         session_minutes=payload.session_minutes,
         experience_level=experience_level,
         num_variants=payload.num_variants,
+        session_mode=payload.session_mode,
+        custom_slot_sessions=payload.custom_slot_sessions,
     )
 
     dow_list = list(payload.days_of_week)
