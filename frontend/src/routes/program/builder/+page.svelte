@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
+  import { dndzone } from 'svelte-dnd-action';
 
   let step = 1;
   let loading = true;
@@ -168,6 +169,7 @@
         ...day,
         exercises: day.exercises.map((ex, ei) => ({
           ...ex,
+          id: prev[di]?.exercises[ei]?.id ?? Math.random().toString(36).slice(2),
           set_type: prev[di]?.exercises[ei]?.set_type ?? 'straight',
           superset_group: prev[di]?.exercises[ei]?.superset_group ?? null,
         })),
@@ -207,14 +209,15 @@
     const dayIdx = addingExerciseToDayIdx;
     addingExerciseToDayIdx = null;
     const newEx = {
+      id: Math.random().toString(36).slice(2),
       exercise_id: exercise.id,
       exercise_name: exercise.name,
       primary_muscle: Array.isArray(exercise.primary_muscles) ? exercise.primary_muscles[0] : null,
       mechanics: exercise.mechanics,
       sub_pattern: exercise.sub_pattern || '',
       target_sets: 3, target_reps_min: 8, target_reps_max: 12, target_rir: 2,
-      set_type: 'straight',    // Feature 4
-      superset_group: null,    // Feature 4
+      set_type: 'straight',
+      superset_group: null,
     };
     customDayExercises[dayIdx].exercises = [...(customDayExercises[dayIdx].exercises || []), newEx];
     customDayExercises = [...customDayExercises];
@@ -230,6 +233,12 @@
   let swapExercises = [];
   let allExercises = [];
   let loadingAllExercises = false;
+
+  function handleExerciseSort(e, dayIdx, finalize) {
+    customDayExercises[dayIdx].exercises = e.detail.items;
+    customDayExercises = [...customDayExercises];
+    if (finalize) refreshPrescriptions();
+  }
 
   const DOW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const ALL_MUSCLES = ['chest', 'back', 'quads', 'hamstrings', 'glutes', 'shoulders',
@@ -751,53 +760,57 @@
                 {/if}
               </div>
 
-              <!-- Exercise rows — Feature 4: superset + set type -->
-              {#each (day.exercises ?? []) as ex, exIdx}
-                {@const isInSuperset = ex.superset_group != null}
-                {@const isPairStart = isInSuperset && (exIdx === 0 || (day.exercises[exIdx-1]?.superset_group !== ex.superset_group))}
-                {@const isPairEnd   = isInSuperset && (exIdx === day.exercises.length - 1 || day.exercises[exIdx+1]?.superset_group !== ex.superset_group)}
-                <div style="display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border-faint); border-left:3px solid {isInSuperset ? 'var(--primary)' : 'transparent'}; background:{isInSuperset ? 'rgba(232,160,64,0.04)' : 'transparent'};">
-                  <span style="font-size:11px; color:var(--text-faint); min-width:14px; text-align:right; flex-shrink:0;">{exIdx + 1}</span>
-                  <div style="flex:1; min-width:0;">
-                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                      <span style="font-size:13px; font-weight:500; color:var(--text);">{ex.exercise_name}</span>
-                      {#if isPairStart}
-                        <span style="font-size:9px; font-weight:700; color:var(--primary); background:rgba(232,160,64,0.15); border:1px solid rgba(232,160,64,0.3); border-radius:3px; padding:1px 5px;">SS</span>
-                      {/if}
-                      {#if ex.set_type && ex.set_type !== 'straight'}
-                        <span style="font-size:9px; font-weight:700; color:#7c8cf8; background:rgba(124,140,248,0.12); border:1px solid rgba(124,140,248,0.3); border-radius:3px; padding:1px 5px; text-transform:uppercase;">{ex.set_type.replace('_', ' ')}</span>
+              <!-- Exercise rows: drag-to-reorder + superset + set type -->
+              <div
+                use:dndzone={{ items: day.exercises ?? [], flipDurationMs: 150, dropTargetStyle: {} }}
+                on:consider={e => handleExerciseSort(e, dayIdx, false)}
+                on:finalize={e => handleExerciseSort(e, dayIdx, true)}
+              >
+                {#each (day.exercises ?? []) as ex (ex.id)}
+                  {@const isInSuperset = ex.superset_group != null}
+                  {@const exIdx = day.exercises.indexOf(ex)}
+                  {@const isPairStart = isInSuperset && (exIdx === 0 || day.exercises[exIdx-1]?.superset_group !== ex.superset_group)}
+                  <div style="display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border-faint); border-left:3px solid {isInSuperset ? 'var(--primary)' : 'transparent'}; background:{isInSuperset ? 'rgba(232,160,64,0.04)' : 'var(--surface)'};">
+                    <!-- Drag handle -->
+                    <span style="color:var(--text-faint); font-size:14px; cursor:grab; flex-shrink:0; opacity:0.4; line-height:1; padding:0 2px;" title="Drag to reorder">⠿</span>
+                    <div style="flex:1; min-width:0;">
+                      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                        <span style="font-size:13px; font-weight:500; color:var(--text);">{ex.exercise_name}</span>
+                        {#if isPairStart}
+                          <span style="font-size:9px; font-weight:700; color:var(--primary); background:rgba(232,160,64,0.15); border:1px solid rgba(232,160,64,0.3); border-radius:3px; padding:1px 5px;">SS</span>
+                        {/if}
+                        {#if ex.set_type && ex.set_type !== 'straight'}
+                          <span style="font-size:9px; font-weight:700; color:#7c8cf8; background:rgba(124,140,248,0.12); border:1px solid rgba(124,140,248,0.3); border-radius:3px; padding:1px 5px; text-transform:uppercase;">{ex.set_type.replace('_', ' ')}</span>
+                        {/if}
+                      </div>
+                      {#if ex.sub_pattern}
+                        <div style="font-size:10px; color:var(--text-faint); margin-top:2px; text-transform:capitalize;">{ex.sub_pattern.replace(/_/g, ' ')}</div>
                       {/if}
                     </div>
-                    {#if ex.sub_pattern}
-                      <div style="font-size:10px; color:var(--text-faint); margin-top:2px; text-transform:capitalize;">{ex.sub_pattern.replace(/_/g, ' ')}</div>
+                    <span style="font-size:12px; font-weight:600; color:var(--primary); white-space:nowrap; flex-shrink:0;">
+                      {ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max}
+                      <span style="font-weight:400; color:var(--text-muted);">@RIR{ex.target_rir}</span>
+                    </span>
+                    {#if exIdx < (day.exercises.length - 1)}
+                      <button
+                        on:click={() => toggleSuperset(dayIdx, exIdx)}
+                        title="{isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'Remove superset' : 'Superset with next'}"
+                        style="background:none; border:1px solid {isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'var(--primary)' : 'var(--border)'}; border-radius:4px; color:{isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'var(--primary)' : 'var(--text-faint)'}; cursor:pointer; font-size:11px; padding:2px 5px; flex-shrink:0; line-height:1.2;"
+                      >SS</button>
                     {/if}
-                  </div>
-                  <span style="font-size:12px; font-weight:600; color:var(--primary); white-space:nowrap; flex-shrink:0;">
-                    {ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max}
-                    <span style="font-weight:400; color:var(--text-muted);">@RIR{ex.target_rir}</span>
-                  </span>
-                  <!-- Superset toggle (only if not last exercise) -->
-                  {#if exIdx < (day.exercises.length - 1)}
                     <button
-                      on:click={() => toggleSuperset(dayIdx, exIdx)}
-                      title="{isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'Remove superset' : 'Superset with next'}"
-                      style="background:none; border:1px solid {isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'var(--primary)' : 'var(--border)'}; border-radius:4px; color:{isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'var(--primary)' : 'var(--text-faint)'}; cursor:pointer; font-size:11px; padding:2px 5px; flex-shrink:0; line-height:1.2;"
-                    >SS</button>
-                  {/if}
-                  <!-- Set type cycle -->
-                  <button
-                    on:click={() => cycleSetType(dayIdx, exIdx)}
-                    title="Set type: {ex.set_type || 'straight'} (click to cycle)"
-                    style="background:none; border:1px solid var(--border); border-radius:4px; color:var(--text-faint); cursor:pointer; font-size:10px; padding:2px 5px; flex-shrink:0; line-height:1.2; min-width:28px; text-align:center;"
-                  >{ex.set_type === 'rest_pause' ? 'RP' : ex.set_type === 'drop' ? 'DS' : 'ST'}</button>
-                  <!-- Remove -->
-                  <button
-                    on:click={() => removeExerciseFromDay(dayIdx, exIdx)}
-                    style="background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:18px; line-height:1; padding:0 2px; flex-shrink:0; opacity:0.6;"
-                    title="Remove"
-                  >×</button>
-                </div>
-              {/each}
+                      on:click={() => cycleSetType(dayIdx, exIdx)}
+                      title="Set type (click to cycle)"
+                      style="background:none; border:1px solid var(--border); border-radius:4px; color:var(--text-faint); cursor:pointer; font-size:10px; padding:2px 5px; flex-shrink:0; line-height:1.2; min-width:28px; text-align:center;"
+                    >{ex.set_type === 'rest_pause' ? 'RP' : ex.set_type === 'drop' ? 'DS' : 'ST'}</button>
+                    <button
+                      on:click={() => removeExerciseFromDay(dayIdx, exIdx)}
+                      style="background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:18px; line-height:1; padding:0 2px; flex-shrink:0; opacity:0.6;"
+                      title="Remove"
+                    >×</button>
+                  </div>
+                {/each}
+              </div>
 
               <!-- Add exercise row -->
               <button

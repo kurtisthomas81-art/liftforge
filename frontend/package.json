@@ -15,7 +15,8 @@
     "vite": "5.2.11"
   },
   "dependencies": {
-    "chart.js": "^4.4.3"
+    "chart.js": "^4.4.3",
+    "svelte-dnd-action": "^0.9.47"
   },
   "type": "module"
 }
