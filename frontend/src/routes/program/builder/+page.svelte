@@ -27,14 +27,114 @@
   let daysOfWeek = [];   // array of 0-6 per split day
   let experienceLevel = 'intermediate';
 
-  // Step 3 (variant picker — new)
-  let numVariants = 2;   // 1=A only, 2=A/B, 3=A/B/C
+  // Step 3 (variant picker + mode toggle)
+  let numVariants = 2;           // 1=A only, 2=A/B, 3=A/B/C
+  let sessionMode = 'auto';      // 'auto' | 'custom_slots'
 
-  // Step 5 (review — was step 4)
+  // Step 5 — Auto mode (review)
   let previewData = [];
   let previewLoading = false;
   let previewError = '';
-  let editedDays = {};   // { dayIndex: [exerciseId, ...] } — tracks swaps
+  let editedDays = {};           // { dayIndex: [exerciseId, ...] } — tracks swaps
+
+  // Step 5 — Custom slots mode
+  let customSlotSessions = [];   // [{ day_name, slots: [str], variant: str }]
+  let slotValidations = {};      // { dayIdx: validation result from API }
+  let validatingSlots = {};      // { dayIdx: bool }
+  let customPreviewData = [];    // exercise assignments from previewCustomSlots
+  let customPreviewLoading = false;
+  let customPreviewError = '';
+  let addingSlotForDay = null;   // dayIdx of open slot picker, or null
+
+  const SLOT_OPTIONS = [
+    { key: 'knee_dominant',   label: 'Knee Dominant',    example: 'Squat · Lunge · Leg Press',       fatigue: 'high',   color: '#c0392b' },
+    { key: 'hip_dominant',    label: 'Hip Dominant',     example: 'Deadlift · RDL · Hip Thrust',     fatigue: 'high',   color: '#c0392b' },
+    { key: 'horizontal_push', label: 'Horizontal Push',  example: 'Bench Press · DB Press',          fatigue: 'medium', color: '#e8a040' },
+    { key: 'vertical_push',   label: 'Vertical Push',    example: 'OHP · Arnold Press',              fatigue: 'medium', color: '#e8a040' },
+    { key: 'horizontal_pull', label: 'Horizontal Pull',  example: 'Barbell Row · Cable Row',         fatigue: 'medium', color: '#e8a040' },
+    { key: 'vertical_pull',   label: 'Vertical Pull',    example: 'Pull-Up · Lat Pulldown',          fatigue: 'medium', color: '#e8a040' },
+    { key: 'core',            label: 'Core / Accessory', example: 'Pallof Press · Ab Wheel (opt.)',  fatigue: 'low',    color: '#7f8c8d' },
+  ];
+
+  const DEFAULT_SLOTS_BY_TYPE = {
+    full_body:  ['knee_dominant', 'hip_dominant', 'horizontal_push', 'horizontal_pull'],
+    push:       ['horizontal_push', 'vertical_push'],
+    pull:       ['horizontal_pull', 'vertical_pull'],
+    legs:       ['knee_dominant', 'hip_dominant'],
+    lower:      ['knee_dominant', 'hip_dominant'],
+    upper:      ['horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull'],
+    chest:      ['horizontal_push'],
+    back:       ['horizontal_pull', 'vertical_pull'],
+    shoulders:  ['vertical_push'],
+    default:    ['knee_dominant', 'hip_dominant', 'horizontal_push', 'horizontal_pull'],
+  };
+
+  function inferDayType(name) {
+    const n = name.toLowerCase();
+    if (n.includes('full body') || n.includes('full_body')) return 'full_body';
+    if (n.includes('push')) return 'push';
+    if (n.includes('pull')) return 'pull';
+    if (n.includes('leg')) return 'legs';
+    if (n.includes('lower')) return 'lower';
+    if (n.includes('upper')) return 'upper';
+    if (n.includes('chest')) return 'chest';
+    if (n.includes('back')) return 'back';
+    if (n.includes('shoulder')) return 'shoulders';
+    return 'default';
+  }
+
+  function initCustomSlots() {
+    const days = isCustom ? customDays : (selectedSplit?.days ?? []);
+    customSlotSessions = days.map((day, i) => {
+      const type = inferDayType(day.name);
+      const variant = ['A', 'B', 'C'][i % numVariants];
+      return { day_name: day.name, slots: [...(DEFAULT_SLOTS_BY_TYPE[type] ?? DEFAULT_SLOTS_BY_TYPE.default)], variant };
+    });
+    slotValidations = {};
+    customPreviewData = [];
+  }
+
+  function addSlot(dayIdx, slotKey) {
+    customSlotSessions[dayIdx].slots = [...customSlotSessions[dayIdx].slots, slotKey];
+    customSlotSessions = [...customSlotSessions];
+    validateDaySlots(dayIdx);
+  }
+
+  function removeSlot(dayIdx, slotIdx) {
+    customSlotSessions[dayIdx].slots = customSlotSessions[dayIdx].slots.filter((_, i) => i !== slotIdx);
+    customSlotSessions = [...customSlotSessions];
+    validateDaySlots(dayIdx);
+  }
+
+  async function validateDaySlots(dayIdx) {
+    validatingSlots = { ...validatingSlots, [dayIdx]: true };
+    try {
+      const result = await api.programs.validateSlots({
+        slots: customSlotSessions[dayIdx].slots,
+        goal: selectedGoal,
+        experience_level: experienceLevel,
+      });
+      slotValidations = { ...slotValidations, [dayIdx]: result };
+    } catch (e) { /* silent */ }
+    validatingSlots = { ...validatingSlots, [dayIdx]: false };
+  }
+
+  async function previewCustom() {
+    customPreviewLoading = true;
+    customPreviewError = '';
+    customPreviewData = [];
+    try {
+      customPreviewData = await api.programs.previewCustomSlots({
+        sessions: customSlotSessions,
+        goal: selectedGoal,
+        experience_level: experienceLevel,
+        num_variants: numVariants,
+      });
+    } catch (e) {
+      customPreviewError = e.message;
+    }
+    customPreviewLoading = false;
+  }
 
   // Swap modal
   let showSwapModal = false;
@@ -127,27 +227,38 @@
       name: mesoName,
       days_of_week: daysOfWeek,
       num_variants: numVariants,
+      session_mode: sessionMode,
     };
     if (isCustom) {
       p.custom_days = customDays;
     } else {
       p.split_slug = selectedSplit.slug;
     }
+    if (sessionMode === 'custom_slots') {
+      p.custom_slot_sessions = customSlotSessions;
+    }
     return p;
   }
 
   async function goToReview() {
-    step = 5;
-    previewData = [];
-    editedDays = {};
-    previewError = '';
-    previewLoading = true;
-    try {
-      previewData = await api.programs.previewMesocycle(buildPayload());
-    } catch (e) {
-      previewError = e.message;
+    if (sessionMode === 'custom_slots') {
+      initCustomSlots();
+      // Validate all days upfront
+      await Promise.all(customSlotSessions.map((_, i) => validateDaySlots(i)));
+      step = 5;
+    } else {
+      step = 5;
+      previewData = [];
+      editedDays = {};
+      previewError = '';
+      previewLoading = true;
+      try {
+        previewData = await api.programs.previewMesocycle(buildPayload());
+      } catch (e) {
+        previewError = e.message;
+      }
+      previewLoading = false;
     }
-    previewLoading = false;
   }
 
   async function createMesocycle() {
@@ -155,7 +266,7 @@
     error = null;
     try {
       const payload = buildPayload();
-      if (Object.keys(editedDays).length > 0) {
+      if (sessionMode === 'auto' && Object.keys(editedDays).length > 0) {
         payload.day_exercises = editedDays;
       }
       await api.programs.createMesocycle(payload);
@@ -328,15 +439,16 @@
     </div>
 
   {:else if step === 3}
-    <!-- Step 3: Variation style -->
+    <!-- Step 3: Variation style + exercise mode -->
     <div class="card">
       <div class="flex items-center gap-3 mb-4">
         <button class="btn-ghost btn-sm" on:click={() => step = 2}>← Back</button>
-        <div class="section-title">Workout Variation</div>
+        <div class="section-title">Variation & Exercise Mode</div>
       </div>
 
-      <div style="margin-bottom:24px;">
-        <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">How much exercise variety do you want?</label>
+      <!-- Variation picker -->
+      <div style="margin-bottom:28px;">
+        <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Exercise variety across sessions</label>
         <div style="display:flex; gap:10px; flex-direction:column;">
           {#each [
             { val: 1, label: 'A — No variation', desc: 'Same exercises every session. Best for pure beginners learning movement patterns.' },
@@ -352,8 +464,29 @@
             </button>
           {/each}
         </div>
-        <div style="font-size:11px; color:var(--text-faint); margin-top:10px;">
-          Sessions loop continuously by workout index — A/B with 3 days/week gives A→B→A, then B→A→B the next week.
+        <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">
+          Sessions loop continuously — A/B with 3 days/week: A→B→A week 1, B→A→B week 2.
+        </div>
+      </div>
+
+      <!-- Exercise selection mode -->
+      <div style="margin-bottom:24px; padding-top:20px; border-top:1px solid var(--border);">
+        <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">How do you want to choose exercises?</label>
+        <div style="display:flex; gap:10px; flex-direction:column;">
+          <button
+            on:click={() => sessionMode = 'auto'}
+            style="text-align:left; padding:14px 16px; border-radius:8px; border:2px solid {sessionMode === 'auto' ? 'var(--primary)' : 'var(--border)'}; background:{sessionMode === 'auto' ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:var(--text); cursor:pointer; transition:all 0.15s;"
+          >
+            <div style="font-weight:700; font-size:13px; color:{sessionMode === 'auto' ? 'var(--primary)' : 'var(--text)'}; margin-bottom:3px;">Auto — let the app pick</div>
+            <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">Engine selects exercises based on your split, goal, equipment, and level. You can swap any exercise before generating.</div>
+          </button>
+          <button
+            on:click={() => sessionMode = 'custom_slots'}
+            style="text-align:left; padding:14px 16px; border-radius:8px; border:2px solid {sessionMode === 'custom_slots' ? 'var(--primary)' : 'var(--border)'}; background:{sessionMode === 'custom_slots' ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:var(--text); cursor:pointer; transition:all 0.15s;"
+          >
+            <div style="font-weight:700; font-size:13px; color:{sessionMode === 'custom_slots' ? 'var(--primary)' : 'var(--text)'}; margin-bottom:3px;">Custom — I'll build my own routine</div>
+            <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">Choose which movement patterns go in each session. App shows time estimates, muscle coverage, and balance warnings as you build.</div>
+          </button>
         </div>
       </div>
 
@@ -485,59 +618,184 @@
         <span style="color:var(--text-muted);">Variation</span><span style="color:var(--text);">{numVariants === 1 ? 'A — same every session' : numVariants === 2 ? 'A/B rotation' : 'A/B/C rotation'}</span>
       </div>
 
-      <!-- Exercise preview by day -->
-      <div style="margin-bottom:20px;">
-        <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-          Exercises
-          <span style="font-size:11px; font-weight:400; color:var(--text-muted);">week 1 targets · swap any before generating</span>
-        </div>
-
-        {#if previewLoading}
-          <div style="display:flex; align-items:center; gap:10px; padding:20px 0; color:var(--text-muted); font-size:13px;">
-            <div class="spinner" style="width:16px; height:16px;"></div>
-            Building exercise plan...
+      {#if sessionMode === 'custom_slots'}
+        <!-- ── Custom slot builder ─────────────────────────────────── -->
+        <div style="margin-bottom:20px;">
+          <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:12px;">
+            Session Structure
+            <span style="font-size:11px; font-weight:400; color:var(--text-muted);">· add/remove movement pattern slots per day</span>
           </div>
-        {:else if previewError}
-          <div style="color:var(--danger); font-size:12px; margin-bottom:8px;">{previewError}</div>
-        {:else}
-          {#each previewData as day}
-            <div style="margin-bottom:18px;">
-              <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--border);">
-                <span style="font-size:12px; font-weight:700; color:var(--primary);">{day.day_name}</span>
-                {#if day.variant && numVariants > 1}
-                  <span style="padding:1px 7px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--primary); font-size:10px; font-weight:700; border:1px solid rgba(232,160,64,0.3);">{day.variant}</span>
+
+          {#each customSlotSessions as sess, dayIdx}
+            <div style="margin-bottom:16px; padding:14px; background:var(--surface-2); border-radius:8px; border:1px solid var(--border);">
+              <!-- Day header -->
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                <span style="font-size:13px; font-weight:700; color:var(--primary);">{sess.day_name}</span>
+                {#if numVariants > 1}
+                  <span style="padding:1px 7px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--primary); font-size:10px; font-weight:700; border:1px solid rgba(232,160,64,0.3);">{sess.variant}</span>
                 {/if}
-                <div style="display:flex; gap:4px; flex-wrap:wrap;">
-                  {#each day.muscle_focus as m}
-                    <span style="padding:2px 6px; border-radius:3px; background:var(--surface-2); color:var(--text-muted); font-size:10px; text-transform:capitalize;">{m}</span>
-                  {/each}
-                </div>
               </div>
-              {#if day.exercises.length === 0}
-                <div style="font-size:12px; color:var(--text-faint); padding:6px 0;">No exercises matched your equipment for this day.</div>
-              {:else}
-                {#each day.exercises as ex, exIdx}
-                  <div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-faint);">
-                    <span style="flex:1; font-size:13px; color:var(--text);">{ex.exercise_name}</span>
-                    <span style="font-size:11px; color:var(--text-muted); white-space:nowrap;">{ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max} @RIR{ex.target_rir}</span>
+
+              <!-- Slot chips -->
+              <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                {#each sess.slots as slotKey, slotIdx}
+                  {@const opt = SLOT_OPTIONS.find(o => o.key === slotKey)}
+                  <div style="display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border-radius:20px; background:{opt?.color ?? '#555'}22; border:1px solid {opt?.color ?? '#555'}55;">
+                    <span style="font-size:12px; color:{opt?.color ?? 'var(--text)'}; font-weight:600;">{opt?.label ?? slotKey}</span>
                     <button
-                      on:click={() => openSwapModal(day.day_index, exIdx, ex.primary_muscle)}
-                      title="Swap exercise"
-                      style="padding:3px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-muted); font-size:12px; cursor:pointer; flex-shrink:0;"
-                    >⇄</button>
+                      on:click={() => removeSlot(dayIdx, slotIdx)}
+                      style="background:none; border:none; color:{opt?.color ?? 'var(--text-muted)'}; cursor:pointer; font-size:15px; line-height:1; padding:0 0 0 2px; opacity:0.65;"
+                      title="Remove slot"
+                    >×</button>
                   </div>
                 {/each}
+
+                <!-- Add slot toggle -->
+                <button
+                  on:click={() => addingSlotForDay = addingSlotForDay === dayIdx ? null : dayIdx}
+                  style="padding:5px 12px; border-radius:20px; border:1px dashed var(--border); background:transparent; color:var(--text-muted); font-size:12px; cursor:pointer; transition:border-color 0.15s;"
+                >+ Add slot</button>
+              </div>
+
+              <!-- Inline slot picker -->
+              {#if addingSlotForDay === dayIdx}
+                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; padding:10px; background:var(--surface); border-radius:6px; border:1px solid var(--border);">
+                  {#each SLOT_OPTIONS as opt}
+                    <button
+                      on:click={() => { addSlot(dayIdx, opt.key); addingSlotForDay = null; }}
+                      style="padding:5px 12px; border-radius:16px; border:1px solid {opt.color}55; background:{opt.color}18; color:var(--text); font-size:11px; cursor:pointer; transition:all 0.1s;"
+                      title={opt.example}
+                    >
+                      {opt.label}
+                      {#if opt.key === 'core'}<span style="color:var(--text-faint); font-size:10px;"> (optional)</span>{/if}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+
+              <!-- Validation summary -->
+              {#if validatingSlots[dayIdx]}
+                <div style="font-size:11px; color:var(--text-faint);">Checking...</div>
+              {:else if slotValidations[dayIdx]}
+                {@const v = slotValidations[dayIdx]}
+                <div style="font-size:11px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; color:var(--text-muted); border-top:1px solid var(--border-faint); padding-top:8px;">
+                  <span>~{v.total_estimated_minutes} min</span>
+                  {#if v.push_pull_balance}
+                    <span style="color:{v.push_pull_balance.balanced ? '#5a9' : '#e8a040'};">
+                      Push {v.push_pull_balance.push} · Pull {v.push_pull_balance.pull} {v.push_pull_balance.balanced ? '✓' : '⚠'}
+                    </span>
+                  {/if}
+                  {#if v.muscle_coverage?.length}
+                    <span style="color:var(--text-faint);">
+                      {v.muscle_coverage.slice(0, 4).join(', ')}{v.muscle_coverage.length > 4 ? ` +${v.muscle_coverage.length - 4} more` : ''}
+                    </span>
+                  {/if}
+                </div>
+                {#if v.warnings?.length}
+                  <div style="margin-top:6px;">
+                    {#each v.warnings as w}
+                      <div style="font-size:11px; color:#e8a040; display:flex; align-items:flex-start; gap:5px; margin-top:3px;">
+                        <span style="flex-shrink:0;">⚠</span><span>{w.message}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
               {/if}
             </div>
           {/each}
-        {/if}
-      </div>
+        </div>
+
+        <!-- Preview exercise assignments -->
+        <div style="margin-bottom:20px;">
+          <button
+            on:click={previewCustom}
+            disabled={customPreviewLoading}
+            style="padding:10px 20px; border-radius:6px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:13px; font-weight:600; cursor:pointer; margin-bottom:14px; opacity:{customPreviewLoading ? 0.6 : 1};"
+          >
+            {customPreviewLoading ? 'Loading...' : 'Preview Exercise Assignments →'}
+          </button>
+
+          {#if customPreviewError}
+            <div style="color:var(--danger); font-size:12px; margin-bottom:8px;">{customPreviewError}</div>
+          {/if}
+
+          {#if customPreviewData.length > 0}
+            <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:10px;">Exercise Assignments</div>
+            {#each customPreviewData as day}
+              <div style="margin-bottom:16px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--border);">
+                  <span style="font-size:12px; font-weight:700; color:var(--primary);">{day.day_name}</span>
+                  {#if day.variant && numVariants > 1}
+                    <span style="padding:1px 7px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--primary); font-size:10px; font-weight:700; border:1px solid rgba(232,160,64,0.3);">{day.variant}</span>
+                  {/if}
+                </div>
+                {#each day.exercises as ex}
+                  <div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-faint);">
+                    <span style="flex:1; font-size:13px; color:var(--text);">{ex.exercise_name}</span>
+                    <span style="font-size:11px; color:var(--text-muted); white-space:nowrap;">{ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max} @RIR{ex.target_rir}</span>
+                  </div>
+                {/each}
+              </div>
+            {/each}
+          {/if}
+        </div>
+
+      {:else}
+        <!-- ── Auto mode: exercise preview ─────────────────────────── -->
+        <div style="margin-bottom:20px;">
+          <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+            Exercises
+            <span style="font-size:11px; font-weight:400; color:var(--text-muted);">week 1 targets · swap any before generating</span>
+          </div>
+
+          {#if previewLoading}
+            <div style="display:flex; align-items:center; gap:10px; padding:20px 0; color:var(--text-muted); font-size:13px;">
+              <div class="spinner" style="width:16px; height:16px;"></div>
+              Building exercise plan...
+            </div>
+          {:else if previewError}
+            <div style="color:var(--danger); font-size:12px; margin-bottom:8px;">{previewError}</div>
+          {:else}
+            {#each previewData as day}
+              <div style="margin-bottom:18px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--border);">
+                  <span style="font-size:12px; font-weight:700; color:var(--primary);">{day.day_name}</span>
+                  {#if day.variant && numVariants > 1}
+                    <span style="padding:1px 7px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--primary); font-size:10px; font-weight:700; border:1px solid rgba(232,160,64,0.3);">{day.variant}</span>
+                  {/if}
+                  <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                    {#each day.muscle_focus as m}
+                      <span style="padding:2px 6px; border-radius:3px; background:var(--surface-2); color:var(--text-muted); font-size:10px; text-transform:capitalize;">{m}</span>
+                    {/each}
+                  </div>
+                </div>
+                {#if day.exercises.length === 0}
+                  <div style="font-size:12px; color:var(--text-faint); padding:6px 0;">No exercises matched your equipment for this day.</div>
+                {:else}
+                  {#each day.exercises as ex, exIdx}
+                    <div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-faint);">
+                      <span style="flex:1; font-size:13px; color:var(--text);">{ex.exercise_name}</span>
+                      <span style="font-size:11px; color:var(--text-muted); white-space:nowrap;">{ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max} @RIR{ex.target_rir}</span>
+                      <button
+                        on:click={() => openSwapModal(day.day_index, exIdx, ex.primary_muscle)}
+                        title="Swap exercise"
+                        style="padding:3px 8px; border-radius:4px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-muted); font-size:12px; cursor:pointer; flex-shrink:0;"
+                      >⇄</button>
+                    </div>
+                  {/each}
+                {/if}
+              </div>
+            {/each}
+          {/if}
+        </div>
+      {/if}
 
       {#if error}
         <div style="color:var(--danger); font-size:13px; margin-bottom:12px;">{error}</div>
       {/if}
 
-      <button class="btn-primary" on:click={createMesocycle} disabled={creating || previewLoading}
+      <button class="btn-primary" on:click={createMesocycle}
+        disabled={creating || (sessionMode === 'auto' ? previewLoading : customPreviewLoading)}
         style="padding:12px 28px; font-size:15px;">
         {creating ? 'Building...' : 'Generate Mesocycle'}
       </button>
