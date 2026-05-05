@@ -71,6 +71,27 @@
     default:    ['knee_dominant', 'hip_dominant', 'horizontal_push', 'horizontal_pull'],
   };
 
+  // ── Feature 3: Live time estimate helpers ──────────────────────────────────
+  function getFatigue(sub_pattern) {
+    if (sub_pattern === 'hip_dominant' || sub_pattern === 'knee_dominant') return 'high';
+    if (['horizontal_push','vertical_push','horizontal_pull','vertical_pull'].includes(sub_pattern)) return 'medium';
+    return 'low';
+  }
+
+  function estimateExerciseMinutes(ex) {
+    const fatigue = getFatigue(ex.sub_pattern || '');
+    const setTime = fatigue === 'low' ? 30 : 45;
+    const restTime = fatigue === 'high' ? 180 : fatigue === 'medium' ? 120 : 90;
+    return Math.round((ex.target_sets * (setTime + restTime)) / 60);
+  }
+
+  function estimateDayMinutes(exercises) {
+    if (!exercises?.length) return null;
+    const exTime = exercises.reduce((sum, ex) => sum + estimateExerciseMinutes(ex), 0);
+    const hasSupersets = exercises.some(ex => ex.superset_group != null);
+    return 10 + Math.round(exTime * (hasSupersets ? 0.85 : 1.0));
+  }
+
   function inferDayType(name) {
     const n = name.toLowerCase();
     if (n.includes('full body') || n.includes('full_body')) return 'full_body';
@@ -85,6 +106,37 @@
     return 'default';
   }
 
+  // ── Feature 2: Delete variant day ──────────────────────────────────────────
+  function deleteVariantDay(dayIdx) {
+    customDayExercises = customDayExercises
+      .filter((_, i) => i !== dayIdx)
+      .map((day, i) => ({ ...day, variant: ['A', 'B', 'C'][i] }));
+  }
+
+  // ── Feature 4: Superset + set-type helpers ─────────────────────────────────
+  function toggleSuperset(dayIdx, exIdx) {
+    const exercises = customDayExercises[dayIdx].exercises;
+    const ex = exercises[exIdx];
+    const next = exercises[exIdx + 1];
+    if (!next) return;
+    if (ex.superset_group != null && ex.superset_group === next.superset_group) {
+      ex.superset_group = null;
+      next.superset_group = null;
+    } else {
+      const maxG = exercises.reduce((m, e) => Math.max(m, e.superset_group ?? 0), 0);
+      ex.superset_group = maxG + 1;
+      next.superset_group = maxG + 1;
+    }
+    customDayExercises = [...customDayExercises];
+  }
+
+  function cycleSetType(dayIdx, exIdx) {
+    const types = ['straight', 'rest_pause', 'drop'];
+    const ex = customDayExercises[dayIdx].exercises[exIdx];
+    ex.set_type = types[(types.indexOf(ex.set_type || 'straight') + 1) % types.length];
+    customDayExercises = [...customDayExercises];
+  }
+
   function initCustomDays() {
     const days = isCustom ? customDays : (selectedSplit?.days ?? []);
     customDayExercises = days.map((day, i) => ({
@@ -97,6 +149,8 @@
   async function refreshPrescriptions() {
     if (!customDayExercises.length) return;
     refreshingPrescriptions = true;
+    // Feature 4: capture prev BEFORE await so set_type + superset_group survive the API round-trip
+    const prev = customDayExercises.map(d => ({ exercises: [...(d.exercises || [])] }));
     try {
       const sessions = customDayExercises.map(day => ({
         day_name: day.day_name,
@@ -104,12 +158,20 @@
         slots: (day.exercises || []).map(e => e.sub_pattern || ''),
         slot_exercises: (day.exercises || []).map(e => e.exercise_id),
       }));
-      customDayExercises = await api.programs.previewCustomSlots({
+      const result = await api.programs.previewCustomSlots({
         sessions,
         goal: selectedGoal,
         experience_level: experienceLevel,
         num_variants: numVariants,
       });
+      customDayExercises = result.map((day, di) => ({
+        ...day,
+        exercises: day.exercises.map((ex, ei) => ({
+          ...ex,
+          set_type: prev[di]?.exercises[ei]?.set_type ?? 'straight',
+          superset_group: prev[di]?.exercises[ei]?.superset_group ?? null,
+        })),
+      }));
     } catch (e) { /* silent */ }
     refreshingPrescriptions = false;
   }
@@ -151,6 +213,8 @@
       mechanics: exercise.mechanics,
       sub_pattern: exercise.sub_pattern || '',
       target_sets: 3, target_reps_min: 8, target_reps_max: 12, target_rir: 2,
+      set_type: 'straight',    // Feature 4
+      superset_group: null,    // Feature 4
     };
     customDayExercises[dayIdx].exercises = [...(customDayExercises[dayIdx].exercises || []), newEx];
     customDayExercises = [...customDayExercises];
@@ -256,11 +320,14 @@
       p.split_slug = selectedSplit.slug;
     }
     if (sessionMode === 'custom_slots') {
+      p.num_variants = customDayExercises.length;  // Feature 2: reflect actual day count after deletions
       p.custom_slot_sessions = customDayExercises.map(day => ({
         day_name: day.day_name,
         variant: day.variant,
         slots: (day.exercises || []).map(e => e.sub_pattern || ''),
         slot_exercises: (day.exercises || []).map(e => e.exercise_id),
+        superset_groups: (day.exercises || []).map(e => e.superset_group ?? null),  // Feature 4
+        set_types: (day.exercises || []).map(e => e.set_type || 'straight'),        // Feature 4
       }));
     }
     return p;
@@ -478,7 +545,7 @@
             { val: 1, label: 'A — No variation', desc: 'Same exercises every session. Best for pure beginners learning movement patterns.' },
             { val: 2, label: 'A/B rotation', desc: 'Two alternating workouts. Horizontal push/pull one session, vertical the next. Recommended.' },
             { val: 3, label: 'A/B/C rotation', desc: 'Three unique workouts cycling continuously. More variety across the mesocycle.' },
-          ] as opt}
+          ].filter(opt => opt.val <= selectedDays) as opt}
             <button
               on:click={() => numVariants = opt.val}
               style="text-align:left; padding:14px 16px; border-radius:8px; border:2px solid {numVariants === opt.val ? 'var(--primary)' : 'var(--border)'}; background:{numVariants === opt.val ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:var(--text); cursor:pointer; transition:all 0.15s;"
@@ -667,15 +734,40 @@
                 {#if numVariants > 1}
                   <span style="padding:1px 7px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--primary); font-size:10px; font-weight:700; border:1px solid rgba(232,160,64,0.3);">{day.variant}</span>
                 {/if}
-                <span style="font-size:11px; color:var(--text-faint); margin-left:auto;">{day.exercises?.length ?? 0} exercises</span>
+                <!-- Feature 3: live time estimate -->
+                <span style="font-size:11px; color:var(--text-faint); margin-left:auto;">
+                  {day.exercises?.length ?? 0} exercises
+                  {#if estimateDayMinutes(day.exercises)}
+                    · ~{estimateDayMinutes(day.exercises)} min
+                  {/if}
+                </span>
+                <!-- Feature 2: delete variant day -->
+                {#if customDayExercises.length > 1}
+                  <button
+                    on:click={() => deleteVariantDay(dayIdx)}
+                    style="background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:14px; line-height:1; padding:0 2px; opacity:0.5; margin-left:4px;"
+                    title="Remove this day"
+                  >×</button>
+                {/if}
               </div>
 
-              <!-- Exercise rows -->
+              <!-- Exercise rows — Feature 4: superset + set type -->
               {#each (day.exercises ?? []) as ex, exIdx}
-                <div style="display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--border-faint);">
+                {@const isInSuperset = ex.superset_group != null}
+                {@const isPairStart = isInSuperset && (exIdx === 0 || (day.exercises[exIdx-1]?.superset_group !== ex.superset_group))}
+                {@const isPairEnd   = isInSuperset && (exIdx === day.exercises.length - 1 || day.exercises[exIdx+1]?.superset_group !== ex.superset_group)}
+                <div style="display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border-faint); border-left:3px solid {isInSuperset ? 'var(--primary)' : 'transparent'}; background:{isInSuperset ? 'rgba(232,160,64,0.04)' : 'transparent'};">
                   <span style="font-size:11px; color:var(--text-faint); min-width:14px; text-align:right; flex-shrink:0;">{exIdx + 1}</span>
                   <div style="flex:1; min-width:0;">
-                    <div style="font-size:13px; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{ex.exercise_name}</div>
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                      <span style="font-size:13px; font-weight:500; color:var(--text);">{ex.exercise_name}</span>
+                      {#if isPairStart}
+                        <span style="font-size:9px; font-weight:700; color:var(--primary); background:rgba(232,160,64,0.15); border:1px solid rgba(232,160,64,0.3); border-radius:3px; padding:1px 5px;">SS</span>
+                      {/if}
+                      {#if ex.set_type && ex.set_type !== 'straight'}
+                        <span style="font-size:9px; font-weight:700; color:#7c8cf8; background:rgba(124,140,248,0.12); border:1px solid rgba(124,140,248,0.3); border-radius:3px; padding:1px 5px; text-transform:uppercase;">{ex.set_type.replace('_', ' ')}</span>
+                      {/if}
+                    </div>
                     {#if ex.sub_pattern}
                       <div style="font-size:10px; color:var(--text-faint); margin-top:2px; text-transform:capitalize;">{ex.sub_pattern.replace(/_/g, ' ')}</div>
                     {/if}
@@ -684,6 +776,21 @@
                     {ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max}
                     <span style="font-weight:400; color:var(--text-muted);">@RIR{ex.target_rir}</span>
                   </span>
+                  <!-- Superset toggle (only if not last exercise) -->
+                  {#if exIdx < (day.exercises.length - 1)}
+                    <button
+                      on:click={() => toggleSuperset(dayIdx, exIdx)}
+                      title="{isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'Remove superset' : 'Superset with next'}"
+                      style="background:none; border:1px solid {isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'var(--primary)' : 'var(--border)'}; border-radius:4px; color:{isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'var(--primary)' : 'var(--text-faint)'}; cursor:pointer; font-size:11px; padding:2px 5px; flex-shrink:0; line-height:1.2;"
+                    >SS</button>
+                  {/if}
+                  <!-- Set type cycle -->
+                  <button
+                    on:click={() => cycleSetType(dayIdx, exIdx)}
+                    title="Set type: {ex.set_type || 'straight'} (click to cycle)"
+                    style="background:none; border:1px solid var(--border); border-radius:4px; color:var(--text-faint); cursor:pointer; font-size:10px; padding:2px 5px; flex-shrink:0; line-height:1.2; min-width:28px; text-align:center;"
+                  >{ex.set_type === 'rest_pause' ? 'RP' : ex.set_type === 'drop' ? 'DS' : 'ST'}</button>
+                  <!-- Remove -->
                   <button
                     on:click={() => removeExerciseFromDay(dayIdx, exIdx)}
                     style="background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:18px; line-height:1; padding:0 2px; flex-shrink:0; opacity:0.6;"

@@ -676,23 +676,27 @@ def generate_mesocycle(
                 sess_def = custom_slot_sessions[(global_session_idx - 1) % len(custom_slot_sessions)]
                 slots = sess_def.get("slots", [])
                 slot_exercise_ids = sess_def.get("slot_exercises", [])
+                superset_groups = sess_def.get("superset_groups", [])
+                set_types = sess_def.get("set_types", [])
                 variant_index = {"A": 0, "B": 1, "C": 2}.get(variant, 0)
                 exercises_for_day = []
                 selected_ids: set[int] = set()
                 for i, slot_key in enumerate(slots):
                     pinned_id = slot_exercise_ids[i] if i < len(slot_exercise_ids) else None
                     if pinned_id and pinned_id in ex_by_id:
-                        ex_candidate = ex_by_id[pinned_id]
-                        exercises_for_day.append(ex_candidate)
-                        selected_ids.add(ex_candidate["id"])
+                        ex_candidate = dict(ex_by_id[pinned_id])
                     else:
                         ex_candidate = _select_for_slot(
                             slot_key, equip_set, exercises_db, selected_ids,
                             experience_level, variant_index,
                         )
-                        if ex_candidate:
-                            exercises_for_day.append(ex_candidate)
-                            selected_ids.add(ex_candidate["id"])
+                        if not ex_candidate:
+                            continue
+                        ex_candidate = dict(ex_candidate)
+                    ex_candidate["superset_group"] = superset_groups[i] if i < len(superset_groups) else None
+                    ex_candidate["set_type"] = set_types[i] if i < len(set_types) else "straight"
+                    selected_ids.add(ex_candidate["id"])
+                    exercises_for_day.append(ex_candidate)
             else:
                 slots = _build_slot_template(split_type, day["name"], variant)
                 exercises_for_day = _select_session_exercises(
@@ -758,6 +762,7 @@ def generate_mesocycle(
                     "warmup_sets": warmup_sets,
                     "rest_seconds": rest_seconds,
                     "notes": session_label,
+                    "superset_group": ex.get("superset_group"),
                 })
                 order += 1
 

@@ -228,6 +228,7 @@ def _build_planned_sessions(
                     target_reps_max=ex_data["target_reps_max"],
                     target_rir=ex_data["target_rir"],
                     notes=ex_data.get("notes", ""),
+                    superset_group=ex_data.get("superset_group"),
                 )
                 session.add(pe)
             session.commit()
