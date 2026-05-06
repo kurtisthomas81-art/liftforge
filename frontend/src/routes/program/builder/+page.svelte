@@ -164,7 +164,7 @@
     const days = isCustom ? customDays : (selectedSplit?.days ?? []);
     customDayExercises = days.map((day, i) => ({
       day_name: day.name,
-      variant: ['A', 'B', 'C'][i % numVariants],
+      variant: ['A', 'B', 'C'][i] ?? 'A',
       exercises: [],
     }));
   }
@@ -588,7 +588,8 @@
         <div class="section-title">Variation & Exercise Mode</div>
       </div>
 
-      <!-- Variation picker -->
+      <!-- Variation picker (auto mode only) -->
+      {#if sessionMode === 'auto'}
       <div style="margin-bottom:28px;">
         <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Exercise variety across sessions</label>
         <div style="display:flex; gap:10px; flex-direction:column;">
@@ -610,6 +611,7 @@
           Sessions loop continuously — A/B with 3 days/week: A→B→A week 1, B→A→B week 2.
         </div>
       </div>
+      {/if}
 
       <!-- Exercise selection mode -->
       <div style="margin-bottom:24px; padding-top:20px; border-top:1px solid var(--border);">
@@ -630,6 +632,11 @@
             <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">Choose which movement patterns go in each session. App shows time estimates, muscle coverage, and balance warnings as you build.</div>
           </button>
         </div>
+        {#if sessionMode === 'custom_slots'}
+          <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">
+            Each session you build repeats on its scheduled day — no rotation variants needed. You define exactly what to train.
+          </div>
+        {/if}
       </div>
 
       <button class="btn-primary" on:click={() => step = 4}>Continue →</button>
@@ -791,7 +798,7 @@
               <!-- Day header -->
               <div style="display:flex; align-items:center; gap:8px; padding:11px 14px; background:var(--surface-2); border-bottom:1px solid var(--border);">
                 <span style="font-size:13px; font-weight:700; color:var(--primary);">{day.day_name}</span>
-                {#if numVariants > 1}
+                {#if sessionMode === 'auto' && numVariants > 1}
                   <span style="padding:1px 7px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--primary); font-size:10px; font-weight:700; border:1px solid rgba(232,160,64,0.3);">{day.variant}</span>
                 {/if}
                 <!-- Feature 3: live time estimate -->

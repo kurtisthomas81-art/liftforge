@@ -71,14 +71,14 @@
         <div style="font-size:12px; color:var(--text-faint); padding:4px 0;">Add exercises to see volume coverage.</div>
       {:else}
         {#each MUSCLE_GROUPS as group}
-          {@const groupHasData = group.muscles.some(m => landmarks[m] || (muscleSets[m] ?? 0) > 0)}
+          {@const groupHasData = group.muscles.some(m => !!landmarks[m])}
           {#if groupHasData}
             <div style="margin-bottom:12px;">
               <div style="font-size:10px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">{group.label}</div>
               {#each group.muscles as muscle}
                 {@const sets = muscleSets[muscle] ?? 0}
                 {@const lm = landmarks[muscle]}
-                {#if lm || sets > 0}
+                {#if lm}
                   {@const status = getStatus(sets, lm)}
                   {@const cfg = STATUS[status]}
                   {@const fill = barFill(sets, lm)}

@@ -78,6 +78,47 @@ def _backfill_secondary_muscles(session: Session) -> None:
         print(f"Backfilled secondary_muscles for {updated} exercises.")
 
 
+_COMPOUND_SECONDARY_ADDITIONS = {
+    "Conventional Deadlift":  ["abs"],
+    "Romanian Deadlift":      ["abs"],
+    "Trap Bar Deadlift":      ["abs"],
+    "Stiff-Leg Deadlift":     ["abs"],
+    "Sumo Deadlift":          ["abs"],
+    "Barbell Overhead Press": ["abs"],
+    "Dumbbell Overhead Press":["abs"],
+    "Barbell Back Squat":     ["abs", "calves"],
+    "Front Squat":            ["abs", "calves"],
+    "Leg Press":              ["calves"],
+    "Bulgarian Split Squat":  ["calves"],
+    "Lunge":                  ["calves"],
+    "Walking Lunge":          ["calves"],
+    "Pull-Up":                ["abs"],
+    "Chin-Up":                ["abs"],
+}
+
+
+def _backfill_compound_secondaries(session: Session) -> None:
+    """Merge abs/calves into compound exercises that were seeded without them."""
+    import json as _json
+    updated = 0
+    for name, to_add in _COMPOUND_SECONDARY_ADDITIONS.items():
+        ex = session.exec(select(Exercise).where(Exercise.name == name)).first()
+        if not ex:
+            continue
+        try:
+            current = _json.loads(ex.secondary_muscles or "[]")
+        except Exception:
+            current = []
+        merged = list(dict.fromkeys(current + [m for m in to_add if m not in current]))
+        if merged != current:
+            ex.secondary_muscles = _json.dumps(merged)
+            session.add(ex)
+            updated += 1
+    if updated:
+        session.commit()
+        print(f"Backfilled compound secondary muscles for {updated} exercises.")
+
+
 def _backfill_landmark_goals(session: Session) -> None:
     """Seed goal-specific landmark rows for goals not yet in the DB."""
     from seed_data import LANDMARKS as _LANDMARKS
@@ -123,6 +164,8 @@ def on_startup():
         _backfill_sub_patterns(session)
         # Backfill secondary_muscles for exercises seeded before this field was populated
         _backfill_secondary_muscles(session)
+        # Merge abs/calves into compound exercises missing them
+        _backfill_compound_secondaries(session)
         # Seed goal-specific landmark rows for any goals not yet in the DB
         _backfill_landmark_goals(session)
 
