@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import '../app.css';
   import { activeSession, refreshActiveSession, refreshProfile, getElapsed } from '$lib/stores.js';
 
@@ -29,35 +30,60 @@
     { href: '/history', label: 'History', icon: '◎' },
   ];
 
-  const moreItems = [
-    { href: '/programs-library', label: 'Programs Library', icon: '◈', desc: 'Pick a program and run it' },
-    { href: '/calendar',     label: 'Calendar',     icon: '▣', desc: 'Monthly training view' },
-    { href: '/exercises',    label: 'Library',      icon: '⊞', desc: 'Exercise browser' },
-    { href: '/1rm-test',     label: '1RM Test',     icon: '⊗', desc: 'Guided max strength test' },
-    { href: '/measurements', label: 'Measurements', icon: '↕', desc: 'Body stats & trends' },
-    { href: '/progress',     label: 'Progress',     icon: '◑', desc: '1RM charts & analytics' },
-    { href: '/recovery',     label: 'Recovery',     icon: '◉', desc: 'Muscle recovery map' },
-    { href: '/templates',    label: 'Templates',    icon: '◫', desc: 'Saved workouts' },
-    { href: '/plates',       label: 'Plates',       icon: '⊙', desc: 'Plate calculator' },
-    { href: '/search',       label: 'Search',       icon: '◎', desc: 'Search training notes' },
-    { href: '/chat',         label: 'AI Coach',     icon: '◇', desc: 'Ollama coaching' },
-    { href: '/settings',     label: 'Settings',     icon: '⚙', desc: 'App preferences' },
+  const moreSections = [
+    {
+      label: 'Training',
+      items: [
+        { href: '/templates',    label: 'Templates',       icon: '◫', desc: 'Saved workouts' },
+        { href: '/1rm-test',     label: '1RM Test',        icon: '⊗', desc: 'Guided max strength test' },
+        { href: '/plates',       label: 'Plates',          icon: '⊙', desc: 'Plate calculator' },
+      ]
+    },
+    {
+      label: 'Analytics',
+      items: [
+        { href: '/progress',     label: 'Progress',        icon: '◑', desc: '1RM charts & trends' },
+        { href: '/calendar',     label: 'Calendar',        icon: '▣', desc: 'Monthly training view' },
+        { href: '/recovery',     label: 'Recovery',        icon: '◉', desc: 'Muscle recovery map' },
+        { href: '/measurements', label: 'Measurements',    icon: '↕', desc: 'Body stats & trends' },
+      ]
+    },
+    {
+      label: 'Library',
+      items: [
+        { href: '/exercises',        label: 'Exercises',        icon: '⊞', desc: 'Exercise browser' },
+        { href: '/programs-library', label: 'Browse Programs',  icon: '◧', desc: 'Pre-built programs to run' },
+      ]
+    },
+    {
+      label: 'App',
+      items: [
+        { href: '/chat',   label: 'AI Coach', icon: '◇', desc: 'Ollama coaching' },
+        { href: '/search', label: 'Search',   icon: '⊕', desc: 'Search training notes' },
+      ]
+    },
   ];
+
+  const allMoreItems = moreSections.flatMap(s => s.items);
 
   function isTabActive(href) {
     if (href === '/') return currentPath === '/';
     return currentPath.startsWith(href);
   }
 
-  $: isMoreActive = moreItems.some(m => currentPath.startsWith(m.href));
+  $: isMoreActive = allMoreItems.some(m => currentPath.startsWith(m.href));
 
   function handleMoreNav(href) {
     showMore = false;
-    window.location.href = href;
+    goto(href);
   }
 </script>
 
 <div class="page-wrap">
+  <header class="app-header">
+    <span class="app-header-title">LiftForge</span>
+    <a href="/settings" class="settings-btn" class:active={currentPath === '/settings'} title="Settings">⚙</a>
+  </header>
   <main class="main-content">
     {#if $activeSession && currentPath !== '/log'}
       <a href="/log" class="active-session-bar">
@@ -92,22 +118,63 @@
     <div class="more-sheet">
       <div class="more-sheet-handle"></div>
       <div class="more-sheet-title">More</div>
-      <div class="more-grid">
-        {#each moreItems as item}
-          <button class="more-card" on:click={() => handleMoreNav(item.href)}>
-            <div class="more-card-icon">{item.icon}</div>
-            <div class="more-card-text">
-              <div class="more-card-label">{item.label}</div>
-              <div class="more-card-desc">{item.desc}</div>
-            </div>
-          </button>
-        {/each}
-      </div>
+      {#each moreSections as section}
+        <div class="more-section-label">{section.label}</div>
+        <div class="more-grid">
+          {#each section.items as item}
+            <button class="more-card" on:click={() => handleMoreNav(item.href)}>
+              <div class="more-card-icon">{item.icon}</div>
+              <div class="more-card-text">
+                <div class="more-card-label">{item.label}</div>
+                <div class="more-card-desc">{item.desc}</div>
+              </div>
+            </button>
+          {/each}
+        </div>
+      {/each}
     </div>
   </div>
 {/if}
 
 <style>
+  .app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px 6px;
+    background: var(--surface, #111);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .app-header-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .settings-btn {
+    font-size: 18px;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 4px 6px;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .settings-btn:hover, .settings-btn.active {
+    color: var(--text);
+    background: rgba(255,255,255,0.07);
+  }
+  .more-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 0 6px;
+  }
+  .more-section-label:first-of-type {
+    padding-top: 4px;
+  }
   .active-session-bar {
     display: flex;
     align-items: center;
