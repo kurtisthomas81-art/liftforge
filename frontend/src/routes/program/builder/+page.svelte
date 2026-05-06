@@ -148,9 +148,28 @@
     return idx;
   }
 
-  function buildGaugeExercises(mode, preview, custom) {
-    if (mode === 'auto') return (preview || []).flatMap(d => d.exercises ?? []);
-    return (custom || []).flatMap(d => d.exercises ?? []);
+  // How many unique session templates to configure for this split + variant count.
+  // Full-body splits (all days target the same muscles) are limited to numVariants so
+  // that picking A/B gives 2 templates, not 3 (no spurious "Full Body C" card).
+  // PPL-style splits have distinct muscle focus per day → always show all days.
+  function effectiveDayCount(splitDays, nVariants) {
+    if (!splitDays || splitDays.length === 0) return nVariants;
+    if (splitDays.length <= nVariants) return splitDays.length;
+    const ref = JSON.stringify((splitDays[0].muscle_focus ?? []).slice().sort());
+    const allSame = splitDays.every(d =>
+      JSON.stringify((d.muscle_focus ?? []).slice().sort()) === ref
+    );
+    return allSame ? Math.min(nVariants, splitDays.length) : splitDays.length;
+  }
+
+  // Weight each session's sets by how often it repeats per week.
+  // A/B with 3 days/week → each unique session runs 1.5×/week on average.
+  function buildGaugeExercises(mode, preview, custom, trainingDays) {
+    const sessions = mode === 'auto' ? (preview || []) : (custom || []);
+    const freq = sessions.length > 0 && trainingDays > 0 ? trainingDays / sessions.length : 1;
+    return sessions.flatMap(d =>
+      (d.exercises ?? []).map(ex => ({ ...ex, target_sets: (ex.target_sets ?? 0) * freq }))
+    );
   }
 
   $: if (step >= 4 && selectedGoal && selectedGoal !== landmarksGoal) {
@@ -158,13 +177,19 @@
   }
   $: if (step === 5) gaugeExpanded = true;
   $: allExercisesIndex = buildExerciseIndex(allExercises);
-  $: gaugeExercises = buildGaugeExercises(sessionMode, previewData, customDayExercises);
+  $: gaugeExercises = buildGaugeExercises(sessionMode, previewData, customDayExercises, selectedDays);
+  // How many preview sessions to show in auto mode (hides the spurious "C" session for A/B splits)
+  $: effectivePreviewCount = effectiveDayCount(
+    isCustom ? customDays : (selectedSplit?.days ?? []), numVariants
+  );
 
   function initCustomDays() {
-    const days = isCustom ? customDays : (selectedSplit?.days ?? []);
+    const allDays = isCustom ? customDays : (selectedSplit?.days ?? []);
+    const count = effectiveDayCount(allDays, numVariants);
+    const days = allDays.slice(0, count);
     customDayExercises = days.map((day, i) => ({
       day_name: day.name,
-      variant: ['A', 'B', 'C'][i] ?? 'A',
+      variant: ['A', 'B', 'C'][i % numVariants],
       exercises: [],
     }));
   }
@@ -903,7 +928,7 @@
           {:else if previewError}
             <div style="color:var(--danger); font-size:12px; margin-bottom:8px;">{previewError}</div>
           {:else}
-            {#each previewData as day}
+            {#each previewData.slice(0, effectivePreviewCount) as day}
               <div style="margin-bottom:18px;">
                 <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid var(--border);">
                   <span style="font-size:12px; font-weight:700; color:var(--primary);">{day.day_name}</span>
