@@ -19,7 +19,7 @@
   let customDays = [];   // [{ name: '', muscle_focus: [] }]
 
   // Step 3
-  let selectedGoal = 'hypertrophy';
+  let selectedGoal = 'general_fitness';
   let selectedWeeks = 5;
   let selectedPeriodization = 'standard';
   let selectedDuration = 60;
@@ -244,9 +244,10 @@
   const ALL_MUSCLES = ['chest', 'back', 'quads', 'hamstrings', 'glutes', 'shoulders',
                        'biceps', 'triceps', 'calves', 'abs', 'lats', 'traps'];
   const GOALS = [
-    { key: 'hypertrophy', label: 'Hypertrophy', desc: '8-12 reps, RIR 2' },
-    { key: 'strength',    label: 'Strength',    desc: '3-6 reps, RIR 1' },
-    { key: 'recomp',      label: 'Recomp',      desc: '10-15 reps, RIR 2-3' },
+    { key: 'general_fitness', label: 'General Fitness', desc: 'Athletic & strong — 6-12 reps, balanced volume' },
+    { key: 'hypertrophy',     label: 'Hypertrophy',     desc: 'Maximize muscle size — 8-12 reps, RIR 2' },
+    { key: 'strength',        label: 'Strength',        desc: 'Build raw strength — 3-6 reps, RIR 1' },
+    { key: 'recomp',          label: 'Recomp',          desc: 'Build muscle, lose fat — 10-15 reps, RIR 2-3' },
   ];
   const PERIODIZATIONS = [
     { key: 'standard', label: 'Standard',  desc: 'Fixed rep ranges, volume progresses week to week' },

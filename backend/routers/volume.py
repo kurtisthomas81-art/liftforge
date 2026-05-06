@@ -4,16 +4,28 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 from database import get_session
-from models import WorkoutSet, WorkoutSession, Exercise, MuscleVolumeLandmark, MesocycleWeek, PlannedSession, WeeklyCheckin
+from models import WorkoutSet, WorkoutSession, Exercise, MuscleVolumeLandmark, MesocycleWeek, PlannedSession, WeeklyCheckin, Mesocycle
 
 router = APIRouter(prefix="/api/volume", tags=["volume"])
 
 USER_ID = 1
 
 
-def _get_landmarks(session: Session) -> dict:
-    stmt = select(MuscleVolumeLandmark).where(MuscleVolumeLandmark.user_id == USER_ID)
+def _get_landmarks(session: Session, goal: str = "hypertrophy") -> dict:
+    stmt = (
+        select(MuscleVolumeLandmark)
+        .where(MuscleVolumeLandmark.user_id == USER_ID)
+        .where(MuscleVolumeLandmark.goal == goal)
+    )
     landmarks = session.exec(stmt).all()
+    if not landmarks:
+        # fall back to hypertrophy if no rows exist for this goal yet
+        stmt = (
+            select(MuscleVolumeLandmark)
+            .where(MuscleVolumeLandmark.user_id == USER_ID)
+            .where(MuscleVolumeLandmark.goal == "hypertrophy")
+        )
+        landmarks = session.exec(stmt).all()
     return {lm.muscle: {"mev": lm.mev, "mav_low": lm.mav_low, "mav_high": lm.mav_high, "mrv": lm.mrv}
             for lm in landmarks}
 
@@ -37,18 +49,19 @@ def _volume_status(sets: int, lm: dict | None) -> str:
     return "at_mrv"
 
 
-def _aggregate_sets_by_muscle(sets: list, exercises: dict, exclude_warmup: bool = True) -> dict[str, int]:
-    """Count working sets per primary muscle, excluding warm-up sets."""
-    muscle_sets: dict[str, int] = {}
+def _aggregate_sets_by_muscle(sets: list, exercises: dict, exclude_warmup: bool = True) -> dict[str, float]:
+    """Count working sets per muscle. Primary muscles = 1.0 set, secondary = 0.5 set."""
+    muscle_sets: dict[str, float] = {}
     for ws in sets:
         if exclude_warmup and ws.set_type == "warmup":
             continue
         ex = exercises.get(ws.exercise_id)
         if not ex:
             continue
-        muscles = _parse_muscles(ex.primary_muscles)
-        for muscle in muscles:
-            muscle_sets[muscle] = muscle_sets.get(muscle, 0) + 1
+        for muscle in _parse_muscles(ex.primary_muscles):
+            muscle_sets[muscle] = muscle_sets.get(muscle, 0) + 1.0
+        for muscle in _parse_muscles(ex.secondary_muscles or "[]"):
+            muscle_sets[muscle] = muscle_sets.get(muscle, 0) + 0.5
     return muscle_sets
 
 
@@ -134,14 +147,22 @@ def volume_for_week(
                 if ex:
                     exercise_cache[ws.exercise_id] = ex
 
+    # Detect the active mesocycle's goal to use goal-calibrated landmarks
+    active_meso = session.exec(
+        select(Mesocycle)
+        .where(Mesocycle.user_id == USER_ID)
+        .where(Mesocycle.status == "active")
+    ).first()
+    goal = active_meso.goal if active_meso else "hypertrophy"
+
     sets_by_muscle = _aggregate_sets_by_muscle(all_sets, exercise_cache)
-    landmarks = _get_landmarks(session)
+    landmarks = _get_landmarks(session, goal)
 
     result = []
     all_muscles = set(sets_by_muscle) | set(landmarks)
     for muscle in sorted(all_muscles):
         lm = landmarks.get(muscle)
-        s_count = sets_by_muscle.get(muscle, 0)
+        s_count = round(sets_by_muscle.get(muscle, 0), 1)
         result.append({
             "muscle": muscle,
             "sets": s_count,
@@ -152,6 +173,7 @@ def volume_for_week(
     return {
         "week_start": monday.isoformat(),
         "week_end": sunday.isoformat(),
+        "goal": goal,
         "muscles": result,
     }
 

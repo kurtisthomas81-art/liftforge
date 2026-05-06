@@ -337,7 +337,7 @@ EXERCISES = [
         "aliases": ["wide pulldown"],
         "movement_pattern": "pull",
         "primary_muscles": ["lats"],
-        "secondary_muscles": ["back"],
+        "secondary_muscles": ["back", "biceps"],
         "equipment_required": ["cable_machine"],
         "mechanics": "compound",
         "force": "pull",
@@ -861,7 +861,7 @@ EXERCISES = [
         "aliases": ["machine hack squat"],
         "movement_pattern": "squat",
         "primary_muscles": ["quads"],
-        "secondary_muscles": ["glutes"],
+        "secondary_muscles": ["glutes", "hamstrings"],
         "equipment_required": ["machine"],
         "mechanics": "compound",
         "force": "push",
@@ -1534,19 +1534,64 @@ SPLITS = [
 ]
 
 LANDMARKS = [
-    # (muscle, mev, mav_low, mav_high, mrv)
-    ("chest",       8,  12, 20, 22),
-    ("back",        10, 14, 22, 25),
-    ("quads",       8,  12, 20, 20),
-    ("hamstrings",  6,  10, 16, 20),
-    ("glutes",      0,  4,  12, 16),
-    ("shoulders",   8,  16, 22, 26),
-    ("biceps",      8,  14, 20, 26),
-    ("triceps",     6,  10, 14, 18),
-    ("calves",      8,  12, 16, 20),
-    ("abs",         0,  6,  16, 20),
-    ("lats",        10, 14, 22, 25),
-    ("traps",       8,  12, 20, 22),
+    # (goal, muscle, mev, mav_low, mav_high, mrv)
+
+    # hypertrophy — maximize muscle growth, bodybuilder-level volume
+    ("hypertrophy", "chest",       8,  12, 20, 22),
+    ("hypertrophy", "back",        10, 14, 22, 25),
+    ("hypertrophy", "quads",       8,  12, 20, 20),
+    ("hypertrophy", "hamstrings",  6,  10, 16, 20),
+    ("hypertrophy", "glutes",      0,  4,  12, 16),
+    ("hypertrophy", "shoulders",   8,  16, 22, 26),
+    ("hypertrophy", "biceps",      8,  14, 20, 26),
+    ("hypertrophy", "triceps",     6,  10, 14, 18),
+    ("hypertrophy", "calves",      8,  12, 16, 20),
+    ("hypertrophy", "abs",         0,  6,  16, 20),
+    ("hypertrophy", "lats",        10, 14, 22, 25),
+    ("hypertrophy", "traps",       8,  12, 20, 22),
+
+    # general_fitness — athletic, built, functional; think Evander Holyfield / Chris Evans
+    # strength-leaning, 6-12 hard sets/muscle/week is the target
+    ("general_fitness", "chest",       4,  6,  12, 16),
+    ("general_fitness", "back",        4,  6,  12, 16),
+    ("general_fitness", "quads",       4,  6,  12, 15),
+    ("general_fitness", "hamstrings",  3,  5,  10, 14),
+    ("general_fitness", "glutes",      0,  3,   8, 12),
+    ("general_fitness", "shoulders",   4,  8,  14, 18),
+    ("general_fitness", "biceps",      3,  5,  10, 14),
+    ("general_fitness", "triceps",     3,  5,   8, 12),
+    ("general_fitness", "calves",      4,  6,  10, 14),
+    ("general_fitness", "abs",         0,  4,  10, 14),
+    ("general_fitness", "lats",        4,  6,  12, 16),
+    ("general_fitness", "traps",       3,  5,  10, 12),
+
+    # strength — powerlifting/strength focus; low volume, high intensity, compound-heavy
+    ("strength", "chest",       3,  4,   8, 12),
+    ("strength", "back",        4,  6,  10, 14),
+    ("strength", "quads",       4,  5,  10, 14),
+    ("strength", "hamstrings",  3,  4,   8, 12),
+    ("strength", "glutes",      0,  2,   6, 10),
+    ("strength", "shoulders",   3,  4,   8, 12),
+    ("strength", "biceps",      2,  3,   6,  8),
+    ("strength", "triceps",     3,  4,   8, 10),
+    ("strength", "calves",      3,  4,   8, 10),
+    ("strength", "abs",         0,  3,   8, 12),
+    ("strength", "lats",        4,  6,  10, 14),
+    ("strength", "traps",       3,  4,   8, 10),
+
+    # recomp — body recomposition; moderate volume, mixed stimulus
+    ("recomp", "chest",       6,  10, 16, 20),
+    ("recomp", "back",        7,  11, 18, 22),
+    ("recomp", "quads",       6,  10, 16, 18),
+    ("recomp", "hamstrings",  5,   8, 13, 18),
+    ("recomp", "glutes",      0,   3,  9, 14),
+    ("recomp", "shoulders",   6,  12, 18, 22),
+    ("recomp", "biceps",      6,  10, 16, 22),
+    ("recomp", "triceps",     5,   8, 11, 16),
+    ("recomp", "calves",      6,  10, 13, 18),
+    ("recomp", "abs",         0,   5, 13, 18),
+    ("recomp", "lats",        7,  11, 18, 22),
+    ("recomp", "traps",       6,  10, 16, 20),
 ]
 # fmt: on
 
@@ -1691,9 +1736,10 @@ def seed_splits(session: Session) -> None:
 
 
 def seed_landmarks(session: Session) -> None:
-    for muscle, mev, mav_low, mav_high, mrv in LANDMARKS:
+    for goal, muscle, mev, mav_low, mav_high, mrv in LANDMARKS:
         landmark = MuscleVolumeLandmark(
             user_id=1,
+            goal=goal,
             muscle=muscle,
             mev=mev,
             mav_low=mav_low,
@@ -1702,7 +1748,7 @@ def seed_landmarks(session: Session) -> None:
         )
         session.add(landmark)
     session.commit()
-    print(f"Seeded {len(LANDMARKS)} volume landmarks.")
+    print(f"Seeded {len(LANDMARKS)} volume landmarks across all goals.")
 
 
 if __name__ == "__main__":

@@ -58,6 +58,44 @@ def _backfill_sub_patterns(session: Session) -> None:
     print(f"Backfilled sub_pattern for {len(needs_backfill)} exercises.")
 
 
+def _backfill_secondary_muscles(session: Session) -> None:
+    """Write secondary_muscles from seed data to any exercise that has an empty array."""
+    import json as _json
+    from seed_data import EXERCISES as _EXERCISES
+    seed_map = {ex["name"]: ex.get("secondary_muscles", []) for ex in _EXERCISES}
+    all_exercises = session.exec(select(Exercise)).all()
+    updated = 0
+    for ex in all_exercises:
+        if ex.secondary_muscles and ex.secondary_muscles != "[]":
+            continue
+        seed_secondary = seed_map.get(ex.name, [])
+        if seed_secondary:
+            ex.secondary_muscles = _json.dumps(seed_secondary)
+            session.add(ex)
+            updated += 1
+    if updated:
+        session.commit()
+        print(f"Backfilled secondary_muscles for {updated} exercises.")
+
+
+def _backfill_landmark_goals(session: Session) -> None:
+    """Seed goal-specific landmark rows for goals not yet in the DB."""
+    from seed_data import LANDMARKS as _LANDMARKS
+    existing = session.exec(select(MuscleVolumeLandmark)).all()
+    existing_keys = {(lm.goal, lm.muscle, lm.user_id) for lm in existing}
+    added = 0
+    for goal, muscle, mev, mav_low, mav_high, mrv in _LANDMARKS:
+        if (goal, muscle, 1) not in existing_keys:
+            session.add(MuscleVolumeLandmark(
+                user_id=1, goal=goal, muscle=muscle,
+                mev=mev, mav_low=mav_low, mav_high=mav_high, mrv=mrv,
+            ))
+            added += 1
+    if added:
+        session.commit()
+        print(f"Backfilled {added} landmark rows for new goals.")
+
+
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
@@ -83,6 +121,10 @@ def on_startup():
 
         # Backfill sub_pattern for exercises seeded before this field existed
         _backfill_sub_patterns(session)
+        # Backfill secondary_muscles for exercises seeded before this field was populated
+        _backfill_secondary_muscles(session)
+        # Seed goal-specific landmark rows for any goals not yet in the DB
+        _backfill_landmark_goals(session)
 
 
 @app.get("/api/health")

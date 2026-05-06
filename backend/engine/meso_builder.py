@@ -35,14 +35,14 @@ CORE_MUSCLES = {"abs", "core"}             # never auto-populated; optional acce
 # ── Pattern × Goal prescription matrix ────────────────────────────────────────
 # Each entry: {fatigue, hypertrophy/strength/recomp: {sets:(min,max), reps:(min,max)}, beginner_rir:(conservative,standard)}
 PATTERN_PRESCRIPTION: dict[str, dict] = {
-    "hip_dominant":    {"fatigue": "high",   "hypertrophy": {"sets": (2, 3), "reps": (5, 8)},   "strength": {"sets": (2, 3), "reps": (3, 5)},   "recomp": {"sets": (2, 3), "reps": (5, 8)},   "beginner_rir": (4, 3)},
-    "knee_dominant":   {"fatigue": "high",   "hypertrophy": {"sets": (3, 4), "reps": (5, 10)},  "strength": {"sets": (3, 5), "reps": (3, 6)},   "recomp": {"sets": (3, 4), "reps": (6, 10)},  "beginner_rir": (3, 3)},
-    "horizontal_push": {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
-    "vertical_push":   {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
-    "horizontal_pull": {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
-    "vertical_pull":   {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
-    "core":            {"fatigue": "low",    "hypertrophy": {"sets": (2, 3), "reps": (12, 20)}, "strength": {"sets": (2, 3), "reps": (12, 20)}, "recomp": {"sets": (2, 3), "reps": (12, 20)}, "beginner_rir": (2, 1)},
-    "":                {"fatigue": "low",    "hypertrophy": {"sets": (2, 3), "reps": (12, 20)}, "strength": {"sets": (2, 3), "reps": (12, 20)}, "recomp": {"sets": (2, 3), "reps": (12, 20)}, "beginner_rir": (2, 1)},
+    "hip_dominant":    {"fatigue": "high",   "hypertrophy": {"sets": (2, 3), "reps": (5, 8)},   "general_fitness": {"sets": (2, 3), "reps": (5, 8)},   "strength": {"sets": (2, 3), "reps": (3, 5)},   "recomp": {"sets": (2, 3), "reps": (5, 8)},   "beginner_rir": (4, 3)},
+    "knee_dominant":   {"fatigue": "high",   "hypertrophy": {"sets": (3, 4), "reps": (5, 10)},  "general_fitness": {"sets": (3, 4), "reps": (6, 10)},  "strength": {"sets": (3, 5), "reps": (3, 6)},   "recomp": {"sets": (3, 4), "reps": (6, 10)},  "beginner_rir": (3, 3)},
+    "horizontal_push": {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "general_fitness": {"sets": (3, 4), "reps": (6, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
+    "vertical_push":   {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "general_fitness": {"sets": (3, 4), "reps": (6, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
+    "horizontal_pull": {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "general_fitness": {"sets": (3, 4), "reps": (6, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
+    "vertical_pull":   {"fatigue": "medium", "hypertrophy": {"sets": (3, 4), "reps": (8, 12)},  "general_fitness": {"sets": (3, 4), "reps": (6, 12)},  "strength": {"sets": (4, 5), "reps": (5, 8)},   "recomp": {"sets": (3, 4), "reps": (8, 12)},  "beginner_rir": (3, 2)},
+    "core":            {"fatigue": "low",    "hypertrophy": {"sets": (2, 3), "reps": (12, 20)}, "general_fitness": {"sets": (2, 3), "reps": (12, 20)}, "strength": {"sets": (2, 3), "reps": (12, 20)}, "recomp": {"sets": (2, 3), "reps": (12, 20)}, "beginner_rir": (2, 1)},
+    "":                {"fatigue": "low",    "hypertrophy": {"sets": (2, 3), "reps": (12, 20)}, "general_fitness": {"sets": (2, 3), "reps": (12, 20)}, "strength": {"sets": (2, 3), "reps": (12, 20)}, "recomp": {"sets": (2, 3), "reps": (12, 20)}, "beginner_rir": (2, 1)},
 }
 
 
@@ -59,7 +59,7 @@ def _rep_set_for_pattern(
     Intermediate/advanced ramp sets from min→max across working weeks.
     """
     rx = PATTERN_PRESCRIPTION.get(sub_pattern, PATTERN_PRESCRIPTION[""])
-    goal_key = goal if goal in ("hypertrophy", "strength", "recomp") else "hypertrophy"
+    goal_key = goal if goal in ("hypertrophy", "general_fitness", "strength", "recomp") else "hypertrophy"
     goal_rx = rx[goal_key]
     sets_min, sets_max = goal_rx["sets"]
     reps_min, reps_max = goal_rx["reps"]
@@ -87,6 +87,8 @@ def _rep_range_for_goal(goal: str, mechanics: str) -> tuple[int, int]:
         return (3, 6)
     if goal == "recomp":
         return (10, 15)
+    if goal == "general_fitness":
+        return (6, 10) if mechanics == "compound" else (10, 15)
     if mechanics == "compound":
         return (8, 12)
     return (10, 20)
@@ -112,9 +114,10 @@ def _rep_range_linear(goal: str, week_number: int, weeks_total: int) -> tuple[in
 
 
 _DUP_PATTERNS: dict[str, list[tuple]] = {
-    "hypertrophy": [(8, 12, 2, "Hypertrophy"), (3, 6, 1, "Strength"), (12, 20, 3, "Volume")],
-    "strength":    [(3, 6, 1, "Strength"), (6, 10, 2, "Power"), (2, 4, 1, "Peaking")],
-    "recomp":      [(10, 15, 2, "Hypertrophy"), (4, 6, 1, "Strength"), (15, 20, 3, "Volume")],
+    "hypertrophy":     [(8, 12, 2, "Hypertrophy"), (3, 6, 1, "Strength"), (12, 20, 3, "Volume")],
+    "general_fitness": [(6, 10, 2, "Strength"),    (8, 12, 2, "Build"),    (10, 15, 3, "Volume")],
+    "strength":        [(3, 6, 1, "Strength"),      (6, 10, 2, "Power"),    (2, 4, 1, "Peaking")],
+    "recomp":          [(10, 15, 2, "Hypertrophy"), (4, 6, 1, "Strength"), (15, 20, 3, "Volume")],
 }
 
 

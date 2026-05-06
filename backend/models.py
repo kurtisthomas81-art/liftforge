@@ -98,6 +98,7 @@ class SplitDay(SQLModel, table=True):
 class MuscleVolumeLandmark(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(default=1, index=True)
+    goal: str = Field(default="hypertrophy")  # hypertrophy|general_fitness|strength|recomp
     muscle: str
     mev: int
     mav_low: int
