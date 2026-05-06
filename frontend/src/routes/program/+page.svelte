@@ -107,6 +107,32 @@
     return 'var(--muted)';
   }
 
+  function getMevWidth(muscle) {
+    if (!weekVolume) return 0;
+    const entry = weekVolume.muscles.find(m => m.muscle === muscle);
+    if (!entry?.landmarks?.mev) return 0;
+    return Math.min(100, (entry.landmarks.mev / (entry.landmarks.mrv || 25)) * 100);
+  }
+
+  function getVolumeStatus(muscle) {
+    if (!weekVolume) return null;
+    const entry = weekVolume.muscles.find(m => m.muscle === muscle);
+    if (!entry?.landmarks) return null;
+    const { sets } = entry;
+    const { mev, mav_low, mav_high, mrv } = entry.landmarks;
+    if (sets === 0)
+      return { label: 'Not started', color: 'var(--muted)',   rec: `Target this week: ${mav_low}–${mav_high} sets` };
+    if (mev && sets < mev)
+      return { label: 'Under minimum', color: 'var(--muted)', rec: `Add ${mev - sets} more set${mev - sets !== 1 ? 's' : ''} to reach the floor` };
+    if (sets < mav_low)
+      return { label: 'Building up',   color: 'var(--muted)', rec: `${mav_low - sets} more set${mav_low - sets !== 1 ? 's' : ''} to enter the target zone` };
+    if (sets <= mav_high)
+      return { label: 'In the zone',   color: 'var(--success)', rec: "You're in the optimal range" };
+    if (sets < mrv)
+      return { label: 'Getting close', color: 'var(--warn)',   rec: `${mrv - sets} set${mrv - sets !== 1 ? 's' : ''} from your weekly limit` };
+    return   { label: 'At limit',      color: 'var(--danger)', rec: 'At your ceiling — back off next session' };
+  }
+
   function dayCatColor(name) {
     const n = (name || '').toLowerCase();
     if (n.includes('push')) return 'var(--push)';
@@ -300,7 +326,22 @@
     <!-- Weekly volume chart -->
     {#if weekVolume}
       <div class="card mt-4">
-        <div class="section-title">Weekly Volume</div>
+        <div class="vol-header">
+          <div class="section-title" style="margin-bottom:0">Weekly Volume</div>
+          <div class="vol-legend">
+            <span class="vol-leg-band"></span>
+            <span class="vol-leg-text">Target zone</span>
+            <span class="vol-leg-sep">·</span>
+            <span class="vol-leg-dot" style="background:var(--success)"></span>
+            <span class="vol-leg-text">On track</span>
+            <span class="vol-leg-sep">·</span>
+            <span class="vol-leg-dot" style="background:var(--warn)"></span>
+            <span class="vol-leg-text">Near limit</span>
+            <span class="vol-leg-sep">·</span>
+            <span class="vol-leg-dot" style="background:var(--danger)"></span>
+            <span class="vol-leg-text">Back off</span>
+          </div>
+        </div>
         <div class="vol-chart">
           {#each CHART_MUSCLES as muscle}
             {@const entry = weekVolume.muscles.find(m => m.muscle === muscle)}
@@ -308,15 +349,29 @@
             {@const lm = entry?.landmarks}
             {@const mrv = lm?.mrv ?? 25}
             {@const mavR = getMavRange(muscle)}
+            {@const status = getVolumeStatus(muscle)}
             <div class="vol-row">
               <div class="vol-muscle">{muscle}</div>
-              <div class="vol-bar-wrap">
-                {#if lm}
-                  <div class="vol-mav-band" style="left:{mavR.start}%;width:{mavR.end-mavR.start}%"></div>
+              <div class="vol-main">
+                <div class="vol-bar-row">
+                  <div class="vol-bar-wrap">
+                    {#if lm}
+                      <div class="vol-mav-band" style="left:{mavR.start}%;width:{mavR.end - mavR.start}%"></div>
+                      {#if lm.mev}
+                        <div class="vol-mev-tick" style="left:{getMevWidth(muscle)}%"></div>
+                      {/if}
+                    {/if}
+                    <div class="vol-bar-fill" style="width:{getMavWidth(muscle)}%;background:{barColor(muscle)}"></div>
+                  </div>
+                  <div class="vol-count">{sets}{lm ? '/' + mrv : ''}</div>
+                </div>
+                {#if status}
+                  <div class="vol-status-row">
+                    <span class="vol-chip" style="color:{status.color}">{status.label}</span>
+                    <span class="vol-rec">{status.rec}</span>
+                  </div>
                 {/if}
-                <div class="vol-bar-fill" style="width:{getMavWidth(muscle)}%;background:{barColor(muscle)}"></div>
               </div>
-              <div class="vol-count">{sets}{lm ? '/' + mrv : ''}</div>
             </div>
           {/each}
         </div>
@@ -459,13 +514,34 @@
   .day-chevron { color:var(--muted); font-size:18px; }
 
   /* Volume chart */
-  .vol-chart { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
-  .vol-row { display:flex; align-items:center; gap:10px; }
-  .vol-muscle { font-size:12px; text-transform:capitalize; width:80px; flex-shrink:0; }
+  .vol-header { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+  .vol-legend { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+  .vol-leg-band {
+    display:inline-block; width:16px; height:10px; border-radius:3px; flex-shrink:0;
+    background:rgba(54,200,122,0.2); border:1px solid rgba(54,200,122,0.45);
+  }
+  .vol-leg-dot { display:inline-block; width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .vol-leg-text { font-size:10px; color:var(--muted); }
+  .vol-leg-sep { font-size:10px; color:var(--faint); }
+
+  .vol-chart { display:flex; flex-direction:column; gap:14px; }
+  .vol-row { display:flex; align-items:flex-start; gap:10px; }
+  .vol-muscle { font-size:11px; text-transform:capitalize; width:76px; flex-shrink:0; color:var(--muted); padding-top:2px; }
+  .vol-main { flex:1; min-width:0; }
+  .vol-bar-row { display:flex; align-items:center; gap:8px; }
   .vol-bar-wrap { flex:1; position:relative; background:var(--surf-2); border-radius:3px; height:10px; overflow:hidden; }
-  .vol-mav-band { position:absolute; top:0; bottom:0; background:rgba(54,200,122,0.15); }
+  .vol-mav-band {
+    position:absolute; top:0; bottom:0;
+    background:rgba(54,200,122,0.2);
+    border-left:1px solid rgba(54,200,122,0.4);
+    border-right:1px solid rgba(54,200,122,0.4);
+  }
+  .vol-mev-tick { position:absolute; top:0; bottom:0; width:1px; background:rgba(255,255,255,0.18); }
   .vol-bar-fill { position:absolute; top:0; bottom:0; left:0; border-radius:3px; transition:width 0.3s; }
-  .vol-count { font-size:11px; color:var(--muted); width:44px; text-align:right; flex-shrink:0; }
+  .vol-count { font-size:11px; color:var(--muted); width:38px; text-align:right; flex-shrink:0; font-variant-numeric:tabular-nums; }
+  .vol-status-row { display:flex; align-items:center; gap:6px; margin-top:5px; }
+  .vol-chip { font-size:10px; font-weight:700; flex-shrink:0; }
+  .vol-rec { font-size:10px; color:var(--muted); }
 
   /* Start-a-program empty state */
   .start-head { margin-bottom:16px; }
