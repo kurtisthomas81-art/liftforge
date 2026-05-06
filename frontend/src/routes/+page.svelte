@@ -294,7 +294,12 @@
     <a href="/program" class="next-card">
       <div>
         <div class="next-label">Next Up</div>
-        <div class="serif-17">{nextPlanned.split_day_name || 'Next Session'}</div>
+        <div class="serif-17" style="display:flex; align-items:center; gap:6px;">
+          {nextPlanned.base_session_name ?? nextPlanned.split_day_name ?? 'Next Session'}
+          {#if nextPlanned.variant}
+            <span style="display:inline-block; padding:1px 6px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--accent); font-size:10px; font-weight:700;">{nextPlanned.variant}</span>
+          {/if}
+        </div>
         <div class="muted-11">{nextPlanned.exercise_count ?? ''} exercises</div>
       </div>
       <span class="tomorrow-badge">Tomorrow ›</span>

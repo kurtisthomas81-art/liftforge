@@ -1,0 +1,1 @@
+function a(e){return e?new Date(e).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}function o(){const e=new Date,n=e.toLocaleDateString("en-US",{weekday:"long"}),t=e.toLocaleDateString("en-US",{month:"long",day:"numeric"});return`${n}, ${t}`}export{o as a,a as f};

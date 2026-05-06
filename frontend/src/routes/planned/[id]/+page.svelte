@@ -117,7 +117,12 @@
     <div class="flex items-center gap-3 mb-4" style="flex-wrap:wrap;">
       <a href="/program/{ps.mesocycle_name ? '' : ''}" class="btn-ghost btn-sm" on:click|preventDefault={() => history.back()}>← Back</a>
       <div style="flex:1;">
-        <h2 style="font-size:20px; font-weight:700;">{ps.split_day_name || 'Session'}</h2>
+        <h2 style="font-size:20px; font-weight:700; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          {ps.base_session_name ?? ps.split_day_name ?? 'Session'}
+          {#if ps.variant}
+            <span style="display:inline-block; padding:2px 9px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--accent); font-size:12px; font-weight:700;">{ps.variant}</span>
+          {/if}
+        </h2>
         <div style="color:var(--text-muted); font-size:13px; margin-top:2px;">
           {#if ps.mesocycle_name}{ps.mesocycle_name} · {/if}
           Week {ps.week_number}

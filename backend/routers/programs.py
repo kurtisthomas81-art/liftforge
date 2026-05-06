@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Optional
 from datetime import datetime, date
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,17 @@ from models import (
 router = APIRouter(prefix="/api/programs", tags=["programs"])
 
 USER_ID = 1
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _parse_variant(name: str):
+    """Extract trailing A/B/C variant letter from a split day name.
+    'Full Body A' → ('Full Body', 'A');  'Push' → ('Push', None)"""
+    m = re.match(r'^(.*?)\s+([A-C])$', name or '')
+    if m:
+        return m.group(1), m.group(2)
+    return (name or ''), None
 
 
 # ── Serialisers ────────────────────────────────────────────────────────────────
@@ -62,6 +74,7 @@ def _serialize_mesocycle(m: Mesocycle) -> dict:
         "start_date": m.start_date,
         "deload_week": m.deload_week,
         "created_at": m.created_at.isoformat() if m.created_at else None,
+        "num_variants": m.num_variants,
     }
 
 
@@ -642,9 +655,12 @@ def get_active_mesocycle(session: Session = Depends(get_session)):
                 ex = session.get(Exercise, pe.exercise_id)
                 ex_list.append(_serialize_planned_exercise(pe, ex.name if ex else ""))
 
+            base_name, variant = _parse_variant(split_day_name)
             sessions_out.append({
                 **_serialize_planned_session(ps),
                 "split_day_name": split_day_name,
+                "base_session_name": base_name,
+                "variant": variant if meso.num_variants > 1 else None,
                 "exercises": ex_list,
             })
 
@@ -867,9 +883,12 @@ def get_mesocycle(id: int, session: Session = Depends(get_session)):
                 ex = session.get(Exercise, pe.exercise_id)
                 ex_list.append(_serialize_planned_exercise(pe, ex.name if ex else ""))
 
+            base_name, variant = _parse_variant(split_day_name)
             sessions_out.append({
                 **_serialize_planned_session(ps),
                 "split_day_name": split_day_name,
+                "base_session_name": base_name,
+                "variant": variant if meso.num_variants > 1 else None,
                 "exercises": ex_list,
                 "completed": ps.session_id is not None,
             })
@@ -1018,9 +1037,12 @@ def get_planned_session(id: int, session: Session = Depends(get_session)):
 
         ex_list.append(ex_data)
 
+    base_name, variant = _parse_variant(split_day_name)
     return {
         **_serialize_planned_session(ps),
         "split_day_name": split_day_name,
+        "base_session_name": base_name,
+        "variant": variant if (meso and meso.num_variants > 1) else None,
         "muscles": muscles,
         "mesocycle_name": meso_name,
         "week_number": week_num,

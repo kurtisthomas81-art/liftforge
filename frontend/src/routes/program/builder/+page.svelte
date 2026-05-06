@@ -219,6 +219,10 @@
           id: prev[di]?.exercises[ei]?.id ?? Math.random().toString(36).slice(2),
           set_type: prev[di]?.exercises[ei]?.set_type ?? 'straight',
           superset_group: prev[di]?.exercises[ei]?.superset_group ?? null,
+          target_sets: prev[di]?.exercises[ei]?.target_sets ?? ex.target_sets,
+          target_reps_min: prev[di]?.exercises[ei]?.target_reps_min ?? ex.target_reps_min,
+          target_reps_max: prev[di]?.exercises[ei]?.target_reps_max ?? ex.target_reps_max,
+          target_rir: prev[di]?.exercises[ei]?.target_rir ?? ex.target_rir,
         })),
       }));
     } catch (e) { /* silent */ }
@@ -868,10 +872,21 @@
                           <div style="font-size:10px; color:var(--text-faint); margin-top:2px; text-transform:capitalize;">{ex.sub_pattern.replace(/_/g, ' ')}</div>
                         {/if}
                       </div>
-                      <span style="font-size:12px; font-weight:600; color:var(--primary); white-space:nowrap; flex-shrink:0;">
-                        {ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max}
-                        <span style="font-weight:400; color:var(--text-muted);">@RIR{ex.target_rir}</span>
-                      </span>
+                      <div style="display:flex; align-items:center; gap:2px; flex-shrink:0; font-size:12px;">
+                        <input type="number" min="1" max="20" bind:value={ex.target_sets}
+                          on:input={() => customDayExercises = [...customDayExercises]}
+                          style="width:32px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--primary); font-size:12px; font-weight:700; padding:2px 2px;"
+                        /><span style="color:var(--text-muted); padding:0 1px;">×</span><input type="number" min="1" max="50" bind:value={ex.target_reps_min}
+                          on:input={() => customDayExercises = [...customDayExercises]}
+                          style="width:32px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--primary); font-size:12px; font-weight:700; padding:2px 2px;"
+                        /><span style="color:var(--text-muted); padding:0 1px;">–</span><input type="number" min="1" max="50" bind:value={ex.target_reps_max}
+                          on:input={() => customDayExercises = [...customDayExercises]}
+                          style="width:32px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--primary); font-size:12px; font-weight:700; padding:2px 2px;"
+                        /><span style="color:var(--text-muted); font-size:11px; padding:0 2px;">@RIR</span><input type="number" min="0" max="5" bind:value={ex.target_rir}
+                          on:input={() => customDayExercises = [...customDayExercises]}
+                          style="width:28px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--text-muted); font-size:11px; font-weight:600; padding:2px 2px;"
+                        />
+                      </div>
                       {#if exIdx < (day.exercises.length - 1)}
                         <button
                           on:click={() => toggleSuperset(dayIdx, exIdx)}

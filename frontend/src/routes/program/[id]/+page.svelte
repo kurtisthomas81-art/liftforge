@@ -176,8 +176,11 @@
         {#each week.sessions as ps}
           <div class="card" style="border-color:{ps.completed ? 'rgba(76,175,106,0.3)' : 'var(--border)'};">
             <div class="flex items-center justify-between mb-2">
-              <div style="font-weight:600; font-size:14px; color:{ps.completed ? '#4caf6a' : 'var(--text)'};">
-                {ps.split_day_name || `Day ${DOW[ps.day_of_week] ?? ps.day_of_week + 1}`}
+              <div style="font-weight:600; font-size:14px; color:{ps.completed ? '#4caf6a' : 'var(--text)'}; display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                {ps.base_session_name ?? ps.split_day_name ?? `Day ${DOW[ps.day_of_week] ?? ps.day_of_week + 1}`}
+                {#if ps.variant}
+                  <span style="display:inline-block; padding:1px 5px; border-radius:8px; background:rgba(232,160,64,0.18); color:var(--accent); font-size:9px; font-weight:700; line-height:1.5;">{ps.variant}</span>
+                {/if}
               </div>
               <span style="font-size:11px; color:var(--text-muted);">{DOW[ps.day_of_week] ?? ''}</span>
             </div>

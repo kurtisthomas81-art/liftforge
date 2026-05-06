@@ -151,11 +151,17 @@
 <svelte:head><title>Program — LiftForge</title></svelte:head>
 
 {#if selectedSession}
+  {@const _drillBase = selectedSession.base_session_name ?? selectedSession.split_day_name ?? ''}
   <!-- Drill-in view -->
   <div class="drill-header">
     <button class="back-btn" on:click={closeDay}>‹</button>
     <div class="drill-title-wrap">
-      <div class="drill-title">{selectedSession.split_day_name || 'Training Day'}</div>
+      <div class="drill-title" style="display:flex; align-items:center; gap:6px;">
+        {selectedSession.base_session_name ?? selectedSession.split_day_name ?? 'Training Day'}
+        {#if selectedSession.variant}
+          <span style="display:inline-block; padding:1px 6px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--accent); font-size:10px; font-weight:700;">{selectedSession.variant}</span>
+        {/if}
+      </div>
       <div class="drill-meta">
         {#if selectedSession.exercises?.length}
           {selectedSession.exercises.length} exercises
@@ -164,15 +170,15 @@
         {/if}
       </div>
     </div>
-    <span class="drill-cat-badge" style="color:{dayCatColor(selectedSession.split_day_name)};border-color:{dayCatColor(selectedSession.split_day_name)}35;background:{dayCatColor(selectedSession.split_day_name)}18">
-      {selectedSession.split_day_name?.split(' ')[0]?.toLowerCase() || 'train'}
+    <span class="drill-cat-badge" style="color:{dayCatColor(_drillBase)};border-color:{dayCatColor(_drillBase)}35;background:{dayCatColor(_drillBase)}18">
+      {_drillBase.split(' ')[0]?.toLowerCase() || 'train'}
     </span>
   </div>
 
   <div class="drill-body">
     {#each (selectedSession.exercises || selectedSession.planned_exercises || []) as ex, i}
       <div class="drill-ex-row">
-        <div class="drill-num" style="background:{dayCatColor(selectedSession.split_day_name)}18;border-color:{dayCatColor(selectedSession.split_day_name)}35;color:{dayCatColor(selectedSession.split_day_name)}">
+        <div class="drill-num" style="background:{dayCatColor(_drillBase)}18;border-color:{dayCatColor(_drillBase)}35;color:{dayCatColor(_drillBase)}">
           {i + 1}
         </div>
         <div class="drill-ex-info">
@@ -285,7 +291,12 @@
         <div class="up-next-body">
           <div>
             <div class="up-next-label">Up Next</div>
-            <div class="up-next-name">{currentDay.split_day_name || 'Training Day'}</div>
+            <div class="up-next-name" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              {currentDay.base_session_name ?? currentDay.split_day_name ?? 'Training Day'}
+              {#if currentDay.variant}
+                <span style="display:inline-block; padding:1px 6px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--accent); font-size:10px; font-weight:700;">{currentDay.variant}</span>
+              {/if}
+            </div>
             <div class="up-next-meta">{activeMeso.sessions_per_week ?? ''} sessions/week</div>
           </div>
           <button class="start-now-btn" on:click|stopPropagation={() => startDay(currentDay)}>Start</button>
@@ -303,19 +314,34 @@
     {/if}
 
     <!-- This week days -->
-    <div class="section-title">This Week</div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+      <div class="section-title" style="margin-bottom:0;">This Week</div>
+      {#if (activeMeso.num_variants ?? 1) > 1}
+        {@const _sessCount = (activeMeso.current_week_sessions || []).length}
+        {@const _wn = activeMeso.current_week}
+        {@const _nv = activeMeso.num_variants}
+        {@const _pattern = Array.from({ length: _sessCount }, (_, i) => String.fromCharCode(65 + (_wn - 1 + i) % _nv)).join('/')}
+        <span style="font-size:10px; color:var(--text-muted); background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:2px 9px;">{_pattern} pattern</span>
+      {/if}
+    </div>
     <div class="days-list">
       {#each (activeMeso.current_week_sessions || []).sort((a,b) => a.day_of_week - b.day_of_week) as ps}
         {@const label = sessionLabel(ps)}
+        {@const _psBase = ps.base_session_name ?? ps.split_day_name ?? ''}
         <div class="day-row" class:is-done={!!ps.session_id}
           on:click={() => openDay(ps)}
           role="button" tabindex="0"
           on:keydown={e => e.key === 'Enter' && openDay(ps)}>
-          <div class="day-badge" style="background:{dayCatColor(ps.split_day_name)}18;border-color:{dayCatColor(ps.split_day_name)}35;color:{dayCatColor(ps.split_day_name)}">
+          <div class="day-badge" style="background:{dayCatColor(_psBase)}18;border-color:{dayCatColor(_psBase)}35;color:{dayCatColor(_psBase)}">
             {ps.session_id ? '✓' : (ps.day_of_week + 1)}
           </div>
           <div class="day-info">
-            <div class="day-name" class:strikethrough={!!ps.session_id}>{ps.split_day_name || 'Training Day'}</div>
+            <div class="day-name" class:strikethrough={!!ps.session_id} style="display:flex; align-items:center; gap:5px;">
+              {_psBase || 'Training Day'}
+              {#if ps.variant}
+                <span style="display:inline-block; padding:1px 5px; border-radius:8px; background:rgba(232,160,64,0.18); color:var(--accent); font-size:9px; font-weight:700; line-height:1.5;">{ps.variant}</span>
+              {/if}
+            </div>
             <div class="day-meta">{DOW[ps.day_of_week]}{label ? ' · ' + label : ''}</div>
           </div>
           <div class="day-chevron">›</div>

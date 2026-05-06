@@ -165,7 +165,12 @@
     {#if pl}
       <div class="selected-card">
         <div class="selected-date">{new Date(dateString(selectedDay) + 'T00:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' })}</div>
-        <div class="selected-name">{pl.split_day_name}</div>
+        <div class="selected-name" style="display:flex; align-items:center; gap:6px;">
+          {pl.base_session_name ?? pl.split_day_name}
+          {#if pl.variant}
+            <span style="display:inline-block; padding:1px 6px; border-radius:10px; background:rgba(232,160,64,0.18); color:var(--accent); font-size:10px; font-weight:700;">{pl.variant}</span>
+          {/if}
+        </div>
         <div class="selected-planned">Planned session</div>
       </div>
     {/if}
@@ -177,7 +182,12 @@
     {#each upcoming as p}
       <div class="upcoming-row">
         <div class="upcoming-info">
-          <div class="upcoming-name">{p.split_day_name}</div>
+          <div class="upcoming-name" style="display:flex; align-items:center; gap:5px;">
+            {p.base_session_name ?? p.split_day_name}
+            {#if p.variant}
+              <span style="display:inline-block; padding:1px 5px; border-radius:8px; background:rgba(232,160,64,0.18); color:var(--accent); font-size:9px; font-weight:700; line-height:1.5;">{p.variant}</span>
+            {/if}
+          </div>
           <div class="upcoming-date">{new Date(p.date + 'T00:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })}</div>
         </div>
         <button class="upcoming-go-btn" on:click={() => goto('/program')}>Go →</button>

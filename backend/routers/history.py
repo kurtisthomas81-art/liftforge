@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
@@ -200,10 +201,15 @@ def calendar_data(
                         except Exception:
                             muscle_focus = []
 
+                _vm = re.match(r'^(.*?)\s+([A-C])$', split_day_name)
+                base_name = _vm.group(1) if _vm else split_day_name
+                variant = _vm.group(2) if (_vm and meso.num_variants > 1) else None
                 planned_out.append({
                     "date": session_date.isoformat(),
                     "planned_session_id": ps.id,
                     "split_day_name": split_day_name,
+                    "base_session_name": base_name,
+                    "variant": variant,
                     "muscle_focus": muscle_focus,
                 })
 
