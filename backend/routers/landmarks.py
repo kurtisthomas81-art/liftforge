@@ -34,6 +34,25 @@ def get_landmarks(session: Session = Depends(get_session)):
     return [_serialize(lm) for lm in session.exec(stmt).all()]
 
 
+@router.get("/{goal}")
+def get_landmarks_for_goal(goal: str, session: Session = Depends(get_session)):
+    stmt = (
+        select(MuscleVolumeLandmark)
+        .where(MuscleVolumeLandmark.user_id == USER_ID)
+        .where(MuscleVolumeLandmark.goal == goal)
+    )
+    rows = session.exec(stmt).all()
+    if not rows:
+        stmt = (
+            select(MuscleVolumeLandmark)
+            .where(MuscleVolumeLandmark.user_id == USER_ID)
+            .where(MuscleVolumeLandmark.goal == "general_fitness")
+        )
+        rows = session.exec(stmt).all()
+    return {lm.muscle: {"mev": lm.mev, "mav_low": lm.mav_low, "mav_high": lm.mav_high, "mrv": lm.mrv}
+            for lm in rows}
+
+
 @router.put("")
 def update_landmarks(entries: list[LandmarkEntry], session: Session = Depends(get_session)):
     for entry in entries:

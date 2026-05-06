@@ -117,7 +117,7 @@ class Mesocycle(SQLModel, table=True):
     goal: str = Field(default="hypertrophy")  # hypertrophy|strength|recomp
     start_date: Optional[str] = Field(default=None)  # ISO date string
     deload_week: int = Field(default=5)
-    periodization_type: str = Field(default="standard")  # standard|linear|dup|block
+    periodization_type: str = Field(default="standard")  # standard|linear|dup|block|double_progression|wave_loading
     num_variants: int = Field(default=2)        # 1=no variation, 2=A/B, 3=A/B/C
     session_counter: int = Field(default=0)     # incremented each time a session is started
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -149,6 +149,7 @@ class PlannedExercise(SQLModel, table=True):
     target_rir: int = Field(default=2)
     notes: str = Field(default="")
     superset_group: Optional[int] = Field(default=None)
+    set_technique: str = Field(default="straight")  # straight|drop|rest_pause|myorep
 
 
 # ── Phase 3 tables ─────────────────────────────────────────────────────────────

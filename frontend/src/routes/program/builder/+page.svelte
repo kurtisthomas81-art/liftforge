@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
   import { dndzone } from 'svelte-dnd-action';
+  import VolumeGauge from '$lib/VolumeGauge.svelte';
 
   let step = 1;
   let loading = true;
@@ -131,12 +132,33 @@
     customDayExercises = [...customDayExercises];
   }
 
-  function cycleSetType(dayIdx, exIdx) {
-    const types = ['straight', 'rest_pause', 'drop'];
-    const ex = customDayExercises[dayIdx].exercises[exIdx];
-    ex.set_type = types[(types.indexOf(ex.set_type || 'straight') + 1) % types.length];
+  function setTechniqueFor(dayIdx, exIdx, technique) {
+    customDayExercises[dayIdx].exercises[exIdx].set_type = technique;
     customDayExercises = [...customDayExercises];
   }
+
+  function buildExerciseIndex(list) {
+    const idx = {};
+    for (const ex of list) {
+      idx[ex.id] = {
+        primary_muscles: Array.isArray(ex.primary_muscles) ? ex.primary_muscles : [],
+        secondary_muscles: Array.isArray(ex.secondary_muscles) ? ex.secondary_muscles : [],
+      };
+    }
+    return idx;
+  }
+
+  function buildGaugeExercises(mode, preview, custom) {
+    if (mode === 'auto') return (preview || []).flatMap(d => d.exercises ?? []);
+    return (custom || []).flatMap(d => d.exercises ?? []);
+  }
+
+  $: if (step >= 4 && selectedGoal && selectedGoal !== landmarksGoal) {
+    api.landmarks.forGoal(selectedGoal).then(d => { landmarks = d; landmarksGoal = selectedGoal; }).catch(() => {});
+  }
+  $: if (step === 5) gaugeExpanded = true;
+  $: allExercisesIndex = buildExerciseIndex(allExercises);
+  $: gaugeExercises = buildGaugeExercises(sessionMode, previewData, customDayExercises);
 
   function initCustomDays() {
     const days = isCustom ? customDays : (selectedSplit?.days ?? []);
@@ -224,6 +246,13 @@
     await refreshPrescriptions();
   }
 
+  // Volume gauge
+  let landmarks = {};
+  let landmarksGoal = null;
+  let gaugeExpanded = false;
+  let allExercisesIndex = {};
+  let gaugeExercises = [];
+
   // Swap modal
   let showSwapModal = false;
   let swapDayIdx = null;
@@ -250,10 +279,19 @@
     { key: 'recomp',          label: 'Recomp',          desc: 'Build muscle, lose fat — 10-15 reps, RIR 2-3' },
   ];
   const PERIODIZATIONS = [
-    { key: 'standard', label: 'Standard',  desc: 'Fixed rep ranges, volume progresses week to week' },
-    { key: 'linear',   label: 'Linear',    desc: 'High reps week 1 descend to low reps by final week' },
-    { key: 'dup',      label: 'DUP',       desc: 'Rep ranges rotate session to session (hypertrophy / strength / volume)' },
-    { key: 'block',    label: 'Block',     desc: 'Accumulation → Intensification → Peak phases' },
+    { key: 'standard',          label: 'Standard',           badge: null,            desc: 'Volume grows week to week. Rep ranges stay fixed.' },
+    { key: 'double_progression',label: 'Double Progression', badge: null,            desc: 'Hit the top of your rep range, then add weight next session.' },
+    { key: 'linear',            label: 'Linear',             badge: null,            desc: 'Reps start high, descend to low reps by final week.' },
+    { key: 'wave_loading',      label: 'Wave Loading',       badge: 'Intermediate+', desc: 'Heavy / moderate / light weeks repeat in a 3-week wave.' },
+    { key: 'dup',               label: 'DUP',                badge: 'Intermediate+', desc: 'Rep zones rotate each session: hypertrophy / strength / volume.' },
+    { key: 'block',             label: 'Block',              badge: 'Advanced',      desc: 'Accumulation → Intensification → Peak phases.' },
+  ];
+
+  const SET_TECHNIQUES = [
+    { key: 'straight',   label: 'Straight',    desc: 'Standard sets with full rest between' },
+    { key: 'drop',       label: 'Drop',        desc: 'Reduce weight each mini-set, no rest between' },
+    { key: 'rest_pause', label: 'Rest-Pause',  desc: 'Brief 10–15s pause mid-set, then continue' },
+    { key: 'myorep',     label: 'Myo-Reps',   desc: 'Activation set to near failure, then 3–5 rep clusters with short rest' },
   ];
 
   onMount(async () => {
@@ -344,6 +382,9 @@
   }
 
   async function goToReview() {
+    if (allExercises.length === 0) {
+      try { allExercises = await api.exercises.list(); } catch (e) { /* ignore */ }
+    }
     if (sessionMode === 'custom_slots') {
       initCustomDays();
       step = 5;
@@ -636,23 +677,24 @@
 
       <!-- Periodization -->
       <div style="margin-bottom:20px;">
-        <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Periodization Style</label>
+        <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Progression Style</label>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
           {#each PERIODIZATIONS as p}
-            {@const locked = experienceLevel === 'beginner' && (p.key === 'dup' || p.key === 'block')}
             <button
-              on:click={() => { if (!locked) selectedPeriodization = p.key; }}
-              title={locked ? 'Unlocks at Intermediate level' : ''}
-              style="text-align:left; padding:12px; border-radius:6px; border:2px solid {selectedPeriodization === p.key ? 'var(--primary)' : 'var(--border)'}; background:{selectedPeriodization === p.key ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:{locked ? 'var(--text-faint)' : selectedPeriodization === p.key ? 'var(--primary)' : 'var(--text)'}; cursor:{locked ? 'not-allowed' : 'pointer'}; transition:all 0.15s; opacity:{locked ? 0.5 : 1}; position:relative;"
+              on:click={() => selectedPeriodization = p.key}
+              style="text-align:left; padding:12px; border-radius:6px; border:2px solid {selectedPeriodization === p.key ? 'var(--primary)' : 'var(--border)'}; background:{selectedPeriodization === p.key ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:{selectedPeriodization === p.key ? 'var(--primary)' : 'var(--text)'}; cursor:pointer; transition:all 0.15s; position:relative;"
             >
-              <div style="font-weight:700; font-size:13px; margin-bottom:3px;">{p.label}{locked ? ' 🔒' : ''}</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                <span style="font-weight:700; font-size:13px;">{p.label}</span>
+                {#if p.badge}
+                  <span style="font-size:9px; font-weight:700; padding:1px 5px; border-radius:8px; background:rgba(124,140,248,0.15); color:#7c8cf8; border:1px solid rgba(124,140,248,0.3); flex-shrink:0;">{p.badge}</span>
+                {/if}
+              </div>
               <div style="font-size:11px; opacity:0.75; line-height:1.4;">{p.desc}</div>
             </button>
           {/each}
         </div>
-        {#if experienceLevel === 'beginner'}
-          <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">DUP & Block unlock at Intermediate. Linear is recommended to build your base.</div>
-        {/if}
+        <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">5/3/1 and 5×5 are available as ready-made programs in the Library.</div>
       </div>
 
       <!-- Weeks -->
@@ -702,6 +744,14 @@
     </div>
 
   {:else if step === 5}
+    <!-- Volume gauge (shown above step card) -->
+    <VolumeGauge
+      exercises={gaugeExercises}
+      exerciseIndex={allExercisesIndex}
+      landmarks={landmarks}
+      bind:expanded={gaugeExpanded}
+    />
+
     <!-- Step 5: Review exercises (was step 4) -->
     <div class="card">
       <div class="flex items-center gap-3 mb-4">
@@ -771,44 +821,49 @@
                   {@const isInSuperset = ex.superset_group != null}
                   {@const exIdx = day.exercises.indexOf(ex)}
                   {@const isPairStart = isInSuperset && (exIdx === 0 || day.exercises[exIdx-1]?.superset_group !== ex.superset_group)}
-                  <div style="display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border-faint); border-left:3px solid {isInSuperset ? 'var(--primary)' : 'transparent'}; background:{isInSuperset ? 'rgba(232,160,64,0.04)' : 'var(--surface)'};">
-                    <!-- Drag handle -->
-                    <span style="color:var(--text-faint); font-size:14px; cursor:grab; flex-shrink:0; opacity:0.4; line-height:1; padding:0 2px;" title="Drag to reorder">⠿</span>
-                    <div style="flex:1; min-width:0;">
-                      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                        <span style="font-size:13px; font-weight:500; color:var(--text);">{ex.exercise_name}</span>
-                        {#if isPairStart}
-                          <span style="font-size:9px; font-weight:700; color:var(--primary); background:rgba(232,160,64,0.15); border:1px solid rgba(232,160,64,0.3); border-radius:3px; padding:1px 5px;">SS</span>
-                        {/if}
-                        {#if ex.set_type && ex.set_type !== 'straight'}
-                          <span style="font-size:9px; font-weight:700; color:#7c8cf8; background:rgba(124,140,248,0.12); border:1px solid rgba(124,140,248,0.3); border-radius:3px; padding:1px 5px; text-transform:uppercase;">{ex.set_type.replace('_', ' ')}</span>
+                  <div style="border-bottom:1px solid var(--border-faint); border-left:3px solid {isInSuperset ? 'var(--primary)' : 'transparent'}; background:{isInSuperset ? 'rgba(232,160,64,0.04)' : 'var(--surface)'};">
+                    <!-- Main row -->
+                    <div style="display:flex; align-items:center; gap:8px; padding:10px 14px 6px;">
+                      <span style="color:var(--text-faint); font-size:14px; cursor:grab; flex-shrink:0; opacity:0.4; line-height:1; padding:0 2px;" title="Drag to reorder">⠿</span>
+                      <div style="flex:1; min-width:0;">
+                        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                          <span style="font-size:13px; font-weight:500; color:var(--text);">{ex.exercise_name}</span>
+                          {#if isPairStart}
+                            <span style="font-size:9px; font-weight:700; color:var(--primary); background:rgba(232,160,64,0.15); border:1px solid rgba(232,160,64,0.3); border-radius:3px; padding:1px 5px;">SS</span>
+                          {/if}
+                        </div>
+                        {#if ex.sub_pattern}
+                          <div style="font-size:10px; color:var(--text-faint); margin-top:2px; text-transform:capitalize;">{ex.sub_pattern.replace(/_/g, ' ')}</div>
                         {/if}
                       </div>
-                      {#if ex.sub_pattern}
-                        <div style="font-size:10px; color:var(--text-faint); margin-top:2px; text-transform:capitalize;">{ex.sub_pattern.replace(/_/g, ' ')}</div>
+                      <span style="font-size:12px; font-weight:600; color:var(--primary); white-space:nowrap; flex-shrink:0;">
+                        {ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max}
+                        <span style="font-weight:400; color:var(--text-muted);">@RIR{ex.target_rir}</span>
+                      </span>
+                      {#if exIdx < (day.exercises.length - 1)}
+                        <button
+                          on:click={() => toggleSuperset(dayIdx, exIdx)}
+                          title="{isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'Remove superset' : 'Superset with next'}"
+                          style="background:none; border:1px solid {isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'var(--primary)' : 'var(--border)'}; border-radius:4px; color:{isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'var(--primary)' : 'var(--text-faint)'}; cursor:pointer; font-size:11px; padding:2px 5px; flex-shrink:0; line-height:1.2;"
+                        >SS</button>
                       {/if}
-                    </div>
-                    <span style="font-size:12px; font-weight:600; color:var(--primary); white-space:nowrap; flex-shrink:0;">
-                      {ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max}
-                      <span style="font-weight:400; color:var(--text-muted);">@RIR{ex.target_rir}</span>
-                    </span>
-                    {#if exIdx < (day.exercises.length - 1)}
                       <button
-                        on:click={() => toggleSuperset(dayIdx, exIdx)}
-                        title="{isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'Remove superset' : 'Superset with next'}"
-                        style="background:none; border:1px solid {isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'var(--primary)' : 'var(--border)'}; border-radius:4px; color:{isInSuperset && day.exercises[exIdx+1]?.superset_group === ex.superset_group ? 'var(--primary)' : 'var(--text-faint)'}; cursor:pointer; font-size:11px; padding:2px 5px; flex-shrink:0; line-height:1.2;"
-                      >SS</button>
-                    {/if}
-                    <button
-                      on:click={() => cycleSetType(dayIdx, exIdx)}
-                      title="Set type (click to cycle)"
-                      style="background:none; border:1px solid var(--border); border-radius:4px; color:var(--text-faint); cursor:pointer; font-size:10px; padding:2px 5px; flex-shrink:0; line-height:1.2; min-width:28px; text-align:center;"
-                    >{ex.set_type === 'rest_pause' ? 'RP' : ex.set_type === 'drop' ? 'DS' : 'ST'}</button>
-                    <button
-                      on:click={() => removeExerciseFromDay(dayIdx, exIdx)}
-                      style="background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:18px; line-height:1; padding:0 2px; flex-shrink:0; opacity:0.6;"
-                      title="Remove"
-                    >×</button>
+                        on:click={() => removeExerciseFromDay(dayIdx, exIdx)}
+                        style="background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:18px; line-height:1; padding:0 2px; flex-shrink:0; opacity:0.6;"
+                        title="Remove"
+                      >×</button>
+                    </div>
+                    <!-- Technique chips row -->
+                    <div style="display:flex; gap:4px; padding:0 14px 8px 38px;">
+                      {#each SET_TECHNIQUES as t}
+                        {@const active = (ex.set_type || 'straight') === t.key}
+                        <button
+                          on:click={() => setTechniqueFor(dayIdx, exIdx, t.key)}
+                          title={t.desc}
+                          style="padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; border:1px solid {active ? 'var(--primary)' : 'var(--border)'}; background:{active ? 'rgba(232,160,64,0.15)' : 'transparent'}; color:{active ? 'var(--primary)' : 'var(--text-faint)'}; cursor:pointer; transition:all 0.1s; line-height:1.5;"
+                        >{t.label}</button>
+                      {/each}
+                    </div>
                   </div>
                 {/each}
               </div>

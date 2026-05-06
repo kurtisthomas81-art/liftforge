@@ -570,7 +570,12 @@
               <!-- svelte-ignore a11y-no-static-element-interactions -->
               <div class="plan-ex" on:click={() => quickFocusExercise(pe.name)}>
                 <span class="plan-ex-name">{pe.name}</span>
-                <span class="plan-ex-target">{pe.sets}×{pe.reps_min}–{pe.reps_max}</span>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span class="plan-ex-target">{pe.sets}×{pe.reps_min}–{pe.reps_max}</span>
+                  {#if pe.set_technique && pe.set_technique !== 'straight'}
+                    <span style="font-size:9px; font-weight:700; padding:1px 5px; border-radius:8px; background:rgba(124,140,248,0.15); color:#7c8cf8; border:1px solid rgba(124,140,248,0.3); text-transform:capitalize;">{pe.set_technique.replace('_', '-')}</span>
+                  {/if}
+                </div>
               </div>
             {/each}
           </div>

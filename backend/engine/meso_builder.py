@@ -749,6 +749,16 @@ def generate_mesocycle(
                 elif periodization_type == "block":
                     phase = _block_phase(week_num, weeks)
                     reps_min, reps_max, rir, session_label = _BLOCK_PHASES[phase]
+                elif periodization_type == "double_progression":
+                    reps_min, reps_max = _rep_range_for_goal(goal, mechanics)
+                    progress = (week_num - 1) / max(weeks - 1, 1)
+                    rir = max(1, round(3 - progress * 2))
+                elif periodization_type == "wave_loading":
+                    wave = (week_num - 1) % 3
+                    _s = _rep_range_for_goal("strength", mechanics)
+                    _g = _rep_range_for_goal(goal, mechanics)
+                    _h = _rep_range_for_goal("hypertrophy", mechanics)
+                    reps_min, reps_max, rir = [(_s[0], _s[1], 1), (_g[0], _g[1], 2), (_h[0], _h[1], 3)][wave]
                 else:
                     reps_min, reps_max = _rep_range_for_goal(goal, mechanics)
                     rir = _rir_for_goal(goal, is_deload)
@@ -766,6 +776,7 @@ def generate_mesocycle(
                     "rest_seconds": rest_seconds,
                     "notes": session_label,
                     "superset_group": ex.get("superset_group"),
+                    "set_technique": ex.get("set_type", "straight"),
                 })
                 order += 1
 

@@ -96,6 +96,7 @@ export const api = {
   landmarks: {
     get: () => request('GET', '/landmarks'),
     update: (data) => request('PUT', '/landmarks', data),
+    forGoal: (goal) => request('GET', `/landmarks/${goal}`),
   },
 
   volume: {
