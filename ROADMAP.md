@@ -169,6 +169,42 @@ Rewrote `meso_builder.py` and `generate_session()` to produce physiologically so
 
 ---
 
+### 6E — Mesocycle Engine V2 + Custom Builder ✅ COMPLETE
+
+Complete rewrite of slot selection, rep/set prescriptions, and A/B/C variant system. New custom builder UI (Caliber/RP-style).
+
+#### Engine fixes & data layer
+
+| Fix | Description |
+|-----|-------------|
+| ~~exercises_db missing fields~~ | `movement_pattern`, `force`, `secondary_muscles` were never included in the exercises dict — silently broke all blocking/balance rules. Fixed. |
+| ~~`sub_pattern` field~~ | New field on `Exercise` model. Computed from `movement_pattern` + `force` + `primary_muscles`. Drives slot assignment and prescriptions. Backfilled on startup. |
+| ~~Abs excluded from auto-selection~~ | `CORE_MUSCLES` constant; abs/core never fill a primary slot in any split |
+| ~~Pattern × Goal rep/set matrix~~ | `PATTERN_PRESCRIPTION`: hip/knee dominant → 5–10 reps heavy; push/pull → 8–12; isolation → 12–20. Beginners get conservative RIR end. Sets ramp MEV→MRV across weeks. |
+| ~~Slot-based session structure~~ | `SESSION_SLOT_TEMPLATES` covers all split types (full_body, push, pull, legs, lower, upper, chest, back, shoulders, arms). Axial-load rule enforced structurally — one knee_dominant and one hip_dominant max per template. |
+| ~~A/B/C variant system~~ | `num_variants` (1/2/3) on Mesocycle; `session_counter` increments on each start; variant letter cycles A→B→C. A=horizontal push/pull, B=vertical, C=horizontal with different exercise index. |
+| ~~`sub_pattern` in exercises API~~ | Added to `_serialize()` and `?sub_pattern=` query filter for client-side picker |
+| ~~Validate-slots endpoint~~ | `POST /api/programs/mesocycles/validate-slots` — returns per-slot prescriptions, push/pull balance, axial-load warnings, estimated session time |
+| ~~Preview-custom-slots endpoint~~ | `POST /api/programs/mesocycles/preview-custom-slots` — returns exercise assignments for user-defined slot lists; honors pinned exercise IDs |
+
+#### Custom mesocycle builder wizard (5-step)
+
+| Feature | Description |
+|---------|-------------|
+| ~~Step 3: Variation picker~~ | A / A-B / A-B-C rotation; options bounded by days/week (2-day can't pick A/B/C) |
+| ~~Step 3: Mode toggle~~ | Auto (engine picks) vs Custom (user builds) |
+| ~~Step 5 Auto mode~~ | Engine auto-populates exercises; variant badge per day; swap any exercise before generating |
+| ~~Step 5 Custom mode — empty start~~ | Days open empty; user builds from scratch (Caliber/RP style) |
+| ~~Add exercise picker~~ | Searchable bottom sheet with muscle filters; shows `sub_pattern` for context |
+| ~~Drag-to-reorder~~ | `svelte-dnd-action` — touch + mouse; ⠿ grip handle; prescriptions refresh after reorder |
+| ~~Superset pairing~~ | SS button pairs adjacent exercises; gold left border + SS badge; time estimate accounts for reduced rest |
+| ~~Set type toggle~~ | ST / RP / DS badge per exercise; cycles on tap |
+| ~~Live time estimate~~ | Per-day `~N min` in header; computed client-side from sub_pattern rest times (high 3 min / medium 2 min / low 90 sec); 15% reduction for supersets |
+| ~~Delete variant days~~ | × on each day card; re-letters remaining A/B/C; payload `num_variants` matches actual count |
+| ~~superset_group passthrough~~ | Flows from wizard through `custom_slot_sessions` → `generate_mesocycle` → `PlannedExercise` |
+
+---
+
 ## 🔮 Phase 7 — Intelligence & Automation
 
 | Feature | Status | Description |
