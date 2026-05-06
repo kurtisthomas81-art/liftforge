@@ -75,7 +75,7 @@ frontend/
 
 ### Backend
 
-**Migrations** — all new columns go in `database.py` `migrate_db()` as `("table", "column", "TYPE DEFAULT x")` tuples. Never write raw `ALTER TABLE` anywhere else. SQLite `ADD COLUMN` is idempotent via the PRAGMA check pattern already in place.
+**Migrations** — all new columns go in `database.py` `migrate_db()` as `("table", "column", "TYPE DEFAULT x")` tuples. Never write raw `ALTER TABLE` anywhere else. SQLite `ADD COLUMN` is idempotent via the PRAGMA check pattern already in place. SQLModel table names are the class name fully lowercased with no separators: `MuscleVolumeLandmark` → `musclevolumelandmark`, `WorkoutSession` → `workoutsession`, etc.
 
 **Single user** — `USER_ID = 1` is hardcoded throughout every router. No auth system.
 
@@ -87,27 +87,38 @@ frontend/
 5. `routers/exercises.py` — include in the serializer response
 6. `routers/programs.py` → `exercises_db` dict — include if used in mesocycle building
 
-**Startup seeding** — exercises, splits, and landmarks are seeded only if the table is empty. Backfills run every startup (guarded by a no-op check). If you add a new backfill, follow the `_backfill_sub_patterns` pattern.
+**Startup seeding** — exercises, splits, and landmarks are seeded only if the table is empty. Backfills run every startup (guarded by a no-op check). Existing backfill functions in `main.py`: `_backfill_sub_patterns`, `_backfill_secondary_muscles`, `_backfill_landmark_goals`. Add new backfills following the same pattern.
 
 ### Volume / Landmark System
 
-`MuscleVolumeLandmark` stores `(mev, mav_low, mav_high, mrv)` per muscle per user, keyed by `goal` (hypertrophy / general_fitness / strength / recomp). The active mesocycle's `goal` field determines which landmark row is used for volume chart targets.
+`MuscleVolumeLandmark` stores `(mev, mav_low, mav_high, mrv)` per muscle per user, keyed by `goal`. The DB holds 48 rows (12 muscles × 4 goals). The active mesocycle's `goal` field determines which set of targets the volume chart uses. `_get_landmarks()` in `volume.py` filters by goal and falls back to `hypertrophy` if no rows exist for the requested goal.
+
+Goal calibration (sets/week targets):
+
+| Goal | Audience | MEV | MAV sweet spot | MRV |
+|---|---|---|---|---|
+| `general_fitness` | Athletic & functional — **default** | 3–4 | 6–12 | 12–16 |
+| `hypertrophy` | Maximize muscle size | 6–10 | 12–22 | 20–26 |
+| `strength` | Raw strength, compound focus | 2–4 | 4–8 | 8–14 |
+| `recomp` | Build muscle, lose fat | 5–7 | 8–16 | 16–22 |
 
 `_aggregate_sets_by_muscle()` in `routers/volume.py` is the single source of truth for set counting:
 - Warm-up sets (`set_type == "warmup"`) are excluded
 - Primary muscles count as **1.0 set** per set performed
 - Secondary muscles (`exercise.secondary_muscles` JSON field) count as **0.5 sets**
-- Returns a `dict[str, float]` — display values may be fractional
+- Returns `dict[str, float]` — values are rounded to 1 decimal in the API response
 
-The weekly volume chart (`/program` page) shows 7 muscles: `chest, back, quads, hamstrings, shoulders, biceps, triceps`. The `lats` muscle is tracked separately in the DB but not shown in the chart.
+The weekly volume chart (`/program` page) shows 7 muscles: `chest, back, quads, hamstrings, shoulders, biceps, triceps`. The `lats` muscle is tracked in the DB but not shown in the chart.
 
 ### Mesocycle Engine
 
 - `sub_pattern` drives slot assignment and rep/set prescriptions (not `movement_pattern`)
-- `PATTERN_PRESCRIPTION` in `meso_builder.py` is the source of truth for sets/reps/RIR by pattern and goal
+- `PATTERN_PRESCRIPTION` in `meso_builder.py` is the source of truth for sets/reps/RIR by pattern and goal — all 4 goals (`hypertrophy`, `general_fitness`, `strength`, `recomp`) are present; unknown goals fall back to `hypertrophy`
+- `_DUP_PATTERNS` defines the rotating rep ranges for DUP periodization per goal
 - `SESSION_SLOT_TEMPLATES` defines default slot order per split type
 - Core/abs are never auto-populated in primary slots (`CORE_MUSCLES` constant)
 - The A/B rotation (`num_variants=2`) produces an A/B/A → B/A/B pattern across 2-week blocks, giving each session type 1.5× weekly frequency on average
+- `general_fitness` is the default goal in the mesocycle builder wizard
 
 ### Frontend (Svelte 4)
 
