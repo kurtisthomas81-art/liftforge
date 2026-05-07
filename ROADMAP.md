@@ -205,6 +205,49 @@ Complete rewrite of slot selection, rep/set prescriptions, and A/B/C variant sys
 
 ---
 
+### 6F — Volume Gauge, Progression Schemes & Builder UX ✅ COMPLETE
+
+Real-time volume feedback, two new periodization styles, set techniques, and builder quality-of-life polish.
+
+#### Volume Gauge
+
+| Feature | Description |
+|---------|-------------|
+| ~~Real-time Volume Check~~ | Collapsible "Volume Check" card above the step 5 review — shows per-muscle set count vs. goal's MEV/MAV/MRV thresholds; color-coded (red/green/amber/orange) |
+| ~~Frequency-weighted gauge~~ | A/B rotation with 3 training days counts each unique session 1.5×/week so gauge reflects actual weekly sets, not per-session sets |
+| ~~Calves & abs always visible~~ | Fixed bug where muscles with 0 sets were hidden; all muscles with landmark data show even at 0% |
+| ~~Compound secondary muscles seeded~~ | abs added to deadlift / squat / OHP / pull-up variants; calves added to squat / leg press / lunge variants; startup backfill merges into already-populated arrays |
+| ~~`GET /landmarks/{goal}` endpoint~~ | New route returns `{ muscle: { mev, mav_low, mav_high, mrv } }` for a given goal; used by gauge without extra round-trips |
+
+#### Progression Schemes
+
+| Feature | Description |
+|---------|-------------|
+| ~~Double Progression~~ | Rep range fixed across all weeks; RIR descends 3→1 linearly; "hit the top of your range → add weight" model — most approachable for beginners/intermediates |
+| ~~Wave Loading~~ | 3-week repeating wave: heavy (strength reps, RIR 1) → moderate → volume (hypertrophy reps, RIR 3); models 5/3/1 heavy/medium/light structure |
+| ~~Remove experience locks~~ | DUP and Block no longer locked for beginners; replaced with "Intermediate+" / "Advanced" info badges; all 6 schemes accessible to anyone |
+
+#### Set Techniques A La Carte
+
+| Feature | Description |
+|---------|-------------|
+| ~~Chip selector in builder~~ | Straight / Drop / Rest-Pause / Myo-Reps chip row per exercise; replaces cycling ST/RP/DS button; active chip highlighted in gold |
+| ~~`set_technique` on PlannedExercise~~ | New DB field (`TEXT DEFAULT 'straight'`); migration-safe; persists through mesocycle generation |
+| ~~Fixed set_technique passthrough bug~~ | `set_type` was captured from the frontend slot payload but never written to `PlannedExercise`; now passed correctly through `meso_builder.py` |
+| ~~Technique badge in logger~~ | When `set_technique` is not straight, a badge shows on the exercise header in the planned session view |
+
+#### Builder UX Polish
+
+| Feature | Description |
+|---------|-------------|
+| ~~Editable sets/reps in custom mode~~ | Sets, reps min/max, and RIR are inline number inputs in step 5 exercise cards; gauge responds immediately as values change |
+| ~~refreshPrescriptions preserves edits~~ | After adding a new exercise, existing exercises retain their user-tuned sets/reps; only the new exercise receives fresh prescriptions |
+| ~~A/B rotation UX fix~~ | Full-body splits with A/B rotation show exactly 2 session cards (not 3); PPL-style splits always show all days; variant picker hidden in custom mode |
+| ~~Unified A/B rotation display~~ | All 6 screens (home, program, program detail, planned session, calendar ×2) show stripped base name + gold variant badge pill ("Full Body" + "A") instead of raw "Full Body A" |
+| ~~Rotation pattern pill~~ | Program page "This Week" section shows "A/B/A pattern" or "B/A/B pattern" pill computed from current week number |
+
+---
+
 ## 🔮 Phase 7 — Intelligence & Automation
 
 | Feature | Status | Description |
