@@ -151,4 +151,10 @@ export const api = {
     delete: (id) => request('DELETE', `/injuries/${id}`),
     affectedExercises: () => request('GET', '/injuries/affected-exercises'),
   },
+
+  liftsaur: {
+    getToken: () => request('GET', '/liftsaur/token'),
+    setToken: (token) => request('PUT', '/liftsaur/token', { token }),
+    sync: () => request('POST', '/liftsaur/sync'),
+  },
 };

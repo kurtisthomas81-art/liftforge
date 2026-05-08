@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import '../app.css';
   import { activeSession, refreshActiveSession, refreshProfile, getElapsed } from '$lib/stores.js';
+  import HexMark from '$lib/HexMark.svelte';
 
   let elapsed = '0:00';
   let intervalId;
@@ -81,7 +82,12 @@
 
 <div class="page-wrap">
   <header class="app-header">
-    <span class="app-header-title">LiftForge</span>
+    <a href="/" class="wordmark">
+      <HexMark size={30} sceneOpacity={0.52}/>
+      <div class="wordmark-text">
+        <span class="wordmark-lift">LIFT</span><span class="wordmark-forge">Forge</span>
+      </div>
+    </a>
     <a href="/settings" class="settings-btn" class:active={currentPath === '/settings'} title="Settings">⚙</a>
   </header>
   <main class="main-content">
@@ -145,12 +151,30 @@
     background: var(--surface, #111);
     border-bottom: 1px solid rgba(255,255,255,0.06);
   }
-  .app-header-title {
-    font-size: 13px;
+  .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    text-decoration: none;
+  }
+  .wordmark-text {
+    line-height: 1;
+  }
+  .wordmark-lift {
+    font-family: 'DM Sans', sans-serif;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    color: var(--muted);
+    font-size: 13px;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
+    color: var(--text, #f8f8ff);
+  }
+  .wordmark-forge {
+    font-family: 'DM Serif Display', serif;
+    font-style: italic;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    color: var(--accent, #e8365d);
+    margin-left: 1px;
   }
   .settings-btn {
     font-size: 18px;

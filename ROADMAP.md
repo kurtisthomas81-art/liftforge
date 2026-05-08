@@ -24,7 +24,7 @@ Repo: https://github.com/kurtisthomas81-art/liftforge
   - 3-day: Full Body 3x, PPL, Arnold, Upper/Lower/FB
   - 4-day: Upper/Lower 2x ⭐, PHUL, PPL+FB, Bro 4-Day
   - 5-day: ULPPL ⭐, PHAT, Bro 5-Day
-- Mesocycle builder wizard (4 steps: days → split → goal → review exercises)
+- Mesocycle builder wizard (5 steps: days → split → goal + periodization + duration → variation mode → review exercises)
 - Hybrid exercise selection: app suggests, user swaps before confirming
 - Volume landmarks per muscle: MEV / MAV / MRV (RP methodology, user-editable)
 - Week-over-week set progression (MEV → MRV linear accumulation)
@@ -268,7 +268,7 @@ Real-time volume feedback, two new periodization styles, set techniques, and bui
     routers/       14 router files
     seed_data.py   108 exercises + 13 splits + landmarks
   frontend/        SvelteKit (static adapter) + Chart.js
-    src/routes/    16 pages
+    src/routes/    19 pages
   docker-compose.yml
   data/            SQLite DB persisted here (mount on Unraid)
 ```
@@ -330,7 +330,7 @@ cd /mnt/user/appdata/liftforge && git pull && docker compose up -d --build
 | Users | Single user (user_id=1), FK-ready | Self-hosted, no auth complexity |
 | DB | SQLite | Single file, zero config, easy backup |
 | Volume metric | Sets per muscle (not tonnage) | Matches RP methodology |
-| Olllama model | 8B (llama3.1:8b) | Fast on home hardware |
+| Ollama model | 8B (llama3.1:8b) | Fast on home hardware |
 | Nutrition | Separate app | User decision |
 | Calorie tracking | Excluded | User decision |
 | CSS | Custom, no framework | Apex theme (#0a0a10 bg, #e8365d accent, DM Serif Display) |

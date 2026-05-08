@@ -97,8 +97,8 @@
             </div>
           {/if}
         {/each}
-        <div style="font-size:10px; color:var(--text-faint); margin-top:4px; border-top:1px solid var(--border); padding-top:8px;">
-          Bar fills to MRV (max recoverable). Hover each row for MEV / MAV / MRV numbers. Secondary muscles count as 0.5 sets.
+        <div style="font-size:10px; color:var(--text-faint); margin-top:4px; border-top:1px solid var(--border); padding-top:8px; line-height:1.7;">
+          <span style="color:var(--text-muted);">MEV</span> = floor &nbsp;·&nbsp; <span style="color:var(--text-muted);">MAV</span> = target zone &nbsp;·&nbsp; <span style="color:var(--text-muted);">MRV</span> = ceiling &nbsp;·&nbsp; bar fills to MRV. Secondary muscles count as 0.5 sets.
         </div>
       {/if}
     </div>

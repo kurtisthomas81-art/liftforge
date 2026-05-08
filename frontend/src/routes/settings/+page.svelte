@@ -111,8 +111,8 @@
       landmarks = (await api.landmarks.get()).map(lm => ({ ...lm }));
     } catch {}
     try {
-      const r = await fetch('/api/liftsaur/token');
-      if (r.ok) { const d = await r.json(); liftsaurConnected = d.connected; }
+      const d = await api.liftsaur.getToken();
+      liftsaurConnected = d.connected;
     } catch {}
     try { injuries = await api.injuries.list(); } catch {}
   });
@@ -183,11 +183,7 @@
   async function saveLiftsaurToken() {
     savingToken = true;
     try {
-      await fetch('/api/liftsaur/token', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: liftsaurToken })
-      });
+      await api.liftsaur.setToken(liftsaurToken);
       liftsaurConnected = true; liftsaurToken = '';
     } catch {}
     savingToken = false;
@@ -196,19 +192,13 @@
   async function syncLiftosaur() {
     syncing = true; syncResult = null; syncError = null;
     try {
-      const res = await fetch('/api/liftsaur/sync', { method: 'POST' });
-      if (!res.ok) { const t = await res.text(); throw new Error(t); }
-      syncResult = await res.json();
+      syncResult = await api.liftsaur.sync();
     } catch (e) { syncError = e.message || 'Sync failed'; }
     syncing = false;
   }
 
   async function disconnectLiftosaur() {
-    await fetch('/api/liftsaur/token', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: '' })
-    });
+    try { await api.liftsaur.setToken(''); } catch {}
     liftsaurConnected = false; syncResult = null; syncError = null;
   }
 </script>
@@ -407,16 +397,16 @@
 {#if landmarks.length > 0}
   <div class="settings-section">
     <div class="section-title">Volume Landmarks</div>
-    <p class="section-desc">MEV · MAV · MRV — sets per week per muscle group.</p>
+    <p class="section-desc">Sets per week per muscle group. <span class="landmark-legend">MEV = floor · MAV = target zone · MRV = ceiling</span></p>
     <div class="landmarks-wrap">
       <table class="landmarks-table">
         <thead>
           <tr>
             <th>Muscle</th>
-            <th>MEV</th>
-            <th>MAV Lo</th>
-            <th>MAV Hi</th>
-            <th>MRV</th>
+            <th title="Minimum Effective Volume — floor">MEV</th>
+            <th title="Minimum Adaptive Volume — target zone low">MAV Lo</th>
+            <th title="Minimum Adaptive Volume — target zone high">MAV Hi</th>
+            <th title="Maximum Recoverable Volume — ceiling">MRV</th>
           </tr>
         </thead>
         <tbody>
@@ -600,4 +590,9 @@
   .landmarks-table td { padding:4px; }
   .landmarks-table input { width:50px; text-align:center; }
   .mt-3 { margin-top:12px; }
+  .landmark-legend {
+    display:inline-block; margin-top:3px;
+    font-size:10px; color:var(--muted); letter-spacing:0.03em;
+    opacity:0.8;
+  }
 </style>
