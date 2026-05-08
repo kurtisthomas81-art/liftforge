@@ -8,7 +8,7 @@ COPY package.json .
 RUN npm install
 
 COPY . .
-RUN python3 generate_icons.py
+RUN node generate_icons.js
 RUN npm run build
 
 # Production image
