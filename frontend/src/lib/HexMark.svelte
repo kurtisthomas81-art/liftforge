@@ -3,7 +3,7 @@
   export let sceneOpacity = 0.38;
   export let heroMode = false;
 
-  $: cx = 50, cy = 50, R = 46;
+  const cx = 50, cy = 50, R = 46;
 
   function hexPoints(r) {
     return Array.from({length: 6}, (_, i) => {
