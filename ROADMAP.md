@@ -248,13 +248,55 @@ Real-time volume feedback, two new periodization styles, set techniques, and bui
 
 ---
 
-## 🔮 Phase 7 — Intelligence & Automation
+## ✅ Phase 7 — Intelligence & Automation (SHIPPED)
+
+### Autoregulation
+
+RIR-driven weight auto-adjustments. When a user logs avg RIR ≤ 1 on straight sets for the same exercise across 2 consecutive completed sessions, the next planned session shows an **AR badge** with a pre-filled suggested weight.
+
+| Feature | Description |
+|---------|-------------|
+| ~~`_compute_ar()` helper~~ | Queries last 2 completed sessions per exercise; checks avg RIR ≤ 1.0 on straight sets; returns `ar_triggered` + `ar_suggested_weight` |
+| ~~Movement-based increments~~ | `hip_dominant` (deadlift family) = +10 lbs; `knee_dominant` (squat family) = +5 lbs; all others (bench, OHP, rows) = +2.5 lbs |
+| ~~% floor fallback~~ | If the fixed increment is < 1% of current weight (very heavy lifts), falls back to 2.5% rounded to nearest 2.5 lbs |
+| ~~AR badge in planned session~~ | "AR" pill + suggested weight shown per exercise in `/planned/[id]` view |
+| ~~AR hints carried to logger~~ | `arHints` store populated before `goto('/log')`; logger checks hints first in `loadOverloadSuggestion()` and shows red "AR: X lbs (auto-reg +2.5%)" hint |
+| ~~Manual overload uses same increment~~ | `get_planned_session()` overload suggestion also uses `_ar_increment()` instead of flat 2.5% |
+
+### Advanced Analytics (`/progress` page)
+
+| Feature | Description |
+|---------|-------------|
+| ~~Strength / Bodyweight ratio chart~~ | Multi-line Chart.js showing squat/bench/deadlift/OHP × bodyweight ratio over time; requires PRs + body weight measurements; hidden if < 2 data points per lift |
+| ~~Volume sweet spot detection~~ | For each Big 4 lift with 3+ PRs: counts working sets in the 7 days preceding each PR session; buckets into `0–5 / 6–9 / 10–13 / 14–17 / 18+`; shows peak bucket ("Chest — best results at 10–13 sets/week") |
+| ~~Predicted 1RM trajectory~~ | Linear regression on last 8 history points; projects 8 weeks forward as a dashed muted line overlaid on the 1RM trend chart; hidden if < 3 sessions |
+| ~~`GET /analytics/strength-ratio-history`~~ | New `analytics.py` router; returns per-lift `{date, e1rm, body_weight, ratio}` arrays |
+| ~~`GET /analytics/volume-sweet-spot`~~ | Same router; reuses `_aggregate_sets_by_muscle()` from `volume.py` |
+
+### Rest Timer Chime
+
+| Feature | Description |
+|---------|-------------|
+| ~~Audible chime on timer expiry~~ | Web Audio API 880 Hz sine wave with 1-second exponential fade; fires at end of countdown in logger; works offline (no files, no external deps) |
+
+### Data Management
+
+| Feature | Description |
+|---------|-------------|
+| ~~Individual session delete~~ | "Delete" button in expanded session detail on `/history`; cascade-deletes sets |
+| ~~Clear All sessions~~ | Red "Clear All" button above session list on `/history`; wipes all completed sessions |
+| ~~Liftosaur: clear imported data~~ | "Clear imported data" button in Settings → Liftosaur section; deletes only sessions tagged `source="liftosaur"` |
+| ~~App Reset (Danger Zone)~~ | Red "Reset App" button in Settings → Danger Zone; `DELETE /api/reset` wipes all user data while preserving exercise library, splits, and landmarks |
+| ~~Liftosaur sync fix~~ | Fixed date regex (`[T ]` separator) and incomplete set parsing (comma-split before regex); `source="liftosaur"` tag on imported sessions |
+| ~~WorkoutSession.source field~~ | New column; migration-safe; enables targeted import clearing |
+
+---
+
+## 🔮 Phase 8 — Intelligence & Notifications
 
 | Feature | Status | Description |
 |---------|--------|-------------|
 | AI Coach Upgrade | — | Deeper Ollama context: current mesocycle, fatigue score, PRs, weak lifts. Form cues, deload recommendations, auto-generated session summaries |
-| Advanced Analytics | — | Strength-to-bodyweight trends over time, volume sweet spot detection (where did you PR most?), predicted 1RM trajectory charts |
-| Autoregulation | — | RIR-driven weight auto-adjustments mid-mesocycle. Consistently logging RIR 0–1 → engine bumps weight next session automatically. True reactive programming |
 | Notifications / Reminders | — | PWA push notifications for workout reminders, rest day alerts, muscle-group nudges ("haven't trained legs in 5 days") |
 
 ---
