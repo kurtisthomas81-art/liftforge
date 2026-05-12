@@ -75,11 +75,6 @@
 
   const allMoreItems = moreSections.flatMap(s => s.items);
 
-  function isTabActive(href) {
-    if (href === '/') return currentPath === '/';
-    return currentPath.startsWith(href);
-  }
-
   $: isMoreActive = allMoreItems.some(m => currentPath.startsWith(m.href));
 
   function handleMoreNav(href) {
@@ -114,7 +109,8 @@
   </a>
   <nav class="sidebar-nav">
     {#each tabs as tab}
-      <a href={tab.href} class="sidebar-nav-item" class:active={isTabActive(tab.href)}>
+      <a href={tab.href} class="sidebar-nav-item"
+         class:active={tab.href === '/' ? currentPath === '/' : currentPath.startsWith(tab.href)}>
         <span class="sidebar-nav-icon">{tab.icon}</span>
         {tab.label}
       </a>
@@ -166,12 +162,13 @@
   <!-- Bottom tab bar -->
   <nav class="bottom-nav">
     {#each tabs as tab}
-      <a href={tab.href} class="tab-btn" class:active={isTabActive(tab.href)}>
+      <a href={tab.href} class="tab-btn"
+         class:active={tab.href === '/' ? currentPath === '/' : currentPath.startsWith(tab.href)}>
         <span class="tab-icon">{tab.icon}</span>
         {tab.label}
       </a>
     {/each}
-    <button class="tab-btn" class:active={isMoreActive || showMore} on:click={() => showMore = true}>
+    <button class="tab-btn" class:active={isMoreActive || showMore} on:click={() => (showMore = true)}>
       <span class="tab-icon">≡</span>
       More
     </button>
