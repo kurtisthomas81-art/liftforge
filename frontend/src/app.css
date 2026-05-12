@@ -31,6 +31,7 @@
   --radius:    6px;
   --radius-lg: 14px;
   --tab-h:     60px;
+  --sidebar-w: 220px;
 
   /* Legacy aliases — keep existing pages working during phased rewrite */
   --surface:     var(--surf);
@@ -259,6 +260,10 @@ tr:last-child td { border-bottom: none; }
 .bottom-nav .tab-btn:hover:not(.active) {
   color: var(--text);
 }
+.bottom-nav .tab-btn:active {
+  color: var(--accent);
+  background: rgba(232, 54, 93, 0.08);
+}
 
 /* ── More sheet ── */
 .more-overlay {
@@ -332,6 +337,133 @@ tr:last-child td { border-bottom: none; }
   color: var(--muted);
   margin-top: 2px;
 }
+
+/* ── Sidebar (desktop) ── */
+.sidebar {
+  display: none;
+}
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  padding: 6px 16px 20px;
+}
+.sidebar-wordmark-text { line-height: 1; }
+.sidebar-wordmark-lift {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.sidebar-wordmark-forge {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  margin-left: 1px;
+}
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px;
+  flex: 1;
+}
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: color 0.15s, background 0.15s;
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+.sidebar-nav-item:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.04);
+}
+.sidebar-nav-item.active {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+.sidebar-nav-item:active {
+  background: rgba(232, 54, 93, 0.15);
+}
+.sidebar-nav-icon {
+  font-size: 17px;
+  line-height: 1;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.sidebar-divider {
+  height: 1px;
+  background: var(--bdr);
+  margin: 10px 0;
+}
+.sidebar-section-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 10px 12px 4px;
+}
+.sidebar-settings {
+  padding: 12px;
+  border-top: 1px solid var(--bdr);
+}
+
+/* ── Desktop layout overrides ── */
+@media (min-width: 768px) {
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: var(--sidebar-w);
+    background: var(--surf);
+    border-right: 1px solid var(--bdr);
+    z-index: 100;
+    padding: 16px 0 0;
+    overflow-y: auto;
+  }
+  .bottom-nav { display: none; }
+  .app-header { display: none; }
+  .page-wrap { margin-left: var(--sidebar-w); }
+  .main-content { padding-bottom: 20px; }
+}
+
+/* ── Back button ── */
+.back-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 20px;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  transition: background 0.15s;
+  line-height: 1;
+}
+.back-btn:hover { background: rgba(255,255,255,0.07); }
+.back-btn:active { background: rgba(255,255,255,0.12); }
 
 /* ── Modal overlay ── */
 .modal-overlay {

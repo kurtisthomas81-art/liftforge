@@ -10,6 +10,11 @@
   let intervalId;
   let showMore = false;
 
+  // Swipe-to-close state
+  let touchStartY = 0;
+  let dragY = 0;
+  let isDragging = false;
+
   onMount(async () => {
     await Promise.all([refreshActiveSession(), refreshProfile()]);
 
@@ -23,6 +28,9 @@
   });
 
   $: currentPath = $page.url.pathname;
+
+  const rootPaths = new Set(['/', '/log', '/program', '/history']);
+  $: canGoBack = !rootPaths.has(currentPath);
 
   const tabs = [
     { href: '/',        label: 'Home',    icon: '◈' },
@@ -78,16 +86,70 @@
     showMore = false;
     goto(href);
   }
+
+  $: if (!showMore) dragY = 0;
+
+  function onSheetTouchStart(e) {
+    touchStartY = e.touches[0].clientY;
+    isDragging = true;
+  }
+  function onSheetTouchMove(e) {
+    const delta = e.touches[0].clientY - touchStartY;
+    dragY = Math.max(0, delta);
+  }
+  function onSheetTouchEnd() {
+    if (dragY > 80) showMore = false;
+    dragY = 0;
+    isDragging = false;
+  }
 </script>
+
+<!-- Desktop sidebar (hidden on mobile via CSS) -->
+<aside class="sidebar">
+  <a href="/" class="sidebar-logo">
+    <HexMark size={28} sceneOpacity={0.52}/>
+    <div class="sidebar-wordmark-text">
+      <span class="sidebar-wordmark-lift">LIFT</span><span class="sidebar-wordmark-forge">Forge</span>
+    </div>
+  </a>
+  <nav class="sidebar-nav">
+    {#each tabs as tab}
+      <a href={tab.href} class="sidebar-nav-item" class:active={isTabActive(tab.href)}>
+        <span class="sidebar-nav-icon">{tab.icon}</span>
+        {tab.label}
+      </a>
+    {/each}
+    <div class="sidebar-divider"></div>
+    {#each moreSections as section}
+      <div class="sidebar-section-label">{section.label}</div>
+      {#each section.items as item}
+        <a href={item.href} class="sidebar-nav-item" class:active={currentPath.startsWith(item.href)}>
+          <span class="sidebar-nav-icon">{item.icon}</span>
+          {item.label}
+        </a>
+      {/each}
+    {/each}
+  </nav>
+  <div class="sidebar-settings">
+    <a href="/settings" class="sidebar-nav-item" class:active={currentPath === '/settings'}>
+      <span class="sidebar-nav-icon">⚙</span>
+      Settings
+    </a>
+  </div>
+</aside>
 
 <div class="page-wrap">
   <header class="app-header">
-    <a href="/" class="wordmark">
-      <HexMark size={30} sceneOpacity={0.52}/>
-      <div class="wordmark-text">
-        <span class="wordmark-lift">LIFT</span><span class="wordmark-forge">Forge</span>
-      </div>
-    </a>
+    {#if canGoBack}
+      <button class="back-btn" on:click={() => history.back()}>←</button>
+    {:else}
+      <a href="/" class="wordmark">
+        <HexMark size={30} sceneOpacity={0.52}/>
+        <div class="wordmark-text">
+          <span class="wordmark-lift">LIFT</span><span class="wordmark-forge">Forge</span>
+        </div>
+      </a>
+    {/if}
     <a href="/settings" class="settings-btn" class:active={currentPath === '/settings'} title="Settings">⚙</a>
   </header>
   <main class="main-content">
@@ -121,7 +183,13 @@
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="more-overlay" on:click|self={() => showMore = false}>
-    <div class="more-sheet">
+    <div
+      class="more-sheet"
+      style="transform: translateY({dragY}px); transition: {isDragging ? 'none' : 'transform 0.25s ease'};"
+      on:touchstart={onSheetTouchStart}
+      on:touchmove|preventDefault={onSheetTouchMove}
+      on:touchend={onSheetTouchEnd}
+    >
       <div class="more-sheet-handle"></div>
       <div class="more-sheet-title">More</div>
       {#each moreSections as section}
