@@ -48,6 +48,7 @@ export const api = {
     unpairExercises: (sessionId, group) =>
       request('DELETE', `/sessions/${sessionId}/pair-exercises/${group}`),
     delete: (id) => request('DELETE', `/sessions/${id}`),
+    deleteAll: () => request('DELETE', '/sessions/all'),
   },
 
   history: {
@@ -163,5 +164,9 @@ export const api = {
   analytics: {
     strengthRatioHistory: () => request('GET', '/analytics/strength-ratio-history'),
     volumeSweetSpot: () => request('GET', '/analytics/volume-sweet-spot'),
+  },
+
+  app: {
+    reset: () => request('DELETE', '/reset'),
   },
 };

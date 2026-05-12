@@ -1,7 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import create_db_and_tables, migrate_db, engine
-from models import Exercise, SplitTemplate, MuscleVolumeLandmark
+from models import (
+    Exercise, SplitTemplate, MuscleVolumeLandmark,
+    WorkoutSet, WorkoutSession, PersonalRecord, BodyMeasurement,
+    Goal, Mesocycle, MesocycleWeek, PlannedSession, PlannedExercise,
+    WorkoutTemplate, TemplateExercise, WeeklyCheckin, Injury,
+)
 from sqlmodel import Session, select
 from routers import exercises, sessions, history, profile, ollama
 from routers import programs, landmarks, volume, prs, templates, measurements, export, recovery, liftsaur_sync, goals, injuries, analytics
@@ -174,3 +179,20 @@ def on_startup():
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "liftforge"}
+
+
+@app.delete("/api/reset")
+def reset_app():
+    """Wipe all user data. Keeps exercise library, split templates, and landmarks."""
+    _WIPE_ORDER = [
+        WorkoutSet, WorkoutSession, PersonalRecord, BodyMeasurement,
+        Goal, PlannedExercise, PlannedSession, MesocycleWeek, Mesocycle,
+        TemplateExercise, WorkoutTemplate, WeeklyCheckin, Injury,
+    ]
+    with Session(engine) as session:
+        for model in _WIPE_ORDER:
+            rows = session.exec(select(model)).all()
+            for row in rows:
+                session.delete(row)
+        session.commit()
+    return {"ok": True}

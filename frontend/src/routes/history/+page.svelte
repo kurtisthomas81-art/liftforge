@@ -170,6 +170,16 @@
       computeMonthStats();
     } catch {}
   }
+
+  async function clearAllSessions() {
+    if (!confirm('Delete ALL workout history? This cannot be undone.')) return;
+    try {
+      await api.sessions.deleteAll();
+      sessions = [];
+      expandedId = null; expandedDetail = null;
+      computeMonthStats();
+    } catch {}
+  }
 </script>
 
 <svelte:head><title>History — LiftForge</title></svelte:head>
@@ -218,7 +228,14 @@
 </div>
 
 <!-- Session list -->
-<div class="section-title mt-4">Past Sessions</div>
+<div style="display:flex; align-items:center; justify-content:space-between; margin-top:16px; margin-bottom:4px;">
+  <div class="section-title" style="margin:0;">Past Sessions</div>
+  {#if sessions.length > 0}
+    <button class="btn-ghost" style="font-size:12px; color:var(--danger,#e8365d); border-color:rgba(232,54,93,0.3); padding:4px 10px;" on:click={clearAllSessions}>
+      Clear All
+    </button>
+  {/if}
+</div>
 
 {#if loading}
   <div class="flex items-center gap-3" style="padding:24px 0;"><div class="spinner"></div></div>

@@ -204,6 +204,7 @@
 
   let clearing = false;
   let clearResult = null;
+  let resetting = false;
   async function clearLiftosaurData() {
     if (!confirm('Delete all Liftosaur-imported sessions? Your manually logged workouts will not be affected.')) return;
     clearing = true; clearResult = null; syncError = null;
@@ -212,6 +213,16 @@
       clearResult = `Deleted ${r.deleted_sessions} imported sessions.`;
     } catch (e) { syncError = e.message || 'Clear failed'; }
     clearing = false;
+  }
+
+  async function resetApp() {
+    if (!confirm('Reset the entire app? This deletes ALL workout history, programs, measurements, goals, and injuries. The exercise library is preserved. This cannot be undone.')) return;
+    resetting = true;
+    try {
+      await api.app.reset();
+      alert('App reset. All user data has been cleared.');
+    } catch {}
+    resetting = false;
   }
 </script>
 
@@ -448,6 +459,15 @@
   </div>
 {/if}
 
+<!-- Danger Zone -->
+<div class="settings-section danger-zone">
+  <div class="section-title" style="color:var(--danger,#e8365d);">Danger Zone</div>
+  <p class="section-desc">Permanently delete all workout data. The exercise library, split templates, and volume landmarks are preserved.</p>
+  <button class="btn-ghost danger-btn" on:click={resetApp} disabled={resetting}>
+    {resetting ? 'Resetting…' : 'Reset App'}
+  </button>
+</div>
+
 <style>
   .page-title { font-family:var(--serif); font-size:26px; color:var(--text); margin-bottom:16px; line-height:1; }
   .page-title em { font-style:italic; color:var(--accent); }
@@ -582,6 +602,9 @@
   .new-exercises { color:var(--muted); margin-top:4px; }
   .import-error { font-size:12px; color:var(--accent); margin-top:10px; }
   .clear-btn { font-size:12px; color:var(--danger, #e8365d); border-color:rgba(232,54,93,0.3); margin-top:10px; padding:6px 12px; }
+  .danger-zone { border-color:rgba(232,54,93,0.25); }
+  .danger-btn { font-size:13px; color:var(--danger, #e8365d); border-color:rgba(232,54,93,0.4); padding:8px 18px; }
+  .danger-btn:hover { border-color:var(--danger, #e8365d) !important; color:var(--danger, #e8365d) !important; }
 
   /* Export rows */
   .data-row {

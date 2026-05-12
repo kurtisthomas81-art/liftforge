@@ -601,6 +601,18 @@ def save_session_as_template(
     return {"template_id": tpl.id, "name": tpl.name}
 
 
+@router.delete("/all")
+def delete_all_sessions(session: Session = Depends(get_session)):
+    all_sessions = session.exec(select(WorkoutSession).where(WorkoutSession.user_id == USER_ID)).all()
+    for wk in all_sessions:
+        sets = session.exec(select(WorkoutSet).where(WorkoutSet.session_id == wk.id)).all()
+        for ws in sets:
+            session.delete(ws)
+        session.delete(wk)
+    session.commit()
+    return {"deleted_sessions": len(all_sessions)}
+
+
 @router.delete("/{session_id}")
 def delete_session(session_id: int, session: Session = Depends(get_session)):
     wk = session.get(WorkoutSession, session_id)
