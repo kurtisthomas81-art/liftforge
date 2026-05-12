@@ -120,6 +120,22 @@
   }
 
   // ── Rest Timer ──────────────────────────────────────────────────────────────
+  function playChime() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.5, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.0);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 1.0);
+    } catch {}
+  }
+
   function startRestTimer(exerciseName) {
     clearRestTimer();
     restExerciseName = exerciseName;
@@ -130,6 +146,7 @@
       if (restRemaining <= 0) {
         restRemaining = 0;
         clearRestTimer();
+        playChime();
         restDismissTimeout = setTimeout(() => { restRunning = false; }, 10000);
       }
     }, 1000);
@@ -150,6 +167,7 @@
         if (restRemaining <= 0) {
           restRemaining = 0;
           clearRestTimer();
+          playChime();
           restDismissTimeout = setTimeout(() => { restRunning = false; }, 10000);
         }
       }, 1000);
