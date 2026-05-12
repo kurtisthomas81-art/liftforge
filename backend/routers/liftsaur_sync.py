@@ -29,11 +29,12 @@ def _get_profile(session: Session) -> UserProfile:
 
 
 def _parse_record(text: str) -> dict | None:
-    date_match = re.match(r'(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})', text)
+    # Format: "2026-04-24 16:48:59 +00:00" (space separator, timezone offset)
+    date_match = re.match(r'(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})', text)
     if not date_match:
         return None
     try:
-        started_at = datetime.fromisoformat(date_match.group(1))
+        started_at = datetime.fromisoformat(f"{date_match.group(1)}T{date_match.group(2)}")
     except ValueError:
         return None
 
@@ -67,17 +68,19 @@ def _parse_record(text: str) -> dict | None:
                 part = part.strip()
                 if part.startswith(('warmup:', 'target:')):
                     continue
-                summary = re.match(r'(\d+)x(\d+)\s+([\d.]+)lb', part)
-                if summary:
-                    count, reps, weight = int(summary.group(1)), int(summary.group(2)), float(summary.group(3))
-                    for _ in range(count):
-                        sets.append({'set_number': set_number, 'reps': reps, 'weight': weight})
-                        set_number += 1
-                    continue
-                ind = re.match(r'(\d+)\s+([\d.]+)lb', part) or re.match(r'([\d.]+)lb\s*x(\d+)', part)
-                if ind:
-                    sets.append({'set_number': set_number, 'reps': int(ind.group(1)), 'weight': float(ind.group(2))})
-                    set_number += 1
+                # Each part may be comma-separated individual sets: "1x5 180lb, 1x3 205lb"
+                for set_str in re.split(r',\s*', part):
+                    set_str = set_str.strip()
+                    if not set_str:
+                        continue
+                    m = re.match(r'(\d+)x(\d+)\s+([\d.]+)lb', set_str)
+                    if m:
+                        count = int(m.group(1))
+                        reps = int(m.group(2))
+                        weight = float(m.group(3))
+                        for _ in range(count):
+                            sets.append({'set_number': set_number, 'reps': reps, 'weight': weight})
+                            set_number += 1
 
             if sets:
                 exercises.append({'name': ex_name, 'sets': sets})
