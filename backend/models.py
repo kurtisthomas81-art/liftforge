@@ -29,6 +29,7 @@ class WorkoutSession(SQLModel, table=True):
     completed_at: Optional[datetime] = Field(default=None)
     readiness_rating: Optional[int] = Field(default=None)   # 1-5 pre-session
     post_session_rpe: Optional[int] = Field(default=None)   # 1-10 post-session
+    source: Optional[str] = Field(default=None)             # "liftosaur" for synced imports
 
 
 class WorkoutSet(SQLModel, table=True):

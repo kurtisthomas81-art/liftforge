@@ -47,6 +47,7 @@ export const api = {
       request('POST', `/sessions/${sessionId}/pair-exercises`, { exercise_ids: exerciseIds }),
     unpairExercises: (sessionId, group) =>
       request('DELETE', `/sessions/${sessionId}/pair-exercises/${group}`),
+    delete: (id) => request('DELETE', `/sessions/${id}`),
   },
 
   history: {
@@ -156,6 +157,7 @@ export const api = {
     getToken: () => request('GET', '/liftsaur/token'),
     setToken: (token) => request('PUT', '/liftsaur/token', { token }),
     sync: () => request('POST', '/liftsaur/sync'),
+    clearImported: () => request('DELETE', '/liftsaur/imported'),
   },
 
   analytics: {

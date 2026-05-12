@@ -599,3 +599,16 @@ def save_session_as_template(
     session.commit()
 
     return {"template_id": tpl.id, "name": tpl.name}
+
+
+@router.delete("/{session_id}")
+def delete_session(session_id: int, session: Session = Depends(get_session)):
+    wk = session.get(WorkoutSession, session_id)
+    if not wk:
+        raise HTTPException(status_code=404, detail="Session not found")
+    sets = session.exec(select(WorkoutSet).where(WorkoutSet.session_id == session_id)).all()
+    for ws in sets:
+        session.delete(ws)
+    session.delete(wk)
+    session.commit()
+    return {"ok": True}

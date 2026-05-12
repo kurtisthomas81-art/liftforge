@@ -201,6 +201,18 @@
     try { await api.liftsaur.setToken(''); } catch {}
     liftsaurConnected = false; syncResult = null; syncError = null;
   }
+
+  let clearing = false;
+  let clearResult = null;
+  async function clearLiftosaurData() {
+    if (!confirm('Delete all Liftosaur-imported sessions? Your manually logged workouts will not be affected.')) return;
+    clearing = true; clearResult = null; syncError = null;
+    try {
+      const r = await api.liftsaur.clearImported();
+      clearResult = `Deleted ${r.deleted_sessions} imported sessions.`;
+    } catch (e) { syncError = e.message || 'Clear failed'; }
+    clearing = false;
+  }
 </script>
 
 <svelte:head><title>Settings — LiftForge</title></svelte:head>
@@ -335,9 +347,15 @@
         {/if}
       </div>
     {/if}
+    {#if clearResult}
+      <div class="import-result">{clearResult}</div>
+    {/if}
     {#if syncError}
       <div class="import-error">{syncError}</div>
     {/if}
+    <button class="btn-ghost clear-btn" on:click={clearLiftosaurData} disabled={clearing}>
+      {clearing ? 'Clearing…' : 'Clear imported data'}
+    </button>
   {/if}
 </div>
 
@@ -563,6 +581,7 @@
   .import-result { font-size:12px; color:var(--success); margin-top:10px; line-height:1.6; }
   .new-exercises { color:var(--muted); margin-top:4px; }
   .import-error { font-size:12px; color:var(--accent); margin-top:10px; }
+  .clear-btn { font-size:12px; color:var(--danger, #e8365d); border-color:rgba(232,54,93,0.3); margin-top:10px; padding:6px 12px; }
 
   /* Export rows */
   .data-row {

@@ -189,6 +189,7 @@ def sync_liftosaur(session: Session = Depends(get_session)):
             name=rec["session_name"],
             started_at=rec["started_at"],
             completed_at=rec["started_at"] + timedelta(hours=1),
+            source="liftosaur",
         )
         session.add(ws)
         session.flush()
@@ -218,3 +219,23 @@ def sync_liftosaur(session: Session = Depends(get_session)):
         "skipped_sessions": skipped_sessions,
         "new_exercises": list(new_exercise_names),
     }
+
+
+@router.delete("/imported")
+def clear_imported(session: Session = Depends(get_session)):
+    """Delete all Liftosaur-imported sessions and their sets."""
+    imported = session.exec(
+        select(WorkoutSession).where(
+            WorkoutSession.user_id == USER_ID,
+            WorkoutSession.source == "liftosaur",
+        )
+    ).all()
+    deleted = 0
+    for ws in imported:
+        sets = session.exec(select(WorkoutSet).where(WorkoutSet.session_id == ws.id)).all()
+        for s in sets:
+            session.delete(s)
+        session.delete(ws)
+        deleted += 1
+    session.commit()
+    return {"deleted_sessions": deleted}

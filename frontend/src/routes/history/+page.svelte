@@ -160,6 +160,16 @@
       alert('Template saved!');
     } catch {}
   }
+
+  async function deleteSession(s) {
+    if (!confirm(`Delete "${s.name || 'this session'}"? This cannot be undone.`)) return;
+    try {
+      await api.sessions.delete(s.id);
+      sessions = sessions.filter(x => x.id !== s.id);
+      if (expandedId === s.id) { expandedId = null; expandedDetail = null; }
+      computeMonthStats();
+    } catch {}
+  }
 </script>
 
 <svelte:head><title>History — LiftForge</title></svelte:head>
@@ -250,6 +260,7 @@
               <div class="detail-actions">
                 <button class="detail-action-btn" on:click={() => repeatSession(s)}>Repeat Session</button>
                 <button class="detail-action-btn" on:click={() => saveAsTemplate(s)}>Save Template</button>
+                <button class="detail-action-btn detail-action-danger" on:click={() => deleteSession(s)}>Delete</button>
               </div>
             {/if}
           </div>
@@ -347,4 +358,6 @@
     cursor: pointer; text-align: center; transition: all 0.15s;
   }
   .detail-action-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .detail-action-danger { color: var(--danger, #e8365d) !important; }
+  .detail-action-danger:hover { border-color: var(--danger, #e8365d) !important; color: var(--danger, #e8365d) !important; }
 </style>

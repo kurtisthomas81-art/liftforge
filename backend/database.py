@@ -20,6 +20,7 @@ def migrate_db():
     new_cols = [
         ("workoutsession", "readiness_rating", "INTEGER"),
         ("workoutsession", "post_session_rpe", "INTEGER"),
+        ("workoutsession", "source", "TEXT"),
         ("userprofile", "display_name", "TEXT DEFAULT 'Lifter'"),
         ("userprofile", "unit_preference", "TEXT DEFAULT 'lbs'"),
         ("userprofile", "experience_level", "TEXT DEFAULT 'intermediate'"),
