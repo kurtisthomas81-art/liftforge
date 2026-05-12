@@ -13,7 +13,7 @@ mkdirSync(outDir, { recursive: true });
 
 const svgData = readFileSync(svgPath);
 
-for (const [name, size] of [['icon-192.png', 192], ['icon-512.png', 512]]) {
+for (const [name, size] of [['icon-192.v2.png', 192], ['icon-512.v2.png', 512]]) {
   const resvg = new Resvg(svgData, { fitTo: { mode: 'width', value: size } });
   writeFileSync(join(outDir, name), resvg.render().asPng());
   console.log(`  wrote ${name} (${size}px)`);
