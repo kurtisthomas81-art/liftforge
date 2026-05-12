@@ -947,6 +947,19 @@ def advance_mesocycle(id: int, session: Session = Depends(get_session)):
 
 # ── Planned Sessions ───────────────────────────────────────────────────────────
 
+def _ar_increment(sub_pattern: str, max_weight: float) -> float:
+    """Movement-based fixed increment with a 1%-of-weight floor."""
+    if sub_pattern == "hip_dominant":
+        fixed = 10.0
+    elif sub_pattern == "knee_dominant":
+        fixed = 5.0
+    else:
+        fixed = 2.5
+    if max_weight > 0 and fixed / max_weight < 0.01:
+        fixed = round(max_weight * 0.025 / 2.5) * 2.5
+    return fixed
+
+
 def _compute_ar(exercise_id: int, db: Session) -> dict:
     """Return AR suggestion if avg RIR ≤ 1 in both of the last 2 completed sessions."""
     sets_stmt = (
@@ -988,7 +1001,9 @@ def _compute_ar(exercise_id: int, db: Session) -> dict:
     if max_weight <= 0:
         return {"ar_triggered": False, "ar_suggested_weight": None}
 
-    suggested = round(max_weight * 1.025 / 2.5) * 2.5
+    ex = db.get(Exercise, exercise_id)
+    increment = _ar_increment(ex.sub_pattern if ex else "", max_weight)
+    suggested = round((max_weight + increment) / 2.5) * 2.5
     return {"ar_triggered": True, "ar_suggested_weight": suggested}
 
 
@@ -1070,7 +1085,8 @@ def get_planned_session(id: int, session: Session = Depends(get_session)):
             lr = prev["reps"]
             lrir = prev.get("rir")
             if lrir is not None and lrir >= 2 and lr >= pe.target_reps_max:
-                new_weight = round(lw * 1.025 / 2.5) * 2.5
+                increment = _ar_increment(ex.sub_pattern if ex else "", lw)
+                new_weight = round((lw + increment) / 2.5) * 2.5
                 ex_data["suggestion"] = f"Try {new_weight} lbs x {lr}"
             elif lrir is not None and lrir <= 1:
                 ex_data["suggestion"] = "Hold weight or reduce reps"
