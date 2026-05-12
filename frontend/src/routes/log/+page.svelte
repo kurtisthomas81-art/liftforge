@@ -2,7 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
-  import { activeSession, refreshActiveSession, getElapsed, sessionPlan } from '$lib/stores.js';
+  import { get } from 'svelte/store';
+  import { activeSession, refreshActiveSession, getElapsed, sessionPlan, arHints } from '$lib/stores.js';
   import { autoSessionName, formatDate } from '$lib/utils.js';
 
   let session = null;
@@ -99,6 +100,11 @@
 
   async function loadOverloadSuggestion(exerciseId) {
     try {
+      const hints = get(arHints);
+      if (hints[exerciseId]) {
+        overloadSuggestions = { ...overloadSuggestions, [exerciseId]: `AR: ${hints[exerciseId]} lbs (auto-reg +2.5%)` };
+        return;
+      }
       const prev = await api.history.lastSession(exerciseId);
       if (!prev?.sets?.length) return;
       const workingSets = prev.sets.filter(s => s.weight && s.reps);
@@ -627,7 +633,7 @@
                 <div class="ex-hdr-left">
                   <div class="ex-name">{group.exercise_name}</div>
                   {#if overloadSuggestions[group.exercise_id]}
-                    <div class="overload-hint">{overloadSuggestions[group.exercise_id]}</div>
+                    <div class="overload-hint" class:overload-ar={overloadSuggestions[group.exercise_id].startsWith('AR:')}>{overloadSuggestions[group.exercise_id]}</div>
                   {/if}
                 </div>
                 <div class="ex-actions">
@@ -720,7 +726,7 @@
             <div class="ex-hdr-left">
               <div class="ex-name">{group.exercise_name}</div>
               {#if overloadSuggestions[group.exercise_id]}
-                <div class="overload-hint">{overloadSuggestions[group.exercise_id]}</div>
+                <div class="overload-hint" class:overload-ar={overloadSuggestions[group.exercise_id].startsWith('AR:')}>{overloadSuggestions[group.exercise_id]}</div>
               {/if}
             </div>
             <div class="ex-actions">
@@ -1159,6 +1165,7 @@
   .ex-hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; }
   .ex-name { font-family:var(--serif); font-size:19px; color:var(--text); line-height:1.1; }
   .overload-hint { font-size:11px; color:var(--muted); margin-top:2px; }
+  .overload-hint.overload-ar { color:var(--primary); font-weight:600; }
   .ex-actions { display:flex; gap:6px; }
   .ex-action-btn {
     background:transparent; border:1px solid var(--bdr-2);

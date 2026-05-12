@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
+  import { arHints } from '$lib/stores.js';
 
   let ps = null;
   let loading = true;
@@ -32,7 +33,14 @@
     if (!ps) return;
     starting = true;
     try {
-      const result = await api.programs.startPlannedSession(ps.id);
+      await api.programs.startPlannedSession(ps.id);
+      const hints = {};
+      for (const ex of ps.exercises) {
+        if (ex.ar_triggered && ex.ar_suggested_weight) {
+          hints[ex.exercise_id] = ex.ar_suggested_weight;
+        }
+      }
+      arHints.set(hints);
       goto('/log');
     } catch (e) {
       error = e.message;
@@ -184,6 +192,13 @@
               {#if ex.suggestion}
                 <span style="color:var(--primary); margin-left:8px;">→ {ex.suggestion}</span>
               {/if}
+            </div>
+          {/if}
+
+          {#if ex.ar_triggered && ex.ar_suggested_weight}
+            <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+              <span style="border:1px solid var(--primary); color:var(--primary); font-size:9px; font-weight:700; padding:1px 5px; border-radius:3px; letter-spacing:0.5px;">AR</span>
+              <span style="font-size:12px; color:var(--primary);">{ex.ar_suggested_weight} lbs next session (auto-reg)</span>
             </div>
           {/if}
 

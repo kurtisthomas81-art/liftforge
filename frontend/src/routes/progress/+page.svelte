@@ -28,6 +28,14 @@
   let quickExercises = [];
 
   let strengthData = null;
+  let strengthRatioHistory = null;
+  let sweetSpotData = null;
+  let chart2 = null;
+  let chartCanvas2;
+
+  const LIFT_COLORS = { squat: '#4a9eff', bench: '#e8365d', deadlift: '#8bc34a', ohp: '#cd853f' };
+  const LIFT_LABELS = { squat: 'Squat', bench: 'Bench', deadlift: 'Deadlift', ohp: 'OHP' };
+  const MUSCLE_LABELS = { chest: 'Chest', quads: 'Quads', back: 'Back', shoulders: 'Shoulders' };
 
   const SCIENCE_CARDS = [
     {
@@ -52,12 +60,14 @@
   const BACK_MUSCLES  = ['traps', 'lats', 'rear_delts', 'triceps', 'glutes', 'hamstrings'];
 
   onMount(async () => {
-    [fatigueData, weekVolume, exercises, goals, strengthData] = await Promise.all([
+    [fatigueData, weekVolume, exercises, goals, strengthData, strengthRatioHistory, sweetSpotData] = await Promise.all([
       api.volume.fatigueReport().catch(() => null),
       api.volume.forWeek().catch(() => null),
       api.exercises.list().catch(() => []),
       api.goals.list().catch(() => []),
       api.profile.strengthLevel().catch(() => null),
+      api.analytics.strengthRatioHistory().catch(() => null),
+      api.analytics.volumeSweetSpot().catch(() => null),
     ]);
 
     // Get prev-week data for WoW comparison
@@ -71,9 +81,13 @@
       .filter(Boolean);
 
     loading = false;
+    if (strengthRatioHistory) await drawChart2();
   });
 
-  onDestroy(() => { if (chart) { chart.destroy(); chart = null; } });
+  onDestroy(() => {
+    if (chart) { chart.destroy(); chart = null; }
+    if (chart2) { chart2.destroy(); chart2 = null; }
+  });
 
   function levelColor(level) {
     if (level === 'elite')        return '#cd853f';
@@ -141,36 +155,72 @@
 
   $: if (selectedExId !== undefined) loadChart(selectedExId);
 
+  function projectLinear(data, weeks = 8) {
+    if (data.length < 3) return [];
+    const pts = data.slice(-8).map(d => d.estimated_1rm);
+    const n = pts.length;
+    const xm = (n - 1) / 2;
+    const ym = pts.reduce((a, b) => a + b, 0) / n;
+    const slope = pts.map((y, i) => (i - xm) * (y - ym)).reduce((a, b) => a + b, 0)
+                / pts.map((_, i) => (i - xm) ** 2).reduce((a, b) => a + b, 0);
+    return Array.from({ length: weeks }, (_, w) =>
+      Math.max(0, parseFloat((ym + slope * (w + 1 + (n - 1) / 2 - xm)).toFixed(1)))
+    );
+  }
+
   async function drawChart() {
     await new Promise(r => setTimeout(r, 0));
     destroyChart();
     if (!chartCanvas || !progressionData.length) return;
     const { Chart, registerables } = await import('chart.js');
     Chart.register(...registerables);
+
+    const historicalLabels = progressionData.map(d => new Date(d.date).toLocaleDateString('en-US', { month:'short', day:'numeric' }));
+    const historicalVals = progressionData.map(d => parseFloat(d.estimated_1rm.toFixed(1)));
+    const projected = projectLinear(progressionData);
+    const projLabels = projected.map((_, i) => `+${i + 1}w`);
+    const allLabels = [...historicalLabels, ...projLabels];
+
+    const projData = projected.length
+      ? [...Array(historicalVals.length - 1).fill(null), historicalVals[historicalVals.length - 1], ...projected]
+      : [];
+
     chart = new Chart(chartCanvas, {
       type: 'line',
       data: {
-        labels: progressionData.map(d => new Date(d.date).toLocaleDateString('en-US', { month:'short', day:'numeric' })),
-        datasets: [{
-          label: 'Est. 1RM',
-          data: progressionData.map(d => parseFloat(d.estimated_1rm.toFixed(1))),
-          borderColor: '#e8365d',
-          backgroundColor: 'rgba(232,54,93,0.08)',
-          borderWidth: 2,
-          pointBackgroundColor: '#e8365d',
-          pointRadius: 4,
-          tension: 0.3,
-          fill: true,
-        }],
+        labels: allLabels,
+        datasets: [
+          {
+            label: 'Est. 1RM',
+            data: [...historicalVals, ...Array(projLabels.length).fill(null)],
+            borderColor: '#e8365d',
+            backgroundColor: 'rgba(232,54,93,0.08)',
+            borderWidth: 2,
+            pointBackgroundColor: '#e8365d',
+            pointRadius: 4,
+            tension: 0.3,
+            fill: true,
+          },
+          ...(projData.length ? [{
+            label: 'Projected',
+            data: projData,
+            borderColor: '#6868a0',
+            borderDash: [6, 4],
+            borderWidth: 1.5,
+            fill: false,
+            pointRadius: 0,
+            tension: 0.3,
+          }] : []),
+        ],
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
-          legend: { display: false },
+          legend: { display: projected.length > 0, labels: { color:'#6868a0', font:{size:10}, boxWidth:16 } },
           tooltip: { backgroundColor:'#12121a', borderColor:'#22222e', borderWidth:1, titleColor:'#f8f8ff', bodyColor:'#6868a0' },
         },
         scales: {
-          x: { ticks: { color:'#6868a0', font:{size:10}, maxTicksLimit:8 }, grid: { color:'rgba(255,255,255,0.03)' } },
+          x: { ticks: { color:'#6868a0', font:{size:10}, maxTicksLimit:10 }, grid: { color:'rgba(255,255,255,0.03)' } },
           y: { ticks: { color:'#6868a0', font:{size:10} }, grid: { color:'rgba(255,255,255,0.03)' } },
         },
       },
@@ -178,6 +228,59 @@
   }
 
   function destroyChart() { if (chart) { chart.destroy(); chart = null; } }
+
+  async function drawChart2() {
+    await new Promise(r => setTimeout(r, 0));
+    if (chart2) { chart2.destroy(); chart2 = null; }
+    if (!chartCanvas2 || !strengthRatioHistory) return;
+    const lifts = strengthRatioHistory.lifts;
+    const datasets = Object.entries(lifts)
+      .filter(([, pts]) => pts.length >= 2)
+      .map(([key, pts]) => ({
+        label: LIFT_LABELS[key] ?? key,
+        data: pts.map(p => p.ratio),
+        borderColor: LIFT_COLORS[key] ?? '#6868a0',
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        pointRadius: 3,
+        tension: 0.3,
+        fill: false,
+      }));
+    if (!datasets.length || !chartCanvas2) return;
+    // Use the union of all dates as labels (keyed to first lift with most points)
+    const longestKey = Object.entries(lifts).sort((a, b) => b[1].length - a[1].length)[0]?.[0];
+    const labels = lifts[longestKey]?.map(p => p.date) ?? [];
+    // Align each dataset to those labels using a sparse map
+    datasets.forEach((ds, i) => {
+      const key = Object.keys(lifts).filter(k => lifts[k].length >= 2)[i];
+      const map = Object.fromEntries(lifts[key].map(p => [p.date, p.ratio]));
+      ds.data = labels.map(l => map[l] ?? null);
+    });
+    const { Chart, registerables } = await import('chart.js');
+    Chart.register(...registerables);
+    chart2 = new Chart(chartCanvas2, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, labels: { color:'#6868a0', font:{size:10}, boxWidth:16 } },
+          tooltip: {
+            backgroundColor:'#12121a', borderColor:'#22222e', borderWidth:1,
+            titleColor:'#f8f8ff', bodyColor:'#6868a0',
+            callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}×BW` },
+          },
+        },
+        scales: {
+          x: { ticks: { color:'#6868a0', font:{size:10}, maxTicksLimit:8 }, grid: { color:'rgba(255,255,255,0.03)' } },
+          y: { ticks: { color:'#6868a0', font:{size:10}, callback: v => `${v}×` }, grid: { color:'rgba(255,255,255,0.03)' } },
+        },
+      },
+    });
+  }
+
+  $: hasRatioData = strengthRatioHistory && Object.values(strengthRatioHistory.lifts ?? {}).some(pts => pts.length >= 2);
+  $: sweetSpotMuscles = sweetSpotData?.muscles ? Object.entries(sweetSpotData.muscles) : [];
 
   async function saveGoal() {
     if (!goalExerciseId || !goalTarget) return;
@@ -296,6 +399,36 @@
   {/if}
 </div>
 {/if}
+
+<!-- Strength-to-Bodyweight Ratio Over Time (2A) -->
+<div class="card section-card">
+  <div class="section-title">Strength / Bodyweight Over Time</div>
+  {#if !hasRatioData}
+    <p style="font-size:13px; color:var(--muted); margin:8px 0;">Log PRs and body weight measurements to unlock this chart.</p>
+  {:else}
+    <div class="chart-wrap"><canvas bind:this={chartCanvas2}></canvas></div>
+  {/if}
+</div>
+
+<!-- Volume Sweet Spot (2B) -->
+<div class="card section-card">
+  <div class="section-title">Volume Sweet Spot</div>
+  <p style="font-size:11px; color:var(--muted); margin-bottom:10px;">Weekly sets that preceded your best PRs most often.</p>
+  {#if sweetSpotMuscles.length === 0}
+    <p style="font-size:13px; color:var(--muted);">Need 3+ PRs per lift to detect patterns.</p>
+  {:else}
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      {#each sweetSpotMuscles as [muscle, data]}
+        <div style="font-size:13px;">
+          <span style="color:var(--text); font-weight:600; text-transform:capitalize;">{MUSCLE_LABELS[muscle] ?? muscle}</span>
+          <span style="color:var(--muted);"> — best results at </span>
+          <span style="color:var(--primary); font-weight:600;">{data.peak_bucket} sets/week</span>
+          <span style="color:var(--faint); font-size:11px;"> ({data.buckets.find(b => b.label === data.peak_bucket)?.count ?? 0} of {data.pr_count} PRs)</span>
+        </div>
+      {/each}
+    </div>
+  {/if}
+</div>
 
 <!-- 1RM Trend -->
 <div class="card section-card">

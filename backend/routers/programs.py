@@ -947,6 +947,51 @@ def advance_mesocycle(id: int, session: Session = Depends(get_session)):
 
 # ── Planned Sessions ───────────────────────────────────────────────────────────
 
+def _compute_ar(exercise_id: int, db: Session) -> dict:
+    """Return AR suggestion if avg RIR ≤ 1 in both of the last 2 completed sessions."""
+    sets_stmt = (
+        select(WorkoutSet, WorkoutSession)
+        .join(WorkoutSession, WorkoutSet.session_id == WorkoutSession.id)
+        .where(
+            WorkoutSet.exercise_id == exercise_id,
+            WorkoutSet.set_type == "straight",
+            WorkoutSet.rir != None,
+            WorkoutSession.completed_at != None,
+        )
+        .order_by(WorkoutSession.id.desc())
+    )
+    rows = db.exec(sets_stmt).all()
+
+    # Group into distinct sessions (preserve order, newest first)
+    sessions_seen: list[int] = []
+    sets_by_session: dict[int, list] = {}
+    for ws, _ in rows:
+        if ws.session_id not in sets_by_session:
+            sessions_seen.append(ws.session_id)
+            sets_by_session[ws.session_id] = []
+        sets_by_session[ws.session_id].append(ws)
+
+    if len(sessions_seen) < 2:
+        return {"ar_triggered": False, "ar_suggested_weight": None}
+
+    for sid in sessions_seen[:2]:
+        s_sets = sets_by_session[sid]
+        if not s_sets:
+            return {"ar_triggered": False, "ar_suggested_weight": None}
+        avg_rir = sum(ws.rir for ws in s_sets) / len(s_sets)
+        if avg_rir > 1.0:
+            return {"ar_triggered": False, "ar_suggested_weight": None}
+
+    # Both sessions had avg RIR ≤ 1 — compute bump from most recent session
+    recent_sets = sets_by_session[sessions_seen[0]]
+    max_weight = max((ws.weight or 0) for ws in recent_sets)
+    if max_weight <= 0:
+        return {"ar_triggered": False, "ar_suggested_weight": None}
+
+    suggested = round(max_weight * 1.025 / 2.5) * 2.5
+    return {"ar_triggered": True, "ar_suggested_weight": suggested}
+
+
 @router.get("/planned/{id}")
 def get_planned_session(id: int, session: Session = Depends(get_session)):
     ps = session.get(PlannedSession, id)
@@ -1034,6 +1079,10 @@ def get_planned_session(id: int, session: Session = Depends(get_session)):
         else:
             ex_data["last_week"] = None
             ex_data["suggestion"] = None
+
+        ar = _compute_ar(pe.exercise_id, session)
+        ex_data["ar_triggered"] = ar["ar_triggered"]
+        ex_data["ar_suggested_weight"] = ar["ar_suggested_weight"]
 
         ex_list.append(ex_data)
 

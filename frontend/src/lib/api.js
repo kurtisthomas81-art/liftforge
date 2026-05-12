@@ -157,4 +157,9 @@ export const api = {
     setToken: (token) => request('PUT', '/liftsaur/token', { token }),
     sync: () => request('POST', '/liftsaur/sync'),
   },
+
+  analytics: {
+    strengthRatioHistory: () => request('GET', '/analytics/strength-ratio-history'),
+    volumeSweetSpot: () => request('GET', '/analytics/volume-sweet-spot'),
+  },
 };
