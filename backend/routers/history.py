@@ -42,13 +42,15 @@ def recent_history(session: Session = Depends(get_session)):
                 for m in json.loads(ex.primary_muscles):
                     muscle_set.add(m)
 
+        working_sets = [ws for ws in sets if ws.set_type != "warmup"]
         result.append(
             {
                 "id": wk.id,
                 "name": wk.name,
                 "started_at": wk.started_at.isoformat() if wk.started_at else None,
                 "completed_at": wk.completed_at.isoformat() if wk.completed_at else None,
-                "set_count": len(sets),
+                "set_count": len(working_sets),
+                "total_weight_moved": round(sum((ws.weight or 0) * ws.reps for ws in working_sets), 1),
                 "muscles": sorted(muscle_set),
             }
         )
@@ -81,13 +83,14 @@ def exercise_progression(exercise_id: int, session: Session = Depends(get_sessio
         if not wk or not wk.completed_at:
             continue
 
-        max_weight = max((s.weight or 0) for s in sets)
-        total_volume = sum((s.weight or 0) * s.reps for s in sets)
+        working_sets = [s for s in sets if s.set_type != "warmup"]
+        max_weight = max((s.weight or 0) for s in working_sets) if working_sets else 0
+        total_volume = sum((s.weight or 0) * s.reps for s in working_sets)
         best_1rm = max(
             _epley_1rm(s.weight, s.reps)
-            for s in sets
+            for s in working_sets
             if s.weight and s.reps
-        ) if any(s.weight and s.reps for s in sets) else 0
+        ) if any(s.weight and s.reps for s in working_sets) else 0
 
         result.append(
             {

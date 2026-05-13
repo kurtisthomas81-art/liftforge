@@ -567,6 +567,7 @@ def get_session_detail(session_id: int, session: Session = Depends(get_session))
 
     # Group sets by exercise
     exercise_map: dict[int, dict] = {}
+    exercise_weight_moved: dict[int, float] = {}
     for ws in sets:
         if ws.exercise_id not in exercise_map:
             ex = session.get(Exercise, ws.exercise_id)
@@ -576,10 +577,17 @@ def get_session_detail(session_id: int, session: Session = Depends(get_session))
                 "superset_group": ws.superset_group,
                 "sets": [],
             }
+            exercise_weight_moved[ws.exercise_id] = 0.0
         exercise_map[ws.exercise_id]["sets"].append(_serialize_set(ws))
+        if ws.set_type != "warmup":
+            exercise_weight_moved[ws.exercise_id] += (ws.weight or 0) * ws.reps
+
+    for ex_id, ex_dict in exercise_map.items():
+        ex_dict["weight_moved"] = round(exercise_weight_moved[ex_id], 1)
 
     data = _serialize_session(wk)
     data["exercises"] = list(exercise_map.values())
+    data["total_weight_moved"] = round(sum(exercise_weight_moved.values()), 1)
     return data
 
 

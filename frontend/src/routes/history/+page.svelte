@@ -272,8 +272,14 @@
                       </span>
                     {/each}
                   </div>
+                  {#if group.weight_moved > 0}
+                    <div class="detail-ex-volume">{group.weight_moved.toLocaleString()} moved</div>
+                  {/if}
                 </div>
               {/each}
+              {#if expandedDetail.total_weight_moved > 0}
+                <div class="detail-total-volume">Session total: {expandedDetail.total_weight_moved.toLocaleString()} moved</div>
+              {/if}
               <div class="detail-actions">
                 <button class="detail-action-btn" on:click={() => repeatSession(s)}>Repeat Session</button>
                 <button class="detail-action-btn" on:click={() => saveAsTemplate(s)}>Save Template</button>
@@ -367,7 +373,12 @@
     background: var(--surf-3); border: 1px solid var(--bdr-2); color: var(--text);
   }
   .set-chip-rir { color: var(--muted); margin-left: 3px; }
-  .detail-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .detail-ex-volume { font-size: 11px; color: var(--muted); margin-top: 5px; }
+  .detail-total-volume {
+    font-size: 12px; font-weight: 600; color: var(--text);
+    padding: 8px 0 4px; border-top: 1px solid var(--bdr-1); margin-top: 4px;
+  }
+  .detail-actions { display: flex; gap: 8px; margin-top: 12px; }
   .detail-action-btn {
     flex: 1; padding: 8px;
     background: transparent; border: 1px solid var(--bdr-2);

@@ -320,7 +320,7 @@
         <div class="session-main">
           <div class="serif-17">{s.name || 'Unnamed Session'}</div>
           <div class="session-meta">
-            {sessionDateStr(s)}{sessionDuration(s) ? ' · ' + sessionDuration(s) : ''} · {s.set_count} sets
+            {sessionDateStr(s)}{sessionDuration(s) ? ' · ' + sessionDuration(s) : ''} · {s.set_count} sets{s.total_weight_moved ? ' · ' + s.total_weight_moved.toLocaleString() + ' moved' : ''}
           </div>
         </div>
         <div class="muscle-tags">
