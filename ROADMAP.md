@@ -332,7 +332,42 @@ RIR-driven weight auto-adjustments. When a user logs avg RIR ≤ 1 on straight s
 
 ---
 
-## 🔮 Phase 9 — Intelligence & Notifications
+## ✅ Phase 9 — Logger UX Overhaul (SHIPPED)
+
+Fixes and improvements to the active session experience driven by real-world testing.
+
+### Exercise Library
+
+| Feature | Description |
+|---------|-------------|
+| ~~Exercise edit + delete~~ | Full edit modal (name, aliases, muscles, equipment, pattern, mechanics, force, bilateral, notes); delete blocked with 409 if exercise has logged sets |
+| ~~Exercise deduplication~~ | Removed duplicate/miscategorized exercises (Machine Lateral Raise, Cross-Body Hammer Curl) via startup purge; no data loss if sets exist |
+| ~~Category fixes~~ | Reverse Curl, Upright Row, Band Pull-Apart, Shrug recategorized; secondary muscle arrays corrected for curl/tricep/fly movements |
+| ~~Forearms + calves tracked~~ | Added to volume chart, landmarks (all 4 goals), and fatigue report; 4 new forearm exercises seeded (Wrist Curl, Reverse Wrist Curl, Reverse Curl, Farmer's Carry) |
+
+### Volume & Weight Tracking
+
+| Feature | Description |
+|---------|-------------|
+| ~~Weight moved per exercise~~ | `weight_moved` (lbs) shown per exercise on session detail in history; session total also shown |
+| ~~Warmup exclusion everywhere~~ | Warmup sets excluded from set_count and weight_moved in history, progression charts, and all volume endpoints |
+| ~~Correct set counting rule~~ | Only sets where `reps > 0` (user entered actual reps) count toward volume and weight moved; blank/unattempted sets contribute nothing |
+
+### Active Session Logger
+
+| Feature | Description |
+|---------|-------------|
+| ~~Sticky session header~~ | Timer, session name, progress bar, and rest card are always visible while scrolling; fixed by changing page layout from `min-height` to `height: 100dvh` |
+| ~~Remove exercise from session~~ | ✕ button on each exercise card with inline confirmation ("Remove + all sets?" → Remove / Keep); backend `DELETE /sessions/{id}/exercises/{ex_id}` |
+| ~~Superset remove support~~ | ✕ button present on superset exercise cards too |
+| ~~Target reps label + actual reps input~~ | Set row now shows target as non-editable label (e.g. `8 →`) sourced from session plan or last session history; separate blank input for actual reps; input turns **green** if ≥ target, **red** if below |
+| ~~Live color feedback~~ | Color updates instantly while typing (on:input), saves to DB on blur/change |
+| ~~`is_done` persisted~~ | Tapping the checkmark now saves `is_done` to the DB (fire-and-forget); was previously client-side only |
+| ~~Sandbox feature parity~~ | Sandbox working sets use `target_reps=N, reps=0` to match the live model; always testable with new features |
+
+---
+
+## 🔮 Phase 10 — Intelligence & Notifications
 
 | Feature | Status | Description |
 |---------|--------|-------------|
