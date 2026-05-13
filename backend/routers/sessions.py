@@ -54,6 +54,7 @@ class SetUpdate(BaseModel):
     rir: Optional[int] = None
     notes: Optional[str] = None
     set_type: Optional[str] = None
+    is_done: Optional[bool] = None
 
 
 _BARBELL_WEIGHT = {"lbs": 45.0, "kg": 20.0}
@@ -152,6 +153,7 @@ def _serialize_set(ws: WorkoutSet) -> dict:
         "set_type": ws.set_type,
         "rest_seconds": ws.rest_seconds,
         "superset_group": ws.superset_group,
+        "is_done": ws.is_done,
     }
 
 
@@ -642,6 +644,8 @@ def update_set(
         ws.notes = payload.notes
     if payload.set_type is not None:
         ws.set_type = payload.set_type
+    if payload.is_done is not None:
+        ws.is_done = payload.is_done
     session.add(ws)
     session.commit()
     session.refresh(ws)

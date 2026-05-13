@@ -41,6 +41,7 @@ def migrate_db():
         ("musclevolumelandmark", "goal", "TEXT DEFAULT 'hypertrophy'"),
         ("plannedexercise", "set_technique", "TEXT DEFAULT 'straight'"),
         ("workoutset", "rest_seconds", "INTEGER DEFAULT NULL"),
+        ("workoutset", "is_done", "INTEGER DEFAULT 0"),
     ]
     with engine.connect() as conn:
         for table, col, typedef in new_cols:

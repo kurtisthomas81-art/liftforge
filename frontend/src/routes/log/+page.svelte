@@ -194,9 +194,13 @@
   function toggleDone(setId, exerciseName, weight, reps, restSeconds = null) {
     if (doneIds.has(setId)) {
       doneIds.delete(setId);
+      doneIds = new Set(doneIds);
       if (rpeSetId === setId) rpeSetId = null;
+      api.sessions.updateSet(session.id, setId, { is_done: false }).catch(() => {});
     } else {
       doneIds.add(setId);
+      doneIds = new Set(doneIds);
+      api.sessions.updateSet(session.id, setId, { is_done: true }).catch(() => {});
       if (!timerStartedAt) {
         timerStartedAt = new Date().toISOString().slice(0, -1);
         sessionStorage.setItem(`lf_timer_${session.id}`, timerStartedAt);
@@ -209,7 +213,6 @@
         rpeSetId = setId;
       }
     }
-    doneIds = new Set(doneIds);
   }
 
   // ── Sandbox session ────────────────────────────────────────────────────────

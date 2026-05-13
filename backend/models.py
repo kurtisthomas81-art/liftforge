@@ -44,6 +44,7 @@ class WorkoutSet(SQLModel, table=True):
     set_type: str = Field(default="straight")       # straight|warmup|drop|rest_pause
     rest_seconds: Optional[int] = Field(default=None)
     superset_group: Optional[int] = Field(default=None)  # exercises sharing same int are paired
+    is_done: bool = Field(default=False)
 
 
 class UserProfile(SQLModel, table=True):

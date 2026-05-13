@@ -49,13 +49,32 @@ def _volume_status(sets: int, lm: dict | None) -> str:
     return "at_mrv"
 
 
-def _aggregate_sets_by_muscle(sets: list, exercises: dict, exclude_warmup: bool = True) -> dict[str, float]:
+def _set_counts(ws, completed_session_ids: set) -> bool:
+    """Return True if this set should be counted toward volume.
+
+    Completed sessions (completed_at IS NOT NULL): count sets where reps > 0
+    (backward-compatible with pre-is_done data).
+    Active sessions: count only sets explicitly marked is_done=True.
+    """
+    if ws.session_id in completed_session_ids:
+        return ws.reps > 0
+    return bool(ws.is_done)
+
+
+def _aggregate_sets_by_muscle(
+    sets: list,
+    exercises: dict,
+    exclude_warmup: bool = True,
+    completed_session_ids: set | None = None,
+) -> dict[str, float]:
     """Count working sets per muscle. Primary muscles = 1.0 set, secondary = 0.5 set."""
+    if completed_session_ids is None:
+        completed_session_ids = set()
     muscle_sets: dict[str, float] = {}
     for ws in sets:
         if exclude_warmup and ws.set_type == "warmup":
             continue
-        if ws.reps == 0:
+        if not _set_counts(ws, completed_session_ids):
             continue
         ex = exercises.get(ws.exercise_id)
         if not ex:
@@ -67,13 +86,20 @@ def _aggregate_sets_by_muscle(sets: list, exercises: dict, exclude_warmup: bool 
     return muscle_sets
 
 
-def _aggregate_volume_load(sets: list, exercises: dict, exclude_warmup: bool = True) -> dict[str, float]:
+def _aggregate_volume_load(
+    sets: list,
+    exercises: dict,
+    exclude_warmup: bool = True,
+    completed_session_ids: set | None = None,
+) -> dict[str, float]:
     """Sum (weight * reps) per primary muscle."""
+    if completed_session_ids is None:
+        completed_session_ids = set()
     muscle_vol: dict[str, float] = {}
     for ws in sets:
         if exclude_warmup and ws.set_type == "warmup":
             continue
-        if ws.reps == 0:
+        if not _set_counts(ws, completed_session_ids):
             continue
         ex = exercises.get(ws.exercise_id)
         if not ex:
@@ -98,8 +124,9 @@ def volume_for_session(session_id: int, session: Session = Depends(get_session))
     exercise_ids = {ws.exercise_id for ws in sets}
     exercises = {eid: session.get(Exercise, eid) for eid in exercise_ids}
 
-    sets_by_muscle = _aggregate_sets_by_muscle(sets, exercises)
-    volume_by_muscle = _aggregate_volume_load(sets, exercises)
+    completed_ids = {session_id} if wk.completed_at is not None else set()
+    sets_by_muscle = _aggregate_sets_by_muscle(sets, exercises, completed_session_ids=completed_ids)
+    volume_by_muscle = _aggregate_volume_load(sets, exercises, completed_session_ids=completed_ids)
     landmarks = _get_landmarks(session)
 
     result = []
@@ -140,11 +167,14 @@ def volume_for_week(
 
     all_sets = []
     exercise_cache: dict[int, Exercise] = {}
+    completed_session_ids: set[int] = set()
 
     for wk in sessions:
         sets_stmt = select(WorkoutSet).where(WorkoutSet.session_id == wk.id)
         s = session.exec(sets_stmt).all()
         all_sets.extend(s)
+        if wk.completed_at is not None:
+            completed_session_ids.add(wk.id)
         for ws in s:
             if ws.exercise_id not in exercise_cache:
                 ex = session.get(Exercise, ws.exercise_id)
@@ -159,7 +189,7 @@ def volume_for_week(
     ).first()
     goal = active_meso.goal if active_meso else "hypertrophy"
 
-    sets_by_muscle = _aggregate_sets_by_muscle(all_sets, exercise_cache)
+    sets_by_muscle = _aggregate_sets_by_muscle(all_sets, exercise_cache, completed_session_ids=completed_session_ids)
     landmarks = _get_landmarks(session, goal)
 
     result = []
@@ -205,19 +235,23 @@ def volume_for_mesocycle(id: int, session: Session = Depends(get_session)):
 
         all_sets = []
         exercise_cache: dict[int, Exercise] = {}
+        completed_session_ids: set[int] = set()
 
         for ps in planned_sessions:
             if ps.session_id:
                 sets_stmt = select(WorkoutSet).where(WorkoutSet.session_id == ps.session_id)
                 s = session.exec(sets_stmt).all()
                 all_sets.extend(s)
+                wk_obj = session.get(WorkoutSession, ps.session_id)
+                if wk_obj and wk_obj.completed_at is not None:
+                    completed_session_ids.add(ps.session_id)
                 for ws in s:
                     if ws.exercise_id not in exercise_cache:
                         ex = session.get(Exercise, ws.exercise_id)
                         if ex:
                             exercise_cache[ws.exercise_id] = ex
 
-        sets_by_muscle = _aggregate_sets_by_muscle(all_sets, exercise_cache)
+        sets_by_muscle = _aggregate_sets_by_muscle(all_sets, exercise_cache, completed_session_ids=completed_session_ids)
         all_muscles.update(sets_by_muscle.keys())
 
         result_by_week.append({
@@ -262,11 +296,13 @@ def volume_alltime(
         wk_key = week_monday.isoformat()
 
         if wk_key not in week_data:
-            week_data[wk_key] = {"sessions": [], "sets": [], "exercises": {}}
+            week_data[wk_key] = {"sessions": [], "sets": [], "exercises": {}, "completed_ids": set()}
 
         sets_stmt = select(WorkoutSet).where(WorkoutSet.session_id == wk.id)
         s = session.exec(sets_stmt).all()
         week_data[wk_key]["sets"].extend(s)
+        if wk.completed_at is not None:
+            week_data[wk_key]["completed_ids"].add(wk.id)
 
         for ws in s:
             if ws.exercise_id not in week_data[wk_key]["exercises"]:
@@ -277,7 +313,7 @@ def volume_alltime(
     result = []
     for wk_start in sorted(week_data.keys()):
         wd = week_data[wk_start]
-        sets_by_muscle = _aggregate_sets_by_muscle(wd["sets"], wd["exercises"])
+        sets_by_muscle = _aggregate_sets_by_muscle(wd["sets"], wd["exercises"], completed_session_ids=wd["completed_ids"])
         result.append({
             "week_start": wk_start,
             "muscles": sets_by_muscle,
