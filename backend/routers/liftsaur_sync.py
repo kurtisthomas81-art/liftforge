@@ -1,3 +1,4 @@
+import json
 import re
 import httpx
 from datetime import datetime, timedelta
@@ -122,10 +123,42 @@ def _fetch_all_history(token: str) -> list[dict]:
     return records
 
 
+_STRIP_PREFIXES = (
+    'barbell ', 'bb ', 'dumbbell ', 'db ', 'cable ', 'machine ',
+    'ez-bar ', 'ez bar ', 'kettlebell ', 'kb ', 'flat ', 'seated ',
+    'standing ', 'lying ',
+)
+
+
+def _normalize_ex_name(name: str) -> str:
+    """Strip a leading equipment/position qualifier for loose matching."""
+    for prefix in _STRIP_PREFIXES:
+        if name.startswith(prefix):
+            return name[len(prefix):].strip()
+    return name
+
+
+def _build_ex_cache(session: Session) -> dict[str, Exercise]:
+    """Build a lookup keyed by name + every alias (all lowercase)."""
+    cache: dict[str, Exercise] = {}
+    for ex in session.exec(select(Exercise)).all():
+        cache[ex.name.lower()] = ex
+        for alias in json.loads(ex.aliases or '[]'):
+            cache[alias.lower()] = ex
+    return cache
+
+
 def _resolve_exercise(name: str, session: Session, ex_cache: dict) -> tuple[Exercise, bool]:
-    """Returns (exercise, is_newly_created)."""
-    key = name.lower()
+    """Returns (exercise, is_newly_created).
+    Lookup order: exact name → alias → normalized name → create new.
+    """
+    key = name.lower().strip()
     if key in ex_cache:
+        return ex_cache[key], False
+
+    normalized = _normalize_ex_name(key)
+    if normalized != key and normalized in ex_cache:
+        ex_cache[key] = ex_cache[normalized]
         return ex_cache[key], False
 
     new_ex = Exercise(name=name, is_custom=True)
@@ -158,11 +191,8 @@ def sync_liftosaur(session: Session = Depends(get_session)):
 
     records = _fetch_all_history(profile.liftsaur_api_token)
 
-    # Pre-populate exercise cache — one query, zero per-miss scans
-    ex_cache: dict[str, Exercise] = {
-        ex.name.lower(): ex
-        for ex in session.exec(select(Exercise)).all()
-    }
+    # Pre-populate exercise cache — names + all aliases, one query
+    ex_cache = _build_ex_cache(session)
 
     # Pre-load existing session keys for O(1) duplicate detection
     existing_keys: set[tuple[str, str]] = {

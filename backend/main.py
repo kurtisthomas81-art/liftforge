@@ -40,6 +40,36 @@ app.include_router(injuries.router)
 app.include_router(analytics.router)
 
 
+def _backfill_exercise_aliases(session: Session) -> None:
+    """Merge missing alias variants into seeded exercises so imports don't fragment the DB."""
+    import json as _json
+    EXTRA: dict[str, list[str]] = {
+        "Barbell Bench Press":          ["flat bench press", "bench"],
+        "Incline Barbell Bench Press":  ["incline bench press", "incline barbell bench"],
+        "Barbell Overhead Press":       ["overhead press", "shoulder press"],
+        "Barbell Row":                  ["bent over row", "barbell bent-over row"],
+        "Pull-Up":                      ["pull up", "pull ups", "pull-ups"],
+        "Chin-Up":                      ["chin up", "chin ups"],
+        "Romanian Deadlift":            ["romanian deadlift"],
+        "Barbell Back Squat":           ["barbell squat"],
+        "Conventional Deadlift":        ["dl"],
+    }
+    changed = 0
+    for ex_name, extras in EXTRA.items():
+        ex = session.exec(select(Exercise).where(Exercise.name == ex_name)).first()
+        if not ex:
+            continue
+        current = _json.loads(ex.aliases or "[]")
+        current_lower = {a.lower() for a in current}
+        to_add = [a for a in extras if a.lower() not in current_lower]
+        if to_add:
+            ex.aliases = _json.dumps(current + to_add)
+            session.add(ex)
+            changed += 1
+    if changed:
+        session.commit()
+
+
 def _backfill_sub_patterns(session: Session) -> None:
     """Compute and write sub_pattern for any exercises that don't have one yet."""
     import json as _json
@@ -166,6 +196,8 @@ def on_startup():
             from seed_data import seed_landmarks
             seed_landmarks(session)
 
+        # Ensure key exercises have all name-variant aliases for import matching
+        _backfill_exercise_aliases(session)
         # Backfill sub_pattern for exercises seeded before this field existed
         _backfill_sub_patterns(session)
         # Backfill secondary_muscles for exercises seeded before this field was populated

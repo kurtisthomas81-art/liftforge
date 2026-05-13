@@ -606,21 +606,21 @@ def create_sandbox_session(session: Session = Depends(get_session)):
     """Create a pre-populated test session for UI exploration."""
     SANDBOX_EXERCISES = [
         ("Barbell Bench Press", [
-            {"set_type": "warmup", "weight": 95,  "reps": 10},
-            {"set_type": "warmup", "weight": 115, "reps": 5},
+            {"set_type": "warmup", "weight": 95,  "reps": 5},
+            {"set_type": "warmup", "weight": 115, "reps": 3},
             {"set_type": "straight", "weight": 135, "reps": 8},
             {"set_type": "straight", "weight": 135, "reps": 8},
             {"set_type": "straight", "weight": 135, "reps": 8},
         ]),
         ("Barbell Back Squat", [
-            {"set_type": "warmup", "weight": 135, "reps": 8},
-            {"set_type": "warmup", "weight": 155, "reps": 5},
+            {"set_type": "warmup", "weight": 135, "reps": 5},
+            {"set_type": "warmup", "weight": 165, "reps": 3},
             {"set_type": "straight", "weight": 185, "reps": 5},
             {"set_type": "straight", "weight": 185, "reps": 5},
             {"set_type": "straight", "weight": 185, "reps": 5},
         ]),
         ("Barbell Row", [
-            {"set_type": "warmup", "weight": 95, "reps": 10},
+            {"set_type": "warmup", "weight": 95, "reps": 5},
             {"set_type": "straight", "weight": 135, "reps": 8},
             {"set_type": "straight", "weight": 135, "reps": 8},
             {"set_type": "straight", "weight": 135, "reps": 8},
