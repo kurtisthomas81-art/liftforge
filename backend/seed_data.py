@@ -1212,6 +1212,56 @@ EXERCISES = [
         "notes": "Unilateral; doubled challenge, no equipment needed.",
     },
 
+    # ── FOREARMS (4) ─────────────────────────────────────────────────────────
+    {
+        "name": "Wrist Curl",
+        "aliases": ["barbell wrist curl", "dumbbell wrist curl"],
+        "movement_pattern": "isolation",
+        "primary_muscles": ["forearms"],
+        "secondary_muscles": [],
+        "equipment_required": ["barbell", "dumbbell"],
+        "mechanics": "isolation",
+        "force": "pull",
+        "is_bilateral": True,
+        "notes": "Palms-up; trains wrist flexors.",
+    },
+    {
+        "name": "Reverse Wrist Curl",
+        "aliases": ["reverse curl wrist", "wrist extension"],
+        "movement_pattern": "isolation",
+        "primary_muscles": ["forearms"],
+        "secondary_muscles": [],
+        "equipment_required": ["barbell", "dumbbell"],
+        "mechanics": "isolation",
+        "force": "pull",
+        "is_bilateral": True,
+        "notes": "Palms-down; trains wrist extensors and brachioradialis.",
+    },
+    {
+        "name": "Reverse Curl",
+        "aliases": ["reverse barbell curl", "reverse dumbbell curl"],
+        "movement_pattern": "isolation",
+        "primary_muscles": ["forearms"],
+        "secondary_muscles": ["biceps"],
+        "equipment_required": ["barbell", "dumbbell"],
+        "mechanics": "isolation",
+        "force": "pull",
+        "is_bilateral": True,
+        "notes": "Overhand grip curl; heavy brachioradialis and extensor load.",
+    },
+    {
+        "name": "Farmer's Carry",
+        "aliases": ["farmer walk", "farmers carry"],
+        "movement_pattern": "carry",
+        "primary_muscles": ["forearms"],
+        "secondary_muscles": ["traps", "shoulders", "abs"],
+        "equipment_required": ["dumbbell", "kettlebell"],
+        "mechanics": "compound",
+        "force": "static",
+        "is_bilateral": True,
+        "notes": "Loaded carry; grip endurance and forearm hypertrophy. Distance or time based.",
+    },
+
     # ── ABS / CORE (10) ──────────────────────────────────────────────────────
     {
         "name": "Plank",
@@ -1592,6 +1642,12 @@ LANDMARKS = [
     ("recomp", "abs",         0,   5, 13, 18),
     ("recomp", "lats",        7,  11, 18, 22),
     ("recomp", "traps",       6,  10, 16, 20),
+
+    # forearms — small, fast-recovering; mostly secondary credit from pulls/carries
+    ("hypertrophy",    "forearms",  4,   8, 14, 18),
+    ("general_fitness","forearms",  2,   4,  8, 12),
+    ("strength",       "forearms",  2,   3,  6,  8),
+    ("recomp",         "forearms",  3,   6, 11, 14),
 ]
 # fmt: on
 

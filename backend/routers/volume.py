@@ -286,7 +286,7 @@ def volume_alltime(
 @router.get("/fatigue-report")
 def fatigue_report(session: Session = Depends(get_session)):
     """Compute fatigue score and deload recommendation from recent training data."""
-    TRACKED_MUSCLES = ["chest", "back", "quads", "hamstrings", "shoulders", "biceps", "triceps"]
+    TRACKED_MUSCLES = ["chest", "back", "quads", "hamstrings", "shoulders", "biceps", "triceps", "calves", "forearms"]
 
     # Get last 10 completed sessions
     stmt = (
