@@ -49,6 +49,7 @@ export const api = {
       request('DELETE', `/sessions/${sessionId}/pair-exercises/${group}`),
     delete: (id) => request('DELETE', `/sessions/${id}`),
     deleteAll: () => request('DELETE', '/sessions/all'),
+    sandbox: () => request('POST', '/sessions/sandbox'),
   },
 
   history: {

@@ -601,6 +601,56 @@ def save_session_as_template(
     return {"template_id": tpl.id, "name": tpl.name}
 
 
+@router.post("/sandbox")
+def create_sandbox_session(session: Session = Depends(get_session)):
+    """Create a pre-populated test session for UI exploration."""
+    SANDBOX_EXERCISES = [
+        ("Barbell Bench Press", [
+            {"set_type": "warmup", "weight": 95,  "reps": 10},
+            {"set_type": "warmup", "weight": 115, "reps": 5},
+            {"set_type": "straight", "weight": 135, "reps": 8},
+            {"set_type": "straight", "weight": 135, "reps": 8},
+            {"set_type": "straight", "weight": 135, "reps": 8},
+        ]),
+        ("Barbell Back Squat", [
+            {"set_type": "warmup", "weight": 135, "reps": 8},
+            {"set_type": "warmup", "weight": 155, "reps": 5},
+            {"set_type": "straight", "weight": 185, "reps": 5},
+            {"set_type": "straight", "weight": 185, "reps": 5},
+            {"set_type": "straight", "weight": 185, "reps": 5},
+        ]),
+        ("Barbell Row", [
+            {"set_type": "warmup", "weight": 95, "reps": 10},
+            {"set_type": "straight", "weight": 135, "reps": 8},
+            {"set_type": "straight", "weight": 135, "reps": 8},
+            {"set_type": "straight", "weight": 135, "reps": 8},
+        ]),
+    ]
+
+    wk = WorkoutSession(user_id=USER_ID, name="[Sandbox] Test Workout", started_at=datetime.utcnow())
+    session.add(wk)
+    session.commit()
+    session.refresh(wk)
+
+    for ex_name, sets in SANDBOX_EXERCISES:
+        ex = session.exec(select(Exercise).where(Exercise.name == ex_name)).first()
+        if not ex:
+            continue
+        for i, s in enumerate(sets, start=1):
+            ws = WorkoutSet(
+                session_id=wk.id,
+                exercise_id=ex.id,
+                set_number=i,
+                weight=s["weight"],
+                reps=s["reps"],
+                set_type=s["set_type"],
+            )
+            session.add(ws)
+
+    session.commit()
+    return _serialize_session(wk)
+
+
 @router.delete("/all")
 def delete_all_sessions(session: Session = Depends(get_session)):
     all_sessions = session.exec(select(WorkoutSession).where(WorkoutSession.user_id == USER_ID)).all()

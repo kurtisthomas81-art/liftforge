@@ -210,6 +210,18 @@
     doneIds = new Set(doneIds);
   }
 
+  // ── Sandbox session ────────────────────────────────────────────────────────
+  async function startSandbox() {
+    pendingSessionCreate = true;
+    await api.sessions.sandbox();
+    await refreshActiveSession();
+    session = $activeSession;
+    await loadSession();
+    timerStartedAt = null;
+    elapsed = '0:00';
+    pendingSessionCreate = false;
+  }
+
   // ── Session start ──────────────────────────────────────────────────────────
   function requestStartSession() {
     readinessRating = null;
@@ -530,6 +542,9 @@
     <div class="no-session-sub">Start a workout to begin logging sets</div>
     <button class="begin-btn" on:click={requestStartSession} disabled={pendingSessionCreate}>
       {pendingSessionCreate ? 'Starting…' : 'Begin Session'}
+    </button>
+    <button class="sandbox-btn" on:click={startSandbox} disabled={pendingSessionCreate}>
+      Quick Test
     </button>
   </div>
 
@@ -1101,6 +1116,13 @@
   }
   .begin-btn:hover { background:#f05070; }
   .begin-btn:disabled { opacity:0.6; cursor:not-allowed; }
+  .sandbox-btn {
+    background:transparent; color:var(--muted); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:10px 28px;
+    font-size:14px; cursor:pointer; transition:color 0.15s, border-color 0.15s;
+  }
+  .sandbox-btn:hover { color:var(--text); border-color:var(--text); }
+  .sandbox-btn:disabled { opacity:0.5; cursor:not-allowed; }
 
   /* Log header */
   .log-header {
