@@ -804,27 +804,11 @@ def save_session_as_template(
 @router.post("/sandbox")
 def create_sandbox_session(session: Session = Depends(get_session)):
     """Create a pre-populated test session for UI exploration."""
+    # working weight, working sets [(reps)]
     SANDBOX_EXERCISES = [
-        ("Barbell Bench Press", [
-            {"set_type": "warmup", "weight": 95,  "reps": 5},
-            {"set_type": "warmup", "weight": 115, "reps": 3},
-            {"set_type": "straight", "weight": 135, "reps": 8},
-            {"set_type": "straight", "weight": 135, "reps": 8},
-            {"set_type": "straight", "weight": 135, "reps": 8},
-        ]),
-        ("Barbell Back Squat", [
-            {"set_type": "warmup", "weight": 135, "reps": 5},
-            {"set_type": "warmup", "weight": 165, "reps": 3},
-            {"set_type": "straight", "weight": 185, "reps": 5},
-            {"set_type": "straight", "weight": 185, "reps": 5},
-            {"set_type": "straight", "weight": 185, "reps": 5},
-        ]),
-        ("Barbell Row", [
-            {"set_type": "warmup", "weight": 95, "reps": 5},
-            {"set_type": "straight", "weight": 135, "reps": 8},
-            {"set_type": "straight", "weight": 135, "reps": 8},
-            {"set_type": "straight", "weight": 135, "reps": 8},
-        ]),
+        ("Barbell Bench Press", 135, [8, 8, 8]),
+        ("Barbell Back Squat",  185, [5, 5, 5]),
+        ("Barbell Row",         135, [8, 8, 8]),
     ]
 
     wk = WorkoutSession(user_id=USER_ID, name="[Sandbox] Test Workout", started_at=datetime.utcnow())
@@ -832,20 +816,32 @@ def create_sandbox_session(session: Session = Depends(get_session)):
     session.commit()
     session.refresh(wk)
 
-    for ex_name, sets in SANDBOX_EXERCISES:
+    for ex_name, working_weight, working_reps in SANDBOX_EXERCISES:
         ex = session.exec(select(Exercise).where(Exercise.name == ex_name)).first()
         if not ex:
             continue
-        for i, s in enumerate(sets, start=1):
-            ws = WorkoutSet(
+        # Warmup sets via shared logic (barbell compound → 3 sets)
+        warmup_rows = _build_warmup_sets(
+            session_id=wk.id,
+            exercise_id=ex.id,
+            warmup_count=3,
+            working_weight=working_weight,
+            uses_barbell=True,
+            unit="lbs",
+            start_set_number=1,
+        )
+        for row in warmup_rows:
+            session.add(row)
+        # Working sets
+        for i, reps in enumerate(working_reps, start=len(warmup_rows) + 1):
+            session.add(WorkoutSet(
                 session_id=wk.id,
                 exercise_id=ex.id,
                 set_number=i,
-                weight=s["weight"],
-                reps=s["reps"],
-                set_type=s["set_type"],
-            )
-            session.add(ws)
+                weight=working_weight,
+                reps=reps,
+                set_type="straight",
+            ))
 
     session.commit()
     return _serialize_session(wk)
