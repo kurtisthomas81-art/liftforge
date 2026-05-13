@@ -123,21 +123,6 @@ def _fetch_all_history(token: str) -> list[dict]:
     return records
 
 
-_STRIP_PREFIXES = (
-    'barbell ', 'bb ', 'dumbbell ', 'db ', 'cable ', 'machine ',
-    'ez-bar ', 'ez bar ', 'kettlebell ', 'kb ', 'flat ', 'seated ',
-    'standing ', 'lying ',
-)
-
-
-def _normalize_ex_name(name: str) -> str:
-    """Strip a leading equipment/position qualifier for loose matching."""
-    for prefix in _STRIP_PREFIXES:
-        if name.startswith(prefix):
-            return name[len(prefix):].strip()
-    return name
-
-
 def _build_ex_cache(session: Session) -> dict[str, Exercise]:
     """Build a lookup keyed by name + every alias (all lowercase)."""
     cache: dict[str, Exercise] = {}
@@ -150,15 +135,11 @@ def _build_ex_cache(session: Session) -> dict[str, Exercise]:
 
 def _resolve_exercise(name: str, session: Session, ex_cache: dict) -> tuple[Exercise, bool]:
     """Returns (exercise, is_newly_created).
-    Lookup order: exact name → alias → normalized name → create new.
+    Lookup order: exact name → alias → create new.
+    No prefix-stripping: equipment type (barbell vs dumbbell) changes the exercise identity.
     """
     key = name.lower().strip()
     if key in ex_cache:
-        return ex_cache[key], False
-
-    normalized = _normalize_ex_name(key)
-    if normalized != key and normalized in ex_cache:
-        ex_cache[key] = ex_cache[normalized]
         return ex_cache[key], False
 
     new_ex = Exercise(name=name, is_custom=True)
