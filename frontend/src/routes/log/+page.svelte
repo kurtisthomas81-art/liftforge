@@ -332,7 +332,20 @@
     if (!session) return;
     showExerciseModal = false;
     if (exercises.find(e => e.exercise_id === ex.id)) return;
-    await api.sessions.addSet(session.id, { exercise_id: ex.id, set_number: 1, reps: 0, set_type: 'straight' });
+
+    let target_reps = null;
+    const planEx = $sessionPlan?.exercises?.find(pe => pe.name === ex.name);
+    if (planEx?.reps_min) {
+      target_reps = planEx.reps_min;
+    } else {
+      try {
+        const prev = await api.history.lastSession(ex.id);
+        const ws = prev?.sets?.filter(s => s.set_type !== 'warmup' && s.reps > 0);
+        if (ws?.length) target_reps = ws[0].reps;
+      } catch {}
+    }
+
+    await api.sessions.addSet(session.id, { exercise_id: ex.id, set_number: 1, reps: 0, target_reps, set_type: 'straight' });
     await loadSession();
   }
 
@@ -347,6 +360,7 @@
       set_number: nextNum,
       weight: lastSet?.weight ?? null,
       reps: 0,
+      target_reps: lastSet?.target_reps ?? null,
       rir: null,
       set_type: 'straight',
     });
@@ -732,8 +746,17 @@
                         class="set-input weight-input"
                         on:change={e => updateSetField(s.id, 'weight', e.target.value)} />
                       <span class="set-times">×</span>
-                      <input type="number" min="1" step="1" value={s.reps}
+                      {#if s.target_reps}
+                        <span class="target-hint">{s.target_reps}</span>
+                        <span class="target-arrow">→</span>
+                      {/if}
+                      <input type="number" min="1" step="1"
+                        value={s.reps || ''}
+                        placeholder="0"
                         class="set-input reps-input"
+                        class:reps-hit={s.reps > 0 && s.target_reps && s.reps >= s.target_reps}
+                        class:reps-miss={s.reps > 0 && s.target_reps && s.reps < s.target_reps}
+                        on:input={e => { s.reps = parseInt(e.target.value) || 0; exercises = [...exercises]; }}
                         on:change={e => updateSetField(s.id, 'reps', e.target.value)} />
                     </div>
                     <div class="set-rpe-cell">
@@ -849,9 +872,17 @@
                     on:change={e => updateSetField(s.id, 'weight', e.target.value)}
                   />
                   <span class="set-times">×</span>
+                  {#if s.target_reps}
+                    <span class="target-hint">{s.target_reps}</span>
+                    <span class="target-arrow">→</span>
+                  {/if}
                   <input type="number" min="1" step="1"
-                    value={s.reps}
+                    value={s.reps || ''}
+                    placeholder="0"
                     class="set-input reps-input"
+                    class:reps-hit={s.reps > 0 && s.target_reps && s.reps >= s.target_reps}
+                    class:reps-miss={s.reps > 0 && s.target_reps && s.reps < s.target_reps}
+                    on:input={e => { s.reps = parseInt(e.target.value) || 0; exercises = [...exercises]; }}
                     on:change={e => updateSetField(s.id, 'reps', e.target.value)}
                   />
                 </div>
@@ -1323,6 +1354,10 @@
   .weight-input { width:62px; }
   .reps-input { width:48px; }
   .set-times { font-size:12px; color:var(--muted); }
+  .target-hint { font-size:13px; color:var(--muted); font-weight:600; min-width:18px; text-align:right; line-height:1; }
+  .target-arrow { font-size:10px; color:var(--faint, var(--bdr)); margin:0 1px; }
+  .reps-input.reps-hit { border-color:var(--success, #4caf50); color:var(--success, #4caf50); }
+  .reps-input.reps-miss { border-color:var(--danger, #e8365d); color:var(--danger, #e8365d); }
   .set-rpe-cell { width:44px; text-align:center; }
   .rpe-val-btn {
     background:transparent; border:1px solid var(--bdr-2);

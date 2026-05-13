@@ -44,6 +44,7 @@ class SetCreate(BaseModel):
     notes: Optional[str] = None
     set_type: str = "straight"
     superset_group: Optional[int] = None
+    target_reps: Optional[int] = None
 
 
 class SetUpdate(BaseModel):
@@ -55,6 +56,7 @@ class SetUpdate(BaseModel):
     notes: Optional[str] = None
     set_type: Optional[str] = None
     is_done: Optional[bool] = None
+    target_reps: Optional[int] = None
 
 
 _BARBELL_WEIGHT = {"lbs": 45.0, "kg": 20.0}
@@ -154,6 +156,7 @@ def _serialize_set(ws: WorkoutSet) -> dict:
         "rest_seconds": ws.rest_seconds,
         "superset_group": ws.superset_group,
         "is_done": ws.is_done,
+        "target_reps": ws.target_reps,
     }
 
 
@@ -613,6 +616,7 @@ def add_set(
         notes=payload.notes,
         set_type=payload.set_type,
         superset_group=payload.superset_group,
+        target_reps=payload.target_reps,
     )
     session.add(ws)
     session.commit()
@@ -646,6 +650,8 @@ def update_set(
         ws.set_type = payload.set_type
     if payload.is_done is not None:
         ws.is_done = payload.is_done
+    if payload.target_reps is not None:
+        ws.target_reps = payload.target_reps
     session.add(ws)
     session.commit()
     session.refresh(ws)

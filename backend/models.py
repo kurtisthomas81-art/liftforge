@@ -45,6 +45,7 @@ class WorkoutSet(SQLModel, table=True):
     rest_seconds: Optional[int] = Field(default=None)
     superset_group: Optional[int] = Field(default=None)  # exercises sharing same int are paired
     is_done: bool = Field(default=False)
+    target_reps: Optional[int] = Field(default=None)     # planned/suggested reps for this set
 
 
 class UserProfile(SQLModel, table=True):
