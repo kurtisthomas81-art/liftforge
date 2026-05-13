@@ -867,14 +867,15 @@ def create_sandbox_session(session: Session = Depends(get_session)):
         )
         for row in warmup_rows:
             session.add(row)
-        # Working sets
+        # Working sets — target_reps holds the goal; reps starts at 0 (to be entered)
         for i, reps in enumerate(working_reps, start=len(warmup_rows) + 1):
             session.add(WorkoutSet(
                 session_id=wk.id,
                 exercise_id=ex.id,
                 set_number=i,
                 weight=working_weight,
-                reps=reps,
+                reps=0,
+                target_reps=reps,
                 set_type="straight",
             ))
 
