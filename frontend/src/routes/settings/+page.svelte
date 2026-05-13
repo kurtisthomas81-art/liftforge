@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
-  import { userProfile, refreshProfile } from '$lib/stores.js';
+  import { userProfile, refreshProfile, importQueueCount, refreshImportQueueCount } from '$lib/stores.js';
 
   let displayName = '';
   let unitPreference = 'lbs';
@@ -193,6 +193,7 @@
     syncing = true; syncResult = null; syncError = null;
     try {
       syncResult = await api.liftsaur.sync();
+      await refreshImportQueueCount();
     } catch (e) { syncError = e.message || 'Sync failed'; }
     syncing = false;
   }
@@ -353,10 +354,19 @@
       <div class="import-result">
         ✓ {syncResult.imported_sessions} sessions · {syncResult.imported_sets} sets imported
         {#if syncResult.skipped_sessions > 0} · {syncResult.skipped_sessions} already existed{/if}
-        {#if syncResult.new_exercises.length > 0}
-          <div class="new-exercises">New exercises created: {syncResult.new_exercises.join(', ')}</div>
+        {#if syncResult.queued_count > 0}
+          <div class="queue-notice">
+            {syncResult.queued_count} unrecognized exercise{syncResult.queued_count > 1 ? 's' : ''} held for review
+            <a href="/import-queue" class="queue-link">Review now →</a>
+          </div>
         {/if}
       </div>
+    {/if}
+    {#if $importQueueCount > 0}
+      <a href="/import-queue" class="queue-alert">
+        {$importQueueCount} exercise{$importQueueCount > 1 ? 's' : ''} waiting in import queue
+        <span class="queue-alert-cta">Review →</span>
+      </a>
     {/if}
     {#if clearResult}
       <div class="import-result">{clearResult}</div>
@@ -599,8 +609,18 @@
   }
   .btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
   .import-result { font-size:12px; color:var(--success); margin-top:10px; line-height:1.6; }
-  .new-exercises { color:var(--muted); margin-top:4px; }
   .import-error { font-size:12px; color:var(--accent); margin-top:10px; }
+  .queue-notice { color:var(--muted); margin-top:6px; }
+  .queue-link { color:var(--accent); text-decoration:none; margin-left:6px; }
+  .queue-link:hover { text-decoration:underline; }
+  .queue-alert {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:12px; padding:10px 14px; border-radius:8px;
+    background:rgba(205,133,63,0.1); border:1px solid rgba(205,133,63,0.3);
+    font-size:13px; color:var(--text); text-decoration:none;
+  }
+  .queue-alert:hover { background:rgba(205,133,63,0.18); }
+  .queue-alert-cta { color:var(--accent); font-weight:600; }
   .clear-btn { font-size:12px; color:var(--danger, #e8365d); border-color:rgba(232,54,93,0.3); margin-top:10px; padding:6px 12px; }
   .danger-zone { border-color:rgba(232,54,93,0.25); }
   .danger-btn { font-size:13px; color:var(--danger, #e8365d); border-color:rgba(232,54,93,0.4); padding:8px 18px; }

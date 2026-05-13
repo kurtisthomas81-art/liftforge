@@ -25,6 +25,18 @@ export async function refreshProfile() {
   }
 }
 
+// Import queue badge count
+export const importQueueCount = writable(0);
+
+export async function refreshImportQueueCount() {
+  try {
+    const d = await api.importQueue.list();
+    importQueueCount.set(d.pending_count);
+  } catch {
+    importQueueCount.set(0);
+  }
+}
+
 // Generated session plan — set by home page, consumed by log page
 export const sessionPlan = writable(null);
 

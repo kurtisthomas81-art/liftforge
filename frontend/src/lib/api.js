@@ -167,6 +167,12 @@ export const api = {
     volumeSweetSpot: () => request('GET', '/analytics/volume-sweet-spot'),
   },
 
+  importQueue: {
+    list: () => request('GET', '/import-queue'),
+    resolve: (id, payload) => request('POST', `/import-queue/${id}/resolve`, payload),
+    dismiss: (id) => request('DELETE', `/import-queue/${id}`),
+  },
+
   app: {
     reset: () => request('DELETE', '/reset'),
   },

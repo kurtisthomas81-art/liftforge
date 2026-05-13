@@ -211,6 +211,16 @@ class Injury(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class ExerciseImportQueue(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    raw_name: str                           # exact string from the import source
+    source: str = Field(default="liftosaur")
+    status: str = Field(default="pending")  # pending | resolved | dismissed
+    resolved_exercise_id: Optional[int] = Field(default=None)
+    pending_sets: str = Field(default="[]") # JSON: [{session_id, set_number, weight, reps, set_type}]
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class BodyMeasurement(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(default=1)

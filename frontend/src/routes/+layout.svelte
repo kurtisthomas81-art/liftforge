@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import '../app.css';
-  import { activeSession, refreshActiveSession, refreshProfile, getElapsed } from '$lib/stores.js';
+  import { activeSession, refreshActiveSession, refreshProfile, getElapsed, importQueueCount, refreshImportQueueCount } from '$lib/stores.js';
   import HexMark from '$lib/HexMark.svelte';
 
   let elapsed = '0:00';
@@ -16,7 +16,7 @@
   let isDragging = false;
 
   onMount(async () => {
-    await Promise.all([refreshActiveSession(), refreshProfile()]);
+    await Promise.all([refreshActiveSession(), refreshProfile(), refreshImportQueueCount()]);
 
     intervalId = setInterval(() => {
       if ($activeSession) {
@@ -130,6 +130,7 @@
     <a href="/settings" class="sidebar-nav-item" class:active={currentPath === '/settings'}>
       <span class="sidebar-nav-icon">⚙</span>
       Settings
+      {#if $importQueueCount > 0}<span class="queue-badge">{$importQueueCount}</span>{/if}
     </a>
   </div>
 </aside>
@@ -146,7 +147,9 @@
         </div>
       </a>
     {/if}
-    <a href="/settings" class="settings-btn" class:active={currentPath === '/settings'} title="Settings">⚙</a>
+    <a href="/settings" class="settings-btn" class:active={currentPath === '/settings'} title="Settings">
+      ⚙{#if $importQueueCount > 0}<span class="queue-badge">{$importQueueCount}</span>{/if}
+    </a>
   </header>
   <main class="main-content">
     {#if $activeSession && currentPath !== '/log'}
@@ -248,10 +251,28 @@
     padding: 4px 6px;
     border-radius: 6px;
     transition: color 0.15s, background 0.15s;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
   .settings-btn:hover, .settings-btn.active {
     color: var(--text);
     background: rgba(255,255,255,0.07);
+  }
+  .queue-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
   }
   .more-section-label {
     font-size: 10px;

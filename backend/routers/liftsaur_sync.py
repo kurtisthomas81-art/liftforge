@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from database import get_session
-from models import UserProfile, WorkoutSession, WorkoutSet, Exercise
+from models import UserProfile, WorkoutSession, WorkoutSet, Exercise, ExerciseImportQueue
 
 router = APIRouter(prefix="/api/liftsaur", tags=["liftsaur"])
 
@@ -133,20 +133,26 @@ def _build_ex_cache(session: Session) -> dict[str, Exercise]:
     return cache
 
 
-def _resolve_exercise(name: str, session: Session, ex_cache: dict) -> tuple[Exercise, bool]:
-    """Returns (exercise, is_newly_created).
-    Lookup order: exact name → alias → create new.
-    No prefix-stripping: equipment type (barbell vs dumbbell) changes the exercise identity.
-    """
-    key = name.lower().strip()
-    if key in ex_cache:
-        return ex_cache[key], False
-
-    new_ex = Exercise(name=name, is_custom=True)
-    session.add(new_ex)
-    session.flush()
-    ex_cache[key] = new_ex
-    return new_ex, True
+def _get_or_create_queue_entry(
+    raw_name: str, db: Session, queue_cache: dict
+) -> ExerciseImportQueue:
+    """Return the pending queue entry for raw_name, creating it if needed."""
+    key = raw_name.lower()
+    if key in queue_cache:
+        return queue_cache[key]
+    existing = db.exec(
+        select(ExerciseImportQueue)
+        .where(ExerciseImportQueue.raw_name == raw_name)
+        .where(ExerciseImportQueue.status == "pending")
+    ).first()
+    if existing:
+        queue_cache[key] = existing
+        return existing
+    entry = ExerciseImportQueue(raw_name=raw_name, pending_sets="[]")
+    db.add(entry)
+    db.flush()
+    queue_cache[key] = entry
+    return entry
 
 
 @router.put("/token")
@@ -187,7 +193,8 @@ def sync_liftosaur(session: Session = Depends(get_session)):
     imported_sessions = 0
     skipped_sessions = 0
     imported_sets = 0
-    new_exercise_names: set[str] = set()
+    queued_names: set[str] = set()
+    queue_cache: dict[str, ExerciseImportQueue] = {}
 
     for rec in records:
         key = (rec["started_at"].date().isoformat(), rec["session_name"])
@@ -208,19 +215,33 @@ def sync_liftosaur(session: Session = Depends(get_session)):
         imported_sessions += 1
 
         for ex_data in rec["exercises"]:
-            ex, is_new = _resolve_exercise(ex_data["name"], session, ex_cache)
-            if is_new:
-                new_exercise_names.add(ex.name)
+            ex = ex_cache.get(ex_data["name"].lower().strip())
 
-            for s in ex_data["sets"]:
-                session.add(WorkoutSet(
-                    session_id=ws.id,
-                    exercise_id=ex.id,
-                    set_number=s["set_number"],
-                    weight=s["weight"],
-                    reps=s["reps"],
-                ))
-                imported_sets += 1
+            if ex:
+                for s in ex_data["sets"]:
+                    session.add(WorkoutSet(
+                        session_id=ws.id,
+                        exercise_id=ex.id,
+                        set_number=s["set_number"],
+                        weight=s["weight"],
+                        reps=s["reps"],
+                    ))
+                    imported_sets += 1
+            else:
+                # Hold sets in the review queue — don't auto-create exercises
+                entry = _get_or_create_queue_entry(ex_data["name"], session, queue_cache)
+                pending = json.loads(entry.pending_sets)
+                for s in ex_data["sets"]:
+                    pending.append({
+                        "session_id": ws.id,
+                        "set_number": s["set_number"],
+                        "weight": s["weight"],
+                        "reps": s["reps"],
+                        "set_type": "straight",
+                    })
+                entry.pending_sets = json.dumps(pending)
+                session.add(entry)
+                queued_names.add(ex_data["name"])
 
     session.commit()
 
@@ -228,7 +249,7 @@ def sync_liftosaur(session: Session = Depends(get_session)):
         "imported_sessions": imported_sessions,
         "imported_sets": imported_sets,
         "skipped_sessions": skipped_sessions,
-        "new_exercises": list(new_exercise_names),
+        "queued_count": len(queued_names),
     }
 
 
