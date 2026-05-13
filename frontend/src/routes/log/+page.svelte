@@ -11,6 +11,7 @@
   let loading = true;
   let elapsed = '0:00';
   let intervalId;
+  let timerStartedAt = null;
   let editingName = false;
   let sessionName = '';
   let finishing = false;
@@ -73,9 +74,12 @@
 
     if (session) {
       await loadSession();
-      intervalId = setInterval(() => {
-        elapsed = getElapsed(session.started_at);
-      }, 1000);
+      const saved = sessionStorage.getItem(`lf_timer_${session.id}`);
+      if (saved) {
+        timerStartedAt = saved;
+        elapsed = getElapsed(timerStartedAt);
+        intervalId = setInterval(() => { elapsed = getElapsed(timerStartedAt); }, 1000);
+      }
     }
     loading = false;
   });
@@ -191,6 +195,13 @@
       if (rpeSetId === setId) rpeSetId = null;
     } else {
       doneIds.add(setId);
+      if (!timerStartedAt) {
+        timerStartedAt = new Date().toISOString().slice(0, -1);
+        sessionStorage.setItem(`lf_timer_${session.id}`, timerStartedAt);
+        clearInterval(intervalId);
+        elapsed = getElapsed(timerStartedAt);
+        intervalId = setInterval(() => { elapsed = getElapsed(timerStartedAt); }, 1000);
+      }
       if (weight && reps) {
         startRestTimer(exerciseName);
         rpeSetId = setId;
@@ -216,8 +227,8 @@
     session = $activeSession;
     exercises = [];
     sessionName = session.name || '';
-    elapsed = getElapsed(session.started_at);
-    intervalId = setInterval(() => { elapsed = getElapsed(session.started_at); }, 1000);
+    timerStartedAt = null;
+    elapsed = '0:00';
     pendingSessionCreate = false;
   }
 
@@ -230,6 +241,8 @@
     try { await api.prs.checkSession(sid); } catch {}
     await refreshActiveSession();
     dismissRestTimer();
+    sessionStorage.removeItem(`lf_timer_${sid}`);
+    timerStartedAt = null;
     clearInterval(intervalId);
     session = null;
     exercises = [];
