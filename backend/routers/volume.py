@@ -55,6 +55,8 @@ def _aggregate_sets_by_muscle(sets: list, exercises: dict, exclude_warmup: bool 
     for ws in sets:
         if exclude_warmup and ws.set_type == "warmup":
             continue
+        if ws.reps == 0:
+            continue
         ex = exercises.get(ws.exercise_id)
         if not ex:
             continue
@@ -70,6 +72,8 @@ def _aggregate_volume_load(sets: list, exercises: dict, exclude_warmup: bool = T
     muscle_vol: dict[str, float] = {}
     for ws in sets:
         if exclude_warmup and ws.set_type == "warmup":
+            continue
+        if ws.reps == 0:
             continue
         ex = exercises.get(ws.exercise_id)
         if not ex:

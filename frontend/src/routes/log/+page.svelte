@@ -452,7 +452,20 @@
   }
 
   // Superset pairing
-  let pairTarget = null; // exercise group currently selected for pairing
+  let pairTarget = null;
+  let removeConfirmExId = null;
+  let removing = false;
+
+  async function removeExercise(exerciseId) {
+    removing = true;
+    try {
+      await api.sessions.removeExercise(session.id, exerciseId);
+      exercises = exercises.filter(e => e.exercise_id !== exerciseId);
+      removeConfirmExId = null;
+    } finally {
+      removing = false;
+    }
+  }
 
   async function startPairing(group) {
     if (pairTarget && pairTarget.exercise_id === group.exercise_id) {
@@ -574,11 +587,6 @@
     <div class="progress-bar-track">
       <div class="progress-bar-fill" style="width:{progressPct}%"></div>
     </div>
-  </div>
-
-  <!-- Scrollable content -->
-  <div class="log-body">
-    <!-- Rest timer inline card -->
     {#if restRunning}
       <div class="rest-card">
         <svg width="62" height="62" class="rest-ring" style="flex-shrink:0">
@@ -604,7 +612,10 @@
         </div>
       </div>
     {/if}
+  </div>
 
+  <!-- Scrollable content -->
+  <div class="log-body">
     <!-- Today's Plan panel (generated sessions) -->
     {#if $sessionPlan?.exercises?.length}
       <div class="plan-card">
@@ -671,8 +682,19 @@
                   <button class="ex-action-btn" on:click={() => togglePrev(group.exercise_id)}>
                     {showPrev[group.exercise_id] ? '▲' : '▼'}
                   </button>
+                  <button class="ex-action-btn ex-remove-btn" title="Remove exercise"
+                    on:click|stopPropagation={() => removeConfirmExId = removeConfirmExId === group.exercise_id ? null : group.exercise_id}>✕</button>
                 </div>
               </div>
+              {#if removeConfirmExId === group.exercise_id}
+                <div class="remove-confirm">
+                  <span>Remove "{group.exercise_name}" and all its sets?</span>
+                  <div class="remove-confirm-btns">
+                    <button class="btn-remove-confirm" on:click={() => removeExercise(group.exercise_id)} disabled={removing}>{removing ? 'Removing…' : 'Remove'}</button>
+                    <button class="btn-remove-cancel" on:click={() => removeConfirmExId = null} disabled={removing}>Keep</button>
+                  </div>
+                </div>
+              {/if}
               {#if showPrev[group.exercise_id]}
                 <div class="prev-ref">
                   {#if prevSessions[group.exercise_id]}
@@ -768,8 +790,20 @@
               <button class="ex-action-btn" on:click={() => togglePrev(group.exercise_id)}>
                 {showPrev[group.exercise_id] ? '▲' : '▼'}
               </button>
+              <button class="ex-action-btn ex-remove-btn" title="Remove exercise"
+                on:click|stopPropagation={() => removeConfirmExId = removeConfirmExId === group.exercise_id ? null : group.exercise_id}>✕</button>
             </div>
           </div>
+
+          {#if removeConfirmExId === group.exercise_id}
+            <div class="remove-confirm">
+              <span>Remove "{group.exercise_name}" and all its sets?</span>
+              <div class="remove-confirm-btns">
+                <button class="btn-remove-confirm" on:click={() => removeExercise(group.exercise_id)} disabled={removing}>{removing ? 'Removing…' : 'Remove'}</button>
+                <button class="btn-remove-cancel" on:click={() => removeConfirmExId = null} disabled={removing}>Keep</button>
+              </div>
+            </div>
+          {/if}
 
           <!-- Previous session reference -->
           {#if showPrev[group.exercise_id]}
@@ -1179,11 +1213,12 @@
   }
   .plan-dismiss:hover { color:var(--accent); }
 
-  /* Rest timer card */
+  /* Rest timer card (now inside sticky header) */
   .rest-card {
     background:var(--surf-2); border:1px solid var(--bdr-2);
     border-radius:var(--radius-lg); padding:12px 16px;
-    display:flex; align-items:center; gap:14px; margin-bottom:14px;
+    display:flex; align-items:center; gap:14px;
+    margin-top:10px; margin-bottom:12px;
   }
   .rest-info { flex:1; }
   .rest-title { font-family:var(--serif); font-size:16px; color:var(--text); margin-bottom:2px; }
@@ -1196,6 +1231,25 @@
   }
   .rest-skip { background:transparent; border:none; font-size:11px; color:var(--muted); cursor:pointer; padding:3px 6px; }
   .rest-skip:hover { color:var(--accent); }
+
+  /* Remove exercise */
+  .ex-remove-btn { color:var(--muted); }
+  .ex-remove-btn:hover { color:var(--danger,#e8365d); border-color:var(--danger,#e8365d); }
+  .remove-confirm {
+    background:rgba(232,54,93,0.07); border:1px solid rgba(232,54,93,0.25);
+    border-radius:var(--radius); padding:10px 12px; margin-bottom:10px;
+    font-size:12px; color:var(--text);
+  }
+  .remove-confirm-btns { display:flex; gap:8px; margin-top:8px; }
+  .btn-remove-confirm {
+    flex:1; padding:8px; background:var(--danger,#e8365d); color:#fff;
+    border:none; border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer;
+  }
+  .btn-remove-confirm:disabled { opacity:0.5; cursor:not-allowed; }
+  .btn-remove-cancel {
+    flex:1; padding:8px; background:transparent; color:var(--muted);
+    border:1px solid var(--bdr-2); border-radius:var(--radius); font-size:12px; cursor:pointer;
+  }
 
   /* Exercise block */
   .ex-block { margin-bottom:16px; }

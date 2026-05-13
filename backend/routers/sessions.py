@@ -662,6 +662,23 @@ def delete_set(
     return {"ok": True}
 
 
+@router.delete("/{session_id}/exercises/{exercise_id}")
+def remove_exercise_from_session(
+    session_id: int,
+    exercise_id: int,
+    session: Session = Depends(get_session),
+):
+    sets = session.exec(
+        select(WorkoutSet)
+        .where(WorkoutSet.session_id == session_id, WorkoutSet.exercise_id == exercise_id)
+    ).all()
+    count = len(sets)
+    for ws in sets:
+        session.delete(ws)
+    session.commit()
+    return {"deleted": True, "sets_removed": count}
+
+
 class SwapExercisePayload(BaseModel):
     old_exercise_id: int
     new_exercise_id: int
