@@ -26,6 +26,8 @@ export const api = {
     },
     get: (id) => request('GET', `/exercises/${id}`),
     create: (data) => request('POST', '/exercises', data),
+    update: (id, data) => request('PATCH', `/exercises/${id}`, data),
+    delete: (id) => request('DELETE', `/exercises/${id}`),
     history: (id) => request('GET', `/exercises/${id}/history`),
   },
 

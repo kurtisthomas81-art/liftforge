@@ -156,6 +156,78 @@ def _backfill_compound_secondaries(session: Session) -> None:
         print(f"Backfilled compound secondary muscles for {updated} exercises.")
 
 
+def _purge_redundant_exercises(session: Session) -> None:
+    """Remove exercises that are exact duplicates of better-named alternatives, only if never logged."""
+    to_purge = ["Machine Lateral Raise", "Cross-Body Hammer Curl"]
+    for name in to_purge:
+        ex = session.exec(select(Exercise).where(Exercise.name == name)).first()
+        if not ex:
+            continue
+        used = session.exec(select(WorkoutSet).where(WorkoutSet.exercise_id == ex.id).limit(1)).first()
+        if used:
+            continue
+        session.delete(ex)
+    session.commit()
+
+
+def _fix_exercise_categories(session: Session) -> None:
+    """Correct miscategorizations and add missing secondary muscles. All ops are idempotent."""
+    import json as _json
+
+    fixes = [
+        # (name, field, new_json_value)
+        ("Reverse Curl",    "primary_muscles",   _json.dumps(["biceps"])),
+        ("Reverse Curl",    "secondary_muscles",  _json.dumps(["forearms"])),
+        ("Upright Row",     "primary_muscles",   _json.dumps(["traps"])),
+        ("Upright Row",     "secondary_muscles",  _json.dumps(["shoulders", "biceps"])),
+        ("Band Pull-Apart", "mechanics",          "compound"),
+        ("Shrug",           "equipment_required", _json.dumps(["barbell", "dumbbell"])),
+    ]
+    for name, field, value in fixes:
+        ex = session.exec(select(Exercise).where(Exercise.name == name)).first()
+        if ex and getattr(ex, field) != value:
+            setattr(ex, field, value)
+            session.add(ex)
+
+    # Remove "cable upright row" alias from Upright Row
+    upright = session.exec(select(Exercise).where(Exercise.name == "Upright Row")).first()
+    if upright:
+        aliases = _json.loads(upright.aliases)
+        cleaned = [a for a in aliases if a.lower() != "cable upright row"]
+        if cleaned != aliases:
+            upright.aliases = _json.dumps(cleaned)
+            session.add(upright)
+
+    # Add missing secondary muscles
+    secondary_additions = {
+        "Cable Curl":                               "forearms",
+        "Preacher Curl":                            "forearms",
+        "Concentration Curl":                       "forearms",
+        "Incline Dumbbell Curl":                    "forearms",
+        "Machine Curl":                             "forearms",
+        "Tricep Pushdown (rope)":                   "forearms",
+        "Tricep Pushdown (bar)":                    "forearms",
+        "Skull Crushers":                           "forearms",
+        "Overhead Tricep Extension (dumbbell)":     "forearms",
+        "Overhead Tricep Extension (cable)":        "forearms",
+        "Kickback":                                 "forearms",
+        "Dumbbell Flye":                            "shoulders",
+        "Cable Crossover":                          "shoulders",
+        "Pec Deck Machine":                         "shoulders",
+    }
+    for ex_name, muscle in secondary_additions.items():
+        ex = session.exec(select(Exercise).where(Exercise.name == ex_name)).first()
+        if not ex:
+            continue
+        secondaries = _json.loads(ex.secondary_muscles)
+        if muscle not in secondaries:
+            secondaries.append(muscle)
+            ex.secondary_muscles = _json.dumps(secondaries)
+            session.add(ex)
+
+    session.commit()
+
+
 def _backfill_landmark_goals(session: Session) -> None:
     """Seed goal-specific landmark rows for goals not yet in the DB."""
     from seed_data import LANDMARKS as _LANDMARKS
@@ -207,6 +279,10 @@ def on_startup():
         _backfill_compound_secondaries(session)
         # Seed goal-specific landmark rows for any goals not yet in the DB
         _backfill_landmark_goals(session)
+        # Remove redundant duplicate exercises (only if never logged)
+        _purge_redundant_exercises(session)
+        # Fix miscategorizations and add missing secondary muscles
+        _fix_exercise_categories(session)
 
 
 @app.get("/api/health")

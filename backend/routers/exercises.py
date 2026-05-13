@@ -1,12 +1,26 @@
 import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select
+from pydantic import BaseModel
+from sqlmodel import Session, select, func
 from database import get_session
 from models import Exercise, WorkoutSet, WorkoutSession
 from datetime import datetime
 
 router = APIRouter(prefix="/api/exercises", tags=["exercises"])
+
+
+class ExerciseUpdate(BaseModel):
+    name: Optional[str] = None
+    aliases: Optional[list] = None
+    notes: Optional[str] = None
+    primary_muscles: Optional[list] = None
+    secondary_muscles: Optional[list] = None
+    equipment_required: Optional[list] = None
+    mechanics: Optional[str] = None
+    force: Optional[str] = None
+    movement_pattern: Optional[str] = None
+    is_bilateral: Optional[bool] = None
 
 
 def _serialize(ex: Exercise) -> dict:
@@ -102,6 +116,70 @@ def create_exercise(payload: dict, session: Session = Depends(get_session)):
     session.commit()
     session.refresh(ex)
     return _serialize(ex)
+
+
+@router.patch("/{exercise_id}")
+def update_exercise(exercise_id: int, payload: ExerciseUpdate, session: Session = Depends(get_session)):
+    ex = session.get(Exercise, exercise_id)
+    if not ex:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+
+    if payload.name is not None:
+        ex.name = payload.name
+    if payload.aliases is not None:
+        ex.aliases = json.dumps(payload.aliases)
+    if payload.notes is not None:
+        ex.notes = payload.notes
+    if payload.primary_muscles is not None:
+        ex.primary_muscles = json.dumps(payload.primary_muscles)
+    if payload.secondary_muscles is not None:
+        ex.secondary_muscles = json.dumps(payload.secondary_muscles)
+    if payload.equipment_required is not None:
+        ex.equipment_required = json.dumps(payload.equipment_required)
+    if payload.mechanics is not None:
+        ex.mechanics = payload.mechanics
+    if payload.force is not None:
+        ex.force = payload.force
+    if payload.movement_pattern is not None:
+        ex.movement_pattern = payload.movement_pattern
+    if payload.is_bilateral is not None:
+        ex.is_bilateral = payload.is_bilateral
+
+    # Recompute sub_pattern if any classifying field changed
+    if any(f is not None for f in [payload.movement_pattern, payload.force, payload.primary_muscles, payload.mechanics]):
+        from seed_data import _compute_sub_pattern
+        ex.sub_pattern = _compute_sub_pattern(
+            ex.movement_pattern,
+            ex.force,
+            json.loads(ex.primary_muscles),
+            ex.mechanics,
+            ex.name,
+        )
+
+    session.add(ex)
+    session.commit()
+    session.refresh(ex)
+    return _serialize(ex)
+
+
+@router.delete("/{exercise_id}")
+def delete_exercise(exercise_id: int, session: Session = Depends(get_session)):
+    ex = session.get(Exercise, exercise_id)
+    if not ex:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+
+    set_count = session.exec(
+        select(func.count(WorkoutSet.id)).where(WorkoutSet.exercise_id == exercise_id)
+    ).one()
+    if set_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Exercise has {set_count} logged set{'s' if set_count != 1 else ''} and cannot be deleted.",
+        )
+
+    session.delete(ex)
+    session.commit()
+    return {"deleted": True}
 
 
 @router.get("/{exercise_id}/history")
