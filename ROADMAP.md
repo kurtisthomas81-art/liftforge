@@ -292,7 +292,47 @@ RIR-driven weight auto-adjustments. When a user logs avg RIR ≤ 1 on straight s
 
 ---
 
-## 🔮 Phase 8 — Intelligence & Notifications
+## ✅ Phase 8 — Smart Session Quality (SHIPPED)
+
+### Liftosaur Import Pipeline
+
+| Feature | Description |
+|---------|-------------|
+| ~~Exercise alias system~~ | `aliases` JSON field on `Exercise`; sync lookup checks name + all aliases (case-insensitive); no more duplicate DB entries when Liftosaur uses a different name for the same exercise |
+| ~~Import queue~~ | Unrecognized Liftosaur exercise names land in `ExerciseImportQueue` instead of auto-creating junk entries. User reviews each in `/import-queue`: match to existing (auto-adds alias for future imports), add as new, or dismiss |
+| ~~Queue badge~~ | Amber pill badge on Settings gear icon when queue has pending items; `importQueueCount` store refreshed after every sync |
+| ~~Alias backfill~~ | Startup backfill seeds common variant aliases ("flat bench press", "overhead press", "bent over row", "pull up/ups", "chin up/ups", "barbell squat", "dl") |
+
+### Session Generation Intelligence
+
+| Feature | Description |
+|---------|-------------|
+| ~~Injury-aware exercise selection~~ | Active injuries (from Settings) exclude related movement patterns and primary muscles from auto-selection; `INJURY_EXCLUDED_PATTERNS` + `INJURY_EXCLUDED_MUSCLES` maps in engine |
+| ~~Cross-session recovery check~~ | 72-hour lookback; per-muscle `RECOVERY_HOURS` thresholds (24–72h); `recovery_warnings` returned in generate response flagging muscles trained too recently |
+| ~~Readiness modulation~~ | `?readiness=1–5` query param on `POST /sessions/generate`; ≤2 → 65% volume + RIR+2; ==3 → 85% volume + RIR+1; 4–5 → standard programming |
+
+### Warmup Pre-population
+
+| Feature | Description |
+|---------|-------------|
+| ~~Already-warm rule~~ | `_warmup_sets_needed` returns 0 when primary muscle already activated — no barbell exception; all warmups skipped |
+| ~~Barbell sequence~~ | Fresh barbell compound → 3 sets: empty bar (45 lbs) → 50% → 75% of last working weight. Isolation → 2 sets: bar → 65% |
+| ~~Non-barbell sequence~~ | Fresh compound → 2 sets: 50% → 75%. Isolation → 1 set: 50% |
+| ~~Auto-created at session start~~ | `generate_session` pre-creates warmup `WorkoutSet` rows immediately; weights pulled from last straight set for that exercise; rounded to nearest 5 lbs; graduated sets null if no history |
+| ~~Warmup rest time~~ | `rest_seconds = 60` stored on all auto-created warmup sets; log page rest timer uses per-set value (warmup completions start 1-min countdown instead of default) |
+| ~~Quick Test updated~~ | Sandbox session uses `_build_warmup_sets` directly — always reflects current warmup rules |
+
+### Logger Polish
+
+| Feature | Description |
+|---------|-------------|
+| ~~Timer starts on first set~~ | Workout elapsed timer now starts when first set is checked done (warmup or working), not on session creation; persisted in `sessionStorage` across page navigations |
+| ~~Quick Test sandbox~~ | "Quick Test" button on empty log page creates a pre-populated Bench/Squat/Row session for UI exploration without building a real workout |
+| ~~Warmup toggle~~ | "W" button on each set row flips `set_type` between warmup and straight; warmup rows render at 65% opacity; excluded from all volume calculations |
+
+---
+
+## 🔮 Phase 9 — Intelligence & Notifications
 
 | Feature | Status | Description |
 |---------|--------|-------------|
