@@ -201,16 +201,14 @@ def _movement_fatigue(movement_pattern: str) -> str:
 def _warmup_sets_needed(ex: dict, activated_muscles: set) -> int:
     """
     Returns warm-up set count for this exercise.
-    Barbell exercises always start with an empty-bar set (45 lb pattern check),
-    then the normal ramp-up sets follow.
 
-    Base counts (before barbell bonus):
-      - Already-warm muscle:   0
-      - First high-fatigue compound (squat/deadlift pattern): 3
-      - First other compound:  2
-      - First isolation:       1
-    Barbell exercises add +1 (the empty-bar set) to whatever the base is,
-    with a floor of 1 so even warm-muscle barbell exercises get the bar check.
+    Already-warm muscle → 0 (all warmups skipped, including barbell-only).
+    Fresh muscle + barbell: set 1 = empty bar, then graduated % sets.
+      compound → 3 total (bar, 50%, 75%)
+      isolation → 2 total (bar, 65%)
+    Fresh muscle, no barbell:
+      compound → 2 total (50%, 75%)
+      isolation → 1 total (50%)
     """
     primaries = _parse_list(ex.get("primary_muscles", []))
     equipment = _parse_list(ex.get("equipment_required", []))
@@ -219,12 +217,9 @@ def _warmup_sets_needed(ex: dict, activated_muscles: set) -> int:
     already_warm = any(m in activated_muscles for m in primaries)
 
     if already_warm:
-        return 1 if uses_barbell else 0
+        return 0
 
-    pattern = ex.get("movement_pattern", "")
-    if pattern in HIGH_FATIGUE_PATTERNS:
-        base = 3
-    elif ex.get("mechanics") == "compound":
+    if ex.get("mechanics") == "compound":
         base = 2
     else:
         base = 1

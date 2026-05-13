@@ -42,6 +42,7 @@ class WorkoutSet(SQLModel, table=True):
     rir: Optional[int] = Field(default=None)        # 0-4, nullable
     notes: Optional[str] = Field(default=None)
     set_type: str = Field(default="straight")       # straight|warmup|drop|rest_pause
+    rest_seconds: Optional[int] = Field(default=None)
     superset_group: Optional[int] = Field(default=None)  # exercises sharing same int are paired
 
 

@@ -56,6 +56,89 @@ class SetUpdate(BaseModel):
     set_type: Optional[str] = None
 
 
+_BARBELL_WEIGHT = {"lbs": 45.0, "kg": 20.0}
+
+# Graduated % sets that follow the empty-bar set (barbell exercises)
+_WARMUP_PCT_SCHEDULE: dict[int, list] = {
+    1: [],
+    2: [0.65],
+    3: [0.50, 0.75],
+}
+_WARMUP_REP_SCHEDULE: dict[int, list] = {
+    1: [5],
+    2: [5, 3],
+    3: [5, 5, 3],
+}
+# Non-barbell: pure percentage sets
+_NONBARBELL_PCT_SCHEDULE: dict[int, list] = {
+    1: [0.50],
+    2: [0.50, 0.75],
+}
+
+
+def _get_last_working_weight(exercise_id: int, db: Session) -> Optional[float]:
+    result = db.exec(
+        select(WorkoutSet)
+        .join(WorkoutSession, WorkoutSet.session_id == WorkoutSession.id)
+        .where(WorkoutSet.exercise_id == exercise_id)
+        .where(WorkoutSet.set_type == "straight")
+        .where(WorkoutSet.weight != None)
+        .order_by(WorkoutSession.started_at.desc())
+        .limit(1)
+    ).first()
+    return result.weight if result else None
+
+
+def _build_warmup_sets(
+    session_id: int,
+    exercise_id: int,
+    warmup_count: int,
+    working_weight: Optional[float],
+    uses_barbell: bool,
+    unit: str,
+    start_set_number: int,
+) -> list:
+    if warmup_count <= 0:
+        return []
+    bar = _BARBELL_WEIGHT.get(unit, 45.0)
+    round_to = 5.0 if unit == "lbs" else 2.5
+    reps_list = _WARMUP_REP_SCHEDULE.get(warmup_count, [5, 5, 3])
+
+    if uses_barbell:
+        pcts = _WARMUP_PCT_SCHEDULE.get(warmup_count, [0.50, 0.75])
+        weights = [bar]
+        for pct in pcts:
+            if working_weight:
+                raw = working_weight * pct
+                w = max(bar, round(raw / round_to) * round_to)
+            else:
+                w = None
+            weights.append(w)
+    else:
+        pcts = _NONBARBELL_PCT_SCHEDULE.get(warmup_count, [0.50, 0.75])
+        weights = []
+        for pct in pcts:
+            if working_weight:
+                raw = working_weight * pct
+                w = round(raw / round_to) * round_to
+            else:
+                w = None
+            weights.append(w)
+
+    return [
+        WorkoutSet(
+            session_id=session_id,
+            exercise_id=exercise_id,
+            set_number=start_set_number + i,
+            weight=w,
+            reps=r,
+            set_type="warmup",
+            rest_seconds=60,
+        )
+        for i, (w, r) in enumerate(zip(weights, reps_list))
+    ]
+
+
 def _serialize_set(ws: WorkoutSet) -> dict:
     return {
         "id": ws.id,
@@ -67,6 +150,7 @@ def _serialize_set(ws: WorkoutSet) -> dict:
         "rir": ws.rir,
         "notes": ws.notes,
         "set_type": ws.set_type,
+        "rest_seconds": ws.rest_seconds,
         "superset_group": ws.superset_group,
     }
 
@@ -389,6 +473,19 @@ def generate_session(
     db.add(wk)
     db.commit()
     db.refresh(wk)
+
+    # Pre-populate warmup sets with calculated weights
+    unit = profile.unit_preference if profile else "lbs"
+    for ex in exercise_plan:
+        w_count = ex["warmup_sets"]
+        if w_count <= 0:
+            continue
+        uses_barbell = "barbell" in ex.get("equipment_required", [])
+        last_weight = _get_last_working_weight(ex["id"], db)
+        warmup_rows = _build_warmup_sets(wk.id, ex["id"], w_count, last_weight, uses_barbell, unit, 1)
+        for row in warmup_rows:
+            db.add(row)
+    db.commit()
 
     exercises_out = [
         {

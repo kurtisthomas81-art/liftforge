@@ -40,6 +40,7 @@ def migrate_db():
         ("mesocycle", "session_counter", "INTEGER DEFAULT 0"),
         ("musclevolumelandmark", "goal", "TEXT DEFAULT 'hypertrophy'"),
         ("plannedexercise", "set_technique", "TEXT DEFAULT 'straight'"),
+        ("workoutset", "rest_seconds", "INTEGER DEFAULT NULL"),
     ]
     with engine.connect() as conn:
         for table, col, typedef in new_cols:

@@ -40,6 +40,7 @@
   let restTimer = null;
   let restExerciseName = '';
   let restRemaining = 0;
+  let restTotalSeconds = 90;
   let restRunning = false;
   let restDismissTimeout = null;
 
@@ -146,10 +147,11 @@
     } catch {}
   }
 
-  function startRestTimer(exerciseName) {
+  function startRestTimer(exerciseName, seconds = defaultRestSeconds) {
     clearRestTimer();
     restExerciseName = exerciseName;
-    restRemaining = defaultRestSeconds;
+    restTotalSeconds = seconds;
+    restRemaining = seconds;
     restRunning = true;
     restTimer = setInterval(() => {
       restRemaining -= 1;
@@ -185,11 +187,11 @@
   }
 
   $: restCirc = 2 * Math.PI * 24;
-  $: restOffset = restCirc * (restRemaining / defaultRestSeconds);
+  $: restOffset = restCirc * (restRemaining / restTotalSeconds);
   $: restColor = restRemaining <= 15 ? 'var(--accent)' : 'var(--success)';
 
   // ── Set "done" toggle ───────────────────────────────────────────────────────
-  function toggleDone(setId, exerciseName, weight, reps) {
+  function toggleDone(setId, exerciseName, weight, reps, restSeconds = null) {
     if (doneIds.has(setId)) {
       doneIds.delete(setId);
       if (rpeSetId === setId) rpeSetId = null;
@@ -203,7 +205,7 @@
         intervalId = setInterval(() => { elapsed = getElapsed(timerStartedAt); }, 1000);
       }
       if (weight && reps) {
-        startRestTimer(exerciseName);
+        startRestTimer(exerciseName, restSeconds ?? defaultRestSeconds);
         rpeSetId = setId;
       }
     }
@@ -723,7 +725,7 @@
                       <!-- svelte-ignore a11y-click-events-have-key-events -->
                       <!-- svelte-ignore a11y-no-static-element-interactions -->
                       <div class="set-check" class:checked={isDone}
-                        on:click={() => toggleDone(s.id, ssLabel, s.weight, s.reps)}>
+                        on:click={() => toggleDone(s.id, ssLabel, s.weight, s.reps, s.rest_seconds)}>
                         {#if isDone}<span class="check-mark">✓</span>{/if}
                       </div>
                       <button class="del-btn" on:click={() => deleteSet(s.id)}>✕</button>
@@ -830,7 +832,7 @@
                   <!-- svelte-ignore a11y-click-events-have-key-events -->
                   <!-- svelte-ignore a11y-no-static-element-interactions -->
                   <div class="set-check" class:checked={isDone}
-                    on:click={() => toggleDone(s.id, group.exercise_name, s.weight, s.reps)}>
+                    on:click={() => toggleDone(s.id, group.exercise_name, s.weight, s.reps, s.rest_seconds)}>
                     {#if isDone}<span class="check-mark">✓</span>{/if}
                   </div>
                   <button class="del-btn" on:click={() => deleteSet(s.id)}>✕</button>
