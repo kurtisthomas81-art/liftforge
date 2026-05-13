@@ -32,6 +32,41 @@ ISO_CRITICAL_MUSCLES = {                   # muscles rarely covered as secondary
 }
 CORE_MUSCLES = {"abs", "core"}             # never auto-populated; optional accessory slot only
 
+# ── Injury → movement exclusion maps ──────────────────────────────────────────
+# Any active injury of any severity triggers exclusion of the listed sub_patterns
+# and primary muscles from auto-selection.  Conservative by design.
+INJURY_EXCLUDED_PATTERNS: dict[str, set] = {
+    "shoulder":   {"vertical_push", "horizontal_push"},
+    "elbow":      {"horizontal_push", "vertical_push", "horizontal_pull", "vertical_pull"},
+    "wrist":      {"horizontal_push", "vertical_push", "horizontal_pull"},
+    "lower_back": {"hip_dominant", "core"},
+    "upper_back": {"horizontal_pull", "vertical_pull"},
+    "hip":        {"knee_dominant", "hip_dominant"},
+    "knee":       {"knee_dominant"},
+    "neck":       {"horizontal_pull", "vertical_pull"},
+    "ankle":      set(),
+}
+INJURY_EXCLUDED_MUSCLES: dict[str, set] = {
+    "shoulder":   {"shoulders", "rear_delts"},
+    "elbow":      {"biceps", "triceps", "forearms"},
+    "wrist":      {"forearms"},
+    "lower_back": {"lower_back"},
+    "upper_back": {"upper_back", "traps"},
+    "hip":        {"glutes", "hip_flexors"},
+    "knee":       {"quads", "hamstrings"},
+    "ankle":      {"calves"},
+    "neck":       {"traps"},
+}
+
+# ── Recovery thresholds (hours) ────────────────────────────────────────────────
+# Muscles under high axial or systemic load need longer than isolation-focused muscles.
+RECOVERY_HOURS: dict[str, int] = {
+    "quads":      48, "hamstrings": 48, "glutes": 48, "lower_back": 72,
+    "chest":      48, "back":       48, "lats":   48,
+    "shoulders":  36, "traps":      36,
+    "biceps":     24, "triceps":    24, "calves":  24, "forearms":  24,
+}
+
 # ── Pattern × Goal prescription matrix ────────────────────────────────────────
 # Each entry: {fatigue, hypertrophy/strength/recomp: {sets:(min,max), reps:(min,max)}, beginner_rir:(conservative,standard)}
 PATTERN_PRESCRIPTION: dict[str, dict] = {
@@ -165,19 +200,36 @@ def _movement_fatigue(movement_pattern: str) -> str:
 
 def _warmup_sets_needed(ex: dict, activated_muscles: set) -> int:
     """
-    Returns warm-up sets needed before this exercise.
-    0 if any primary muscle is already warm from a previous exercise.
-    3 for first high-fatigue compound, 2 for first compound, 1 for first isolation.
+    Returns warm-up set count for this exercise.
+    Barbell exercises always start with an empty-bar set (45 lb pattern check),
+    then the normal ramp-up sets follow.
+
+    Base counts (before barbell bonus):
+      - Already-warm muscle:   0
+      - First high-fatigue compound (squat/deadlift pattern): 3
+      - First other compound:  2
+      - First isolation:       1
+    Barbell exercises add +1 (the empty-bar set) to whatever the base is,
+    with a floor of 1 so even warm-muscle barbell exercises get the bar check.
     """
     primaries = _parse_list(ex.get("primary_muscles", []))
-    if any(m in activated_muscles for m in primaries):
-        return 0
+    equipment = _parse_list(ex.get("equipment_required", []))
+    uses_barbell = "barbell" in equipment
+
+    already_warm = any(m in activated_muscles for m in primaries)
+
+    if already_warm:
+        return 1 if uses_barbell else 0
+
     pattern = ex.get("movement_pattern", "")
     if pattern in HIGH_FATIGUE_PATTERNS:
-        return 3
-    if ex.get("mechanics") == "compound":
-        return 2
-    return 1
+        base = 3
+    elif ex.get("mechanics") == "compound":
+        base = 2
+    else:
+        base = 1
+
+    return base + (1 if uses_barbell else 0)
 
 
 def _apply_secondary_credits(ex: dict, volume_credits: dict, sets: int) -> None:
@@ -263,6 +315,8 @@ def _select_exercises(
     max_per_muscle: int = 3,
     max_total: Optional[int] = None,
     compounds_only: bool = False,
+    excluded_patterns: Optional[set] = None,
+    excluded_muscles: Optional[set] = None,
 ) -> list[dict]:
     """
     Select exercises for a session with:
@@ -305,6 +359,15 @@ def _select_exercises(
                 break
             if ex["id"] in selected_ids:
                 continue
+
+            # Injury exclusions — skip exercises that stress injured body parts
+            sub_pat = ex.get("sub_pattern", "")
+            if excluded_patterns and sub_pat in excluded_patterns:
+                continue
+            if excluded_muscles:
+                ex_primaries = set(_parse_list(ex.get("primary_muscles", [])))
+                if ex_primaries & excluded_muscles:
+                    continue
 
             mechanics = ex.get("mechanics", "isolation")
             pattern = ex.get("movement_pattern", "")
@@ -433,13 +496,20 @@ def _select_for_slot(
     excluded_ids: set[int],
     experience_level: str,
     variant_index: int = 0,
+    excluded_patterns: Optional[set] = None,
+    excluded_muscles: Optional[set] = None,
 ) -> Optional[dict]:
     """Pick one exercise for a slot, cycling through candidates by variant_index."""
+    if excluded_patterns and slot in excluded_patterns:
+        return None  # entire slot blocked by active injury
     candidates = [
         ex for ex in exercises_db
         if ex.get("sub_pattern") == slot
         and set(_parse_list(ex.get("equipment_required", []))).issubset(available_equipment)
         and ex["id"] not in excluded_ids
+        and (not excluded_muscles or not (
+            set(_parse_list(ex.get("primary_muscles", []))) & excluded_muscles
+        ))
     ]
     if experience_level == "beginner":
         candidates = [e for e in candidates if e.get("mechanics") == "compound"]
@@ -456,6 +526,8 @@ def _select_session_exercises(
     experience_level: str,
     variant_letter: str,
     max_total: Optional[int],
+    excluded_patterns: Optional[set] = None,
+    excluded_muscles: Optional[set] = None,
 ) -> list[dict]:
     """Fill each slot with one exercise. Structural slot list prevents axial-load stacking."""
     variant_index = {"A": 0, "B": 1, "C": 2}.get(variant_letter, 0)
@@ -465,8 +537,12 @@ def _select_session_exercises(
     for slot in slots:
         if max_total is not None and len(result) >= max_total:
             break
-        ex = _select_for_slot(slot, available_equipment, exercises_db, selected_ids,
-                               experience_level, variant_index)
+        ex = _select_for_slot(
+            slot, available_equipment, exercises_db, selected_ids,
+            experience_level, variant_index,
+            excluded_patterns=excluded_patterns,
+            excluded_muscles=excluded_muscles,
+        )
         if ex:
             result.append(ex)
             selected_ids.add(ex["id"])
@@ -503,6 +579,8 @@ def preview_mesocycle(
     session_minutes: Optional[int] = None,
     experience_level: str = "intermediate",
     num_variants: int = 2,
+    excluded_patterns: Optional[set] = None,
+    excluded_muscles: Optional[set] = None,
 ) -> list[dict]:
     """
     Returns per-day exercise selection (week-1 parameters) without persisting.
@@ -540,7 +618,9 @@ def preview_mesocycle(
         variant = _variant_letter(idx, num_variants)
         slots = _build_slot_template(split_type, day["name"], variant)
         exercises_for_day = _select_session_exercises(
-            slots, equip_set, exercises_db, experience_level, variant, max_total
+            slots, equip_set, exercises_db, experience_level, variant, max_total,
+            excluded_patterns=excluded_patterns,
+            excluded_muscles=excluded_muscles,
         )
 
         activated_muscles: set[str] = set()
@@ -635,6 +715,8 @@ def generate_mesocycle(
     num_variants: int = 2,
     session_mode: str = "auto",
     custom_slot_sessions: Optional[list[dict]] = None,
+    excluded_patterns: Optional[set] = None,
+    excluded_muscles: Optional[set] = None,
 ) -> list[dict]:
     """
     Returns list of week dicts with planned sessions and exercises.
@@ -703,7 +785,9 @@ def generate_mesocycle(
             else:
                 slots = _build_slot_template(split_type, day["name"], variant)
                 exercises_for_day = _select_session_exercises(
-                    slots, equip_set, exercises_db, experience_level, variant, max_total
+                    slots, equip_set, exercises_db, experience_level, variant, max_total,
+                    excluded_patterns=excluded_patterns,
+                    excluded_muscles=excluded_muscles,
                 )
 
             session_exercises = []

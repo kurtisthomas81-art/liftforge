@@ -1,19 +1,20 @@
 import json
 from typing import Optional
 from datetime import datetime, date, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from database import get_session
 from models import (
     WorkoutSession, WorkoutSet, Exercise, WorkoutTemplate, TemplateExercise,
     UserProfile, UserEquipment, Mesocycle, MesocycleWeek, PlannedSession, SplitDay,
-    MuscleVolumeLandmark,
+    MuscleVolumeLandmark, Injury,
 )
 from engine.meso_builder import (
     _parse_list as _mb_parse, _movement_fatigue, _warmup_sets_needed,
     _apply_secondary_credits, _rest_for_exercise, _fit_to_time,
     _exercise_budget, _select_exercises,
+    INJURY_EXCLUDED_PATTERNS, INJURY_EXCLUDED_MUSCLES, RECOVERY_HOURS,
 )
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -131,7 +132,10 @@ def create_session(payload: SessionCreate, session: Session = Depends(get_sessio
 
 
 @router.post("/generate")
-def generate_session(db: Session = Depends(get_session)):
+def generate_session(
+    readiness: Optional[int] = Query(None, ge=1, le=5),
+    db: Session = Depends(get_session),
+):
     profile = db.exec(select(UserProfile).where(UserProfile.user_id == USER_ID)).first()
     duration = profile.preferred_session_minutes if profile else 60
     experience_level = getattr(profile, "experience_level", "intermediate") or "intermediate"
@@ -139,10 +143,23 @@ def generate_session(db: Session = Depends(get_session)):
     meso = db.exec(
         select(Mesocycle).where(Mesocycle.user_id == USER_ID, Mesocycle.status == "active")
     ).first()
-    goal = meso.goal if meso else "hypertrophy"
+    goal = meso.goal if meso else "general_fitness"
 
-    reps_by_goal = {"strength": (3, 6), "hypertrophy": (8, 12), "recomp": (10, 15)}
-    reps_min, reps_max = reps_by_goal.get(goal, (8, 12))
+    reps_by_goal = {"strength": (3, 6), "hypertrophy": (8, 12), "recomp": (10, 15), "general_fitness": (6, 10)}
+    reps_min, reps_max = reps_by_goal.get(goal, (6, 10))
+
+    # ── Injury exclusions ─────────────────────────────────────────────────────
+    active_injuries = db.exec(
+        select(Injury).where(Injury.user_id == USER_ID, Injury.is_active == True)
+    ).all()
+    excluded_patterns: set[str] = set()
+    excluded_muscles: set[str] = set()
+    injury_exclusions: list[str] = []
+    for inj in active_injuries:
+        bp = inj.body_part
+        excluded_patterns |= INJURY_EXCLUDED_PATTERNS.get(bp, set())
+        excluded_muscles  |= INJURY_EXCLUDED_MUSCLES.get(bp, set())
+        injury_exclusions.append(bp)
 
     # ── Resolve target muscles from today's planned session ───────────────────
     target_muscles: list[str] = []
@@ -202,6 +219,67 @@ def generate_session(db: Session = Depends(get_session)):
     if not target_muscles:
         target_muscles = ["chest", "back", "shoulders"]
 
+    # Remove muscles that are excluded by active injuries
+    target_muscles = [m for m in target_muscles if m not in excluded_muscles]
+    if not target_muscles:
+        target_muscles = ["chest", "back", "shoulders"]
+        target_muscles = [m for m in target_muscles if m not in excluded_muscles]
+    if not target_muscles:
+        target_muscles = ["legs"]  # last resort
+
+    # ── Muscle recovery check ─────────────────────────────────────────────────
+    cutoff = datetime.utcnow() - timedelta(hours=72)
+    recent_sessions = db.exec(
+        select(WorkoutSession).where(
+            WorkoutSession.user_id == USER_ID,
+            WorkoutSession.started_at >= cutoff,
+        )
+    ).all()
+    last_trained: dict[str, datetime] = {}
+    for rs in recent_sessions:
+        rs_sets = db.exec(
+            select(WorkoutSet).where(WorkoutSet.session_id == rs.id)
+        ).all()
+        for ws in rs_sets:
+            if ws.set_type == "warmup":
+                continue
+            ex = db.get(Exercise, ws.exercise_id)
+            if not ex:
+                continue
+            for m in _mb_parse(ex.primary_muscles):
+                if m not in last_trained or rs.started_at > last_trained[m]:
+                    last_trained[m] = rs.started_at
+
+    recovery_warnings: list[dict] = []
+    fresh: list[str] = []
+    for m in target_muscles:
+        last = last_trained.get(m)
+        if last is None:
+            fresh.append(m)
+            continue
+        hours_ago = (datetime.utcnow() - last).total_seconds() / 3600
+        min_hrs = RECOVERY_HOURS.get(m, 48)
+        if hours_ago < min_hrs * 0.5:
+            recovery_warnings.append({
+                "muscle": m,
+                "hours_since_trained": round(hours_ago, 1),
+                "min_recovery_hours": min_hrs,
+                "status": "too_soon",
+            })
+            # Still include so user isn't left with nothing, but flag it
+            fresh.append(m)
+        elif hours_ago < min_hrs:
+            recovery_warnings.append({
+                "muscle": m,
+                "hours_since_trained": round(hours_ago, 1),
+                "min_recovery_hours": min_hrs,
+                "status": "recovering",
+            })
+            fresh.append(m)
+        else:
+            fresh.append(m)
+    target_muscles = fresh or target_muscles
+
     # ── Available equipment ───────────────────────────────────────────────────
     equip_rows = db.exec(
         select(UserEquipment).where(UserEquipment.user_id == USER_ID, UserEquipment.available == True)
@@ -209,19 +287,20 @@ def generate_session(db: Session = Depends(get_session)):
     available_equipment = {r.equipment for r in equip_rows}
 
     # ── Exercise selection via engine ─────────────────────────────────────────
-    all_exercises_db = db.exec(select(Exercise)).all()
+    all_exercises_raw = db.exec(select(Exercise)).all()
     exercises_db = [
         {
             "id": ex.id,
             "name": ex.name,
             "mechanics": ex.mechanics,
             "movement_pattern": ex.movement_pattern or "",
+            "sub_pattern": ex.sub_pattern or "",
             "force": ex.force or "",
             "primary_muscles": _mb_parse(ex.primary_muscles),
             "secondary_muscles": _mb_parse(ex.secondary_muscles),
             "equipment_required": _mb_parse(ex.equipment_required),
         }
-        for ex in all_exercises_db
+        for ex in all_exercises_raw
     ]
 
     compounds_only = experience_level == "beginner"
@@ -234,24 +313,41 @@ def generate_session(db: Session = Depends(get_session)):
         max_per_muscle=max_per_muscle,
         max_total=max_total,
         compounds_only=compounds_only,
+        excluded_patterns=excluded_patterns,
+        excluded_muscles=excluded_muscles,
     )
+
+    # ── Readiness modulation ──────────────────────────────────────────────────
+    # readiness 1-2: significant volume reduction + back off intensity
+    # readiness 3-5: standard programming
+    if readiness is not None and readiness <= 2:
+        volume_scale = 0.65
+        rir_bump = 2
+    elif readiness is not None and readiness == 3:
+        volume_scale = 0.85
+        rir_bump = 1
+    else:
+        volume_scale = 1.0
+        rir_bump = 0
 
     # ── Assign sets and compute secondary credits ─────────────────────────────
     secondary_credits: dict[str, float] = {}
     activated_muscles: set[str] = set()
-
     exercise_plan: list[dict] = []
+
     for ex in selected:
         mechanics = ex.get("mechanics", "isolation")
         target_sets = 4 if mechanics == "compound" else 3
 
-        # Reduce sets for muscles with secondary coverage
         primaries = _mb_parse(ex.get("primary_muscles", []))
         primary = primaries[0] if primaries else None
         if primary:
             credit = secondary_credits.get(primary, 0.0)
             if credit >= target_sets * 0.5:
                 target_sets = max(2, target_sets - 1)
+
+        # Apply readiness scaling before time-budget fitting
+        target_sets = max(2, round(target_sets * volume_scale))
 
         warmup_sets = _warmup_sets_needed(ex, activated_muscles)
         rest_seconds = _rest_for_exercise(ex)
@@ -260,23 +356,26 @@ def generate_session(db: Session = Depends(get_session)):
         if mechanics == "isolation":
             rmin, rmax = max(reps_min, 10), max(reps_max, 15)
 
+        base_rir = 1 if goal == "strength" else 2
+        rir = min(4, base_rir + rir_bump)
+
         exercise_plan.append({
             **ex,
             "target_sets": target_sets,
             "reps_min": rmin,
             "reps_max": rmax,
+            "rir": rir,
             "warmup_sets": warmup_sets,
             "rest_seconds": rest_seconds,
         })
 
-        # Update tracking
         _apply_secondary_credits(ex, secondary_credits, target_sets)
         for m in primaries:
             activated_muscles.add(m)
         for m in _mb_parse(ex.get("secondary_muscles", [])):
             activated_muscles.add(m)
 
-    # ── Fit to time budget (reduce sets, never drop exercises) ────────────────
+    # ── Fit to time budget ────────────────────────────────────────────────────
     exercise_plan = _fit_to_time(exercise_plan, duration, sets_key="target_sets")
 
     # ── Build session ─────────────────────────────────────────────────────────
@@ -300,6 +399,7 @@ def generate_session(db: Session = Depends(get_session)):
             "sets": ex["target_sets"],
             "reps_min": ex["reps_min"],
             "reps_max": ex["reps_max"],
+            "rir": ex.get("rir", 2),
             "warmup_sets": ex["warmup_sets"],
             "rest_seconds": ex["rest_seconds"],
         }
@@ -311,6 +411,9 @@ def generate_session(db: Session = Depends(get_session)):
         "session_name": session_name,
         "goal": goal,
         "exercises": exercises_out,
+        "recovery_warnings": recovery_warnings,
+        "injury_exclusions": injury_exclusions,
+        "readiness_applied": readiness,
     }
 
 

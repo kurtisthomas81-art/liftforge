@@ -10,7 +10,7 @@ from models import (
     SplitTemplate, SplitDay,
     Mesocycle, MesocycleWeek, PlannedSession, PlannedExercise,
     WorkoutSession, WorkoutSet, Exercise, UserEquipment, MuscleVolumeLandmark,
-    UserProfile,
+    UserProfile, Injury,
 )
 
 router = APIRouter(prefix="/api/programs", tags=["programs"])
@@ -19,6 +19,20 @@ USER_ID = 1
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _get_injury_exclusions(db: Session) -> tuple[set, set]:
+    """Return (excluded_patterns, excluded_muscles) based on the user's active injuries."""
+    from engine.meso_builder import INJURY_EXCLUDED_PATTERNS, INJURY_EXCLUDED_MUSCLES
+    injuries = db.exec(
+        select(Injury).where(Injury.user_id == USER_ID, Injury.is_active == True)
+    ).all()
+    excluded_patterns: set = set()
+    excluded_muscles: set = set()
+    for inj in injuries:
+        excluded_patterns |= INJURY_EXCLUDED_PATTERNS.get(inj.body_part, set())
+        excluded_muscles  |= INJURY_EXCLUDED_MUSCLES.get(inj.body_part, set())
+    return excluded_patterns, excluded_muscles
+
 
 def _parse_variant(name: str):
     """Extract trailing A/B/C variant letter from a split day name.
@@ -510,6 +524,7 @@ def preview_custom_slots(payload: CustomSlotPreviewPayload, session: Session = D
 def preview_mesocycle_endpoint(payload: MesocycleCreate, session: Session = Depends(get_session)):
     from engine.meso_builder import preview_mesocycle
     _, _, template_data, user_equipment, landmarks, exercises_db, experience_level = _resolve_meso_resources(payload, session)
+    excluded_patterns, excluded_muscles = _get_injury_exclusions(session)
     return preview_mesocycle(
         split_template=template_data,
         goal=payload.goal,
@@ -521,6 +536,8 @@ def preview_mesocycle_endpoint(payload: MesocycleCreate, session: Session = Depe
         session_minutes=payload.session_minutes,
         experience_level=experience_level,
         num_variants=payload.num_variants,
+        excluded_patterns=excluded_patterns,
+        excluded_muscles=excluded_muscles,
     )
 
 
@@ -577,6 +594,7 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
     if payload.day_exercises:
         day_exercises_override = {int(k): v for k, v in payload.day_exercises.items()}
 
+    excluded_patterns, excluded_muscles = _get_injury_exclusions(session)
     weeks_data = generate_mesocycle(
         split_template=template_data,
         goal=payload.goal,
@@ -592,6 +610,8 @@ def create_mesocycle(payload: MesocycleCreate, session: Session = Depends(get_se
         num_variants=payload.num_variants,
         session_mode=payload.session_mode,
         custom_slot_sessions=payload.custom_slot_sessions,
+        excluded_patterns=excluded_patterns,
+        excluded_muscles=excluded_muscles,
     )
 
     dow_list = list(payload.days_of_week)
