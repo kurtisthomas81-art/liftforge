@@ -42,7 +42,7 @@ def recent_history(session: Session = Depends(get_session)):
                 for m in json.loads(ex.primary_muscles):
                     muscle_set.add(m)
 
-        working_sets = [ws for ws in sets if ws.set_type != "warmup"]
+        working_sets = [ws for ws in sets if ws.set_type != "warmup" and ws.reps > 0]
         result.append(
             {
                 "id": wk.id,
@@ -83,7 +83,7 @@ def exercise_progression(exercise_id: int, session: Session = Depends(get_sessio
         if not wk or not wk.completed_at:
             continue
 
-        working_sets = [s for s in sets if s.set_type != "warmup"]
+        working_sets = [s for s in sets if s.set_type != "warmup" and s.reps > 0]
         max_weight = max((s.weight or 0) for s in working_sets) if working_sets else 0
         total_volume = sum((s.weight or 0) * s.reps for s in working_sets)
         best_1rm = max(
