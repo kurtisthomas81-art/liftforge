@@ -343,8 +343,8 @@
       exercise_id: exerciseId,
       set_number: nextNum,
       weight: lastSet?.weight ?? null,
-      reps: lastSet?.reps ?? 0,
-      rir: lastSet?.rir ?? null,
+      reps: 0,
+      rir: null,
       set_type: 'straight',
     });
     await loadSession();
