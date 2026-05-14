@@ -75,12 +75,14 @@
   }
 
   let persistTimer = null;
+  let cachedDumbbells = []; // preserve dumbbell inventory when saving from this page
+
   function persistInventory() {
     clearTimeout(persistTimer);
     persistTimer = setTimeout(async () => {
       try {
         const barbell = Object.fromEntries(Object.entries(plateCounts).map(([w, cnt]) => [String(w), cnt]));
-        await api.profile.update({ plate_inventory: { barbell } });
+        await api.profile.update({ plate_inventory: { barbell, dumbbell: cachedDumbbells } });
       } catch (_) {}
     }, 1200);
   }
@@ -92,6 +94,7 @@
         switchUnit(profile.unit_preference);
       }
       const inv = profile.plate_inventory || {};
+      cachedDumbbells = inv.dumbbell || [];
       const barbellInv = inv.barbell || {};
       const current = { ...plateCounts };
       for (const [w, cnt] of Object.entries(barbellInv)) {
