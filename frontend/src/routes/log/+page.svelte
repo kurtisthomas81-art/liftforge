@@ -745,6 +745,7 @@
                       <input type="number" min="0" step="2.5" value={s.weight ?? ''} placeholder="BW"
                         class="set-input weight-input"
                         on:change={e => updateSetField(s.id, 'weight', e.target.value)} />
+                      <button class="plate-btn" title="Plate calculator" on:click|stopPropagation={() => openPlateCalc(s.id, s.weight)}>⊙</button>
                       <span class="set-times">×</span>
                       {#if s.target_reps}
                         <span class="target-hint">{s.target_reps}</span>
@@ -871,6 +872,7 @@
                     class="set-input weight-input"
                     on:change={e => updateSetField(s.id, 'weight', e.target.value)}
                   />
+                  <button class="plate-btn" title="Plate calculator" on:click|stopPropagation={() => openPlateCalc(s.id, s.weight)}>⊙</button>
                   <span class="set-times">×</span>
                   {#if s.target_reps}
                     <span class="target-hint">{s.target_reps}</span>
@@ -1354,6 +1356,12 @@
   .weight-input { width:62px; }
   .reps-input { width:48px; }
   .set-times { font-size:12px; color:var(--muted); }
+  .plate-btn {
+    background:transparent; border:none; cursor:pointer;
+    font-size:13px; color:var(--faint); padding:0 1px; line-height:1;
+    flex-shrink:0; transition:color 0.15s;
+  }
+  .plate-btn:hover { color:var(--accent); }
   .target-hint { font-size:13px; color:var(--muted); font-weight:600; min-width:18px; text-align:right; line-height:1; }
   .target-arrow { font-size:10px; color:var(--faint, var(--bdr)); margin:0 1px; }
   .reps-input.reps-hit { border-color:var(--success, #4caf50); color:var(--success, #4caf50); }
