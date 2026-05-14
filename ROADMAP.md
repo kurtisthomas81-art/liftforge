@@ -367,6 +367,41 @@ Fixes and improvements to the active session experience driven by real-world tes
 
 ---
 
+## ✅ Phase 9.5 — Plate Intelligence & UX Polish (SHIPPED)
+
+### Terminology Simplification Pass
+
+Plain-English pairings added across 12 frontend files — jargon kept, context added inline or via tooltip.
+
+| Location | Change |
+|----------|--------|
+| Volume Landmarks table headers | `MEV` / `MAV Low` / `MAV High` / `MRV` with descriptive `title=` tooltips |
+| Program builder wizard | "Build Training Block" (was "Build Mesocycle"); "Training Block Name" label |
+| Program page | "Build Custom Training Block"; "Recovery Week (Deload)" badge and alert |
+| Program detail | Week label shows "Recovery Week" instead of "Deload" |
+| Home page | Fatigue alert: "take a recovery week (deload)" |
+| Planned session | `@ RIR N` label with tooltip "Reps In Reserve — stop when you have N reps left" |
+| Recovery page | Subtitle: "effort (RIR — reps left in tank)"; Avg RIR header tooltip |
+| Logger | RPE column header tooltip: "Rate of Perceived Exertion — how hard the set felt" |
+| Progress page | Help cards: "Volume Targets (MEV → MRV)", "RIR — Reps Left in Tank", "Recovery Week (Deload)"; section title "Max Lift Trend (1RM)" |
+| Exercise page | "Best est. 1-rep max (1RM)" stat label |
+| Programs library | "Recovery (deload) on week N" label; `<span title="Reps In Reserve">RIR</span>` |
+| Volume Gauge | Tooltip: `floor: N sets (MEV) · target: lo–hi sets (MAV) · limit: N sets (MRV)` |
+
+### Plate Inventory System
+
+| Feature | Description |
+|---------|-------------|
+| ~~Exercise loading type~~ | `loading_type` derived from `equipment_required` on every exercise API response — barbell / cable / dumbbell / other; no new DB column needed |
+| ~~`plate_inventory` on UserProfile~~ | JSON field storing barbell plate counts per denomination + dumbbell pair weight list; migration-safe |
+| ~~Settings → Plate Inventory section~~ | Two-tab UI: Barbell (denomination rows with ± steppers, steps of 2, shows "N per side"); Dumbbells (tap-to-toggle grid of common weights 5–60 lbs) |
+| ~~Plates page persistence~~ | Loads saved barbell inventory on mount; auto-saves on every count change (1.2 s debounce); round-trips dumbbell data so saving barbell counts never wipes dumbbell list |
+| ~~Logger ⊙ button — loading-type aware~~ | Hidden for cable and bodyweight exercises; shown for barbell and dumbbell; mode auto-detected from exercise loading type on open |
+| ~~Barbell calc — inventory limits~~ | Plate solver respects owned plate counts (can't suggest plates you don't have); falls back to unlimited if no inventory set |
+| ~~Dumbbell picker modal~~ | Grid of owned dumbbell weights; nearest to the set's current weight highlighted in gold; tap any weight to select it and pre-fill the "Use X lbs" button |
+
+---
+
 ## 🔮 Phase 10 — Intelligence & Notifications
 
 | Feature | Status | Description |
