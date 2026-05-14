@@ -402,11 +402,47 @@ Plain-English pairings added across 12 frontend files — jargon kept, context a
 
 ---
 
-## 🔮 Phase 10 — Intelligence & Notifications
+## ✅ Phase 10 — Intelligence & Session Experience (SHIPPED)
+
+### Bug Fixes
+
+| Fix | Description |
+|-----|-------------|
+| ~~Exercise swap silent data loss~~ | `confirmSwap()` now rolls back UI and shows error if API call fails — previously optimistic update had no error recovery |
+| ~~`repeatSession` full page reload~~ | `window.location.href` replaced with `goto('/log')` + added missing import — was blowing away all SvelteKit stores |
+| ~~Ollama errors masked as "offline"~~ | Unexpected exceptions now log to console and return a distinct message instead of the generic offline message |
+| ~~RIR early/late trend asymmetry~~ | Single-datapoint muscles now return `null` for both early and late trend instead of asymmetric `null` / `value` |
+| ~~"Build Custom Training Block" hover~~ | Removed conflicting `create-btn` class causing red text on red background (invisible on hover) |
+| ~~Button style inconsistency~~ | "Build Custom Training Block" now uses `start-day-btn` to match all other primary CTAs |
+
+### AI Coach Upgrade
+
+Full context injection + safety guardrails replacing the minimal original implementation.
+
+| Feature | Description |
+|---------|-------------|
+| ~~Rich training context~~ | Injects active mesocycle (week, goal, periodization, deload flag), fatigue score + reasons, per-muscle recovery (days since, avg RIR, red/amber/green), full last session (every set with weight/reps/RIR), Big 4 e1RMs + strength level, active injuries, weekly check-in scores |
+| ~~Static RP knowledge block~~ | Curated MEV/MAV/MRV definitions, RIR scale, deload criteria, AR overload rules, and recovery timelines baked into the system prompt — eliminates hallucination on core methodology concepts without a retrieval system |
+| ~~Safety guardrails~~ | Hard rules: cite logged data before any weight recommendation; redirect injury questions to a sports medicine professional; never abandon mesocycle mid-block; say "I don't know" when data is absent |
+| ~~Context summary in header~~ | Chat page shows live context after first message: mesocycle week, fatigue score (color-coded), injury badge |
+| ~~Safety disclaimer~~ | Shown below chat header: "AI recommendations are informational. For injury concerns, consult a professional." |
+| ~~Suggestion chips~~ | Four quick-start prompts shown before first message: recovery, deload check, last session, weekly focus |
+
+### Post-Session Recap
+
+New finish flow: Complete → RPE → **Recap Modal** → Done → Home
+
+| Feature | Description |
+|---------|-------------|
+| ~~Session recap modal~~ | Shows session name + duration, PRs hit (gold badge, previously computed and discarded), every exercise with best working set (weight × reps @ RIR), total weight moved |
+| ~~PR capture~~ | `api.prs.checkSession()` result was always called but its return value was silently discarded — now captured and displayed in the recap |
+| ~~"Get Coach's Take" button~~ | Lazy-loads a 1-2 sentence Ollama coaching observation — not automatic (avoids blocking the UX while model loads) |
+| ~~AI recap guardrailed~~ | Model given verified PR count and names, explicitly banned from recounting them (the UI shows them accurately). AI restricted to coaching observations: RIR trend analysis, RPE calibration, one next-session adjustment |
+
+### Remaining Phase 10
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| AI Coach Upgrade | — | Deeper Ollama context: current mesocycle, fatigue score, PRs, weak lifts. Form cues, deload recommendations, auto-generated session summaries |
 | Notifications / Reminders | — | PWA push notifications for workout reminders, rest day alerts, muscle-group nudges ("haven't trained legs in 5 days") |
 
 ---
