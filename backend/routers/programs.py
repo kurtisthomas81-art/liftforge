@@ -814,9 +814,13 @@ def get_mesocycle_review(id: int, session: Session = Depends(get_session)):
 
         # RIR trend: early (first half) vs late (second half)
         all_rir = [r for wrir in week_muscle_rir for r in wrir.get(muscle, [])]
-        half = len(all_rir) // 2
-        avg_rir_early = round(sum(all_rir[:half]) / half, 1) if half else None
-        avg_rir_late = round(sum(all_rir[half:]) / max(len(all_rir) - half, 1), 1) if all_rir else None
+        if len(all_rir) < 2:
+            avg_rir_early = None
+            avg_rir_late = None
+        else:
+            half = len(all_rir) // 2
+            avg_rir_early = round(sum(all_rir[:half]) / half, 1)
+            avg_rir_late = round(sum(all_rir[half:]) / (len(all_rir) - half), 1)
 
         lm = landmarks.get(muscle)
         suggestion = None

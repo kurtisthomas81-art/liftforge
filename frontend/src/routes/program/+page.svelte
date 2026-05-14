@@ -238,7 +238,7 @@
           </div>
         {/each}
       </div>
-      <button class="create-btn outline-btn" on:click={() => goto('/program/builder')}>Build Custom Training Block</button>
+      <button class="outline-btn" on:click={() => goto('/program/builder')}>Build Custom Training Block</button>
     {/if}
 
   {:else}

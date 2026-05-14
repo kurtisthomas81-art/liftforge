@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+  import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
   import { formatDate, epley1RM } from '$lib/utils.js';
   import { Chart, registerables } from 'chart.js';
@@ -148,7 +149,7 @@
           });
         }
       }
-      window.location.href = '/log';
+      goto('/log');
     } catch {}
   }
 

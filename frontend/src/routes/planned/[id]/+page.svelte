@@ -91,19 +91,24 @@
       }
       return e;
     });
+    const previous = ps;
     ps = { ...ps, exercises: updated };
     showSwapModal = false;
 
-    // Persist
-    await api.programs.updatePlannedExercises(ps.id, updated.map(e => ({
-      exercise_id: e.exercise_id,
-      order_in_session: e.order_in_session,
-      target_sets: e.target_sets,
-      target_reps_min: e.target_reps_min,
-      target_reps_max: e.target_reps_max,
-      target_rir: e.target_rir,
-      notes: e.notes || '',
-    })));
+    try {
+      await api.programs.updatePlannedExercises(ps.id, updated.map(e => ({
+        exercise_id: e.exercise_id,
+        order_in_session: e.order_in_session,
+        target_sets: e.target_sets,
+        target_reps_min: e.target_reps_min,
+        target_reps_max: e.target_reps_max,
+        target_rir: e.target_rir,
+        notes: e.notes || '',
+      })));
+    } catch {
+      ps = previous;
+      error = 'Failed to save exercise swap — please try again.';
+    }
   }
 </script>
 

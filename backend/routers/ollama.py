@@ -135,6 +135,7 @@ async def chat(payload: ChatRequest, session: Session = Depends(get_session)):
     except httpx.TimeoutException:
         reply = "AI coach timed out. The model may be loading — try again in a moment."
     except Exception as e:
-        reply = "AI coach is offline. Check that Ollama is running on your host."
+        print(f"[ollama] unexpected error: {e}")
+        reply = "AI coach error — check server logs."
 
     return {"reply": reply}
