@@ -179,7 +179,7 @@
           <div style="font-size:13px; color:var(--text-muted); margin-bottom:8px;">
             <strong style="color:var(--primary);">{ex.target_sets} sets</strong>
             × {ex.target_reps_min}–{ex.target_reps_max} reps
-            @ RIR {ex.target_rir}
+            <span title="Reps In Reserve — stop when you have {ex.target_rir} reps left in the tank">@ RIR {ex.target_rir}</span>
           </div>
 
           <!-- Last week reference + overload suggestion -->
@@ -187,7 +187,7 @@
             <div style="background:var(--surface-2); border-left:2px solid var(--border); padding:6px 10px; border-radius:2px; font-size:12px; color:var(--text-muted);">
               Last week: {ex.last_week.max_weight} lbs × {ex.last_week.reps}
               {#if ex.last_week.rir !== null && ex.last_week.rir !== undefined}
-                @ RIR {ex.last_week.rir}
+                <span title="Reps In Reserve logged last week">@ RIR {ex.last_week.rir}</span>
               {/if}
               {#if ex.suggestion}
                 <span style="color:var(--primary); margin-left:8px;">→ {ex.suggestion}</span>

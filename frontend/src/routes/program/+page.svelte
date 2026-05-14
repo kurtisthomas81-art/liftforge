@@ -215,7 +215,7 @@
   {:else if !activeMeso}
     <div class="start-head">
       <div class="start-title">Start a Program</div>
-      <div class="start-sub">Pick a published program or build a custom mesocycle.</div>
+      <div class="start-sub">Pick a published program or build a custom training block (mesocycle).</div>
     </div>
 
     {#if libraryLoading}
@@ -238,7 +238,7 @@
           </div>
         {/each}
       </div>
-      <button class="create-btn outline-btn" on:click={() => goto('/program/builder')}>Build Custom Mesocycle</button>
+      <button class="create-btn outline-btn" on:click={() => goto('/program/builder')}>Build Custom Training Block</button>
     {/if}
 
   {:else}
@@ -254,7 +254,7 @@
         <div class="prog-bar-fill" style="width:{weekProgress}%"></div>
       </div>
       {#if activeMeso.current_week_is_deload}
-        <div class="deload-badge">Deload Week</div>
+        <div class="deload-badge">Recovery Week (Deload)</div>
       {/if}
     </div>
 
@@ -308,7 +308,7 @@
     {#if fatigueReport?.deload_recommended}
       <div class="fatigue-warn" style="border-color:{fatigueReport.fatigue_score>=8?'rgba(232,54,93,0.4)':'rgba(232,160,54,0.3)'}">
         <div class="fatigue-warn-title" style="color:{fatigueReport.fatigue_score>=8?'var(--danger)':'var(--warn)'}">
-          {fatigueReport.fatigue_score>=8?'Critical fatigue — deload now':'High fatigue — consider a deload'}
+          {fatigueReport.fatigue_score>=8?'Critical fatigue — take a recovery week (deload)':'High fatigue — consider a recovery week (deload)'}
         </div>
       </div>
     {/if}

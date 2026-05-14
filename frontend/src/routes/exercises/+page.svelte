@@ -313,7 +313,7 @@
               <div class="ex-stats-grid">
                 <div class="ex-stat">
                   <div class="ex-stat-val">{bestOneRM ?? '—'}<span class="ex-stat-unit">lb</span></div>
-                  <div class="ex-stat-lbl">Best est. 1RM</div>
+                  <div class="ex-stat-lbl">Best est. 1-rep max (1RM)</div>
                 </div>
                 <div class="ex-stat">
                   <div class="ex-stat-val">

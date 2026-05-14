@@ -82,7 +82,7 @@
                   {@const status = getStatus(sets, lm)}
                   {@const cfg = STATUS[status]}
                   {@const fill = barFill(sets, lm)}
-                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px;" title="{lm ? `MEV ${lm.mev} · MAV ${lm.mav_low}–${lm.mav_high} · MRV ${lm.mrv}` : 'No landmark data'}">
+                  <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px;" title="{lm ? `floor: ${lm.mev} sets (MEV) · target: ${lm.mav_low}–${lm.mav_high} sets (MAV) · limit: ${lm.mrv} sets (MRV)` : 'No landmark data'}">
                     <span style="font-size:11px; color:var(--text-muted); min-width:80px;">{FRIENDLY[muscle] ?? muscle}</span>
                     <div style="flex:1; height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden; position:relative;">
                       <div style="position:absolute; left:0; top:0; height:100%; width:{fill}%; background:{cfg.color}; border-radius:3px; transition:width 0.3s;"></div>
@@ -98,7 +98,7 @@
           {/if}
         {/each}
         <div style="font-size:10px; color:var(--text-faint); margin-top:4px; border-top:1px solid var(--border); padding-top:8px; line-height:1.7;">
-          <span style="color:var(--text-muted);">MEV</span> = floor &nbsp;·&nbsp; <span style="color:var(--text-muted);">MAV</span> = target zone &nbsp;·&nbsp; <span style="color:var(--text-muted);">MRV</span> = ceiling &nbsp;·&nbsp; bar fills to MRV. Secondary muscles count as 0.5 sets.
+          <span style="color:var(--text-muted);">MEV</span> (floor) &nbsp;·&nbsp; <span style="color:var(--text-muted);">MAV</span> (target zone) &nbsp;·&nbsp; <span style="color:var(--text-muted);">MRV</span> (limit) &nbsp;·&nbsp; bar fills to MRV. Secondary muscles count as 0.5 sets.
         </div>
       {/if}
     </div>

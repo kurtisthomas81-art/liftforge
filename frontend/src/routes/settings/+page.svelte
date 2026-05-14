@@ -436,16 +436,16 @@
 {#if landmarks.length > 0}
   <div class="settings-section">
     <div class="section-title">Volume Landmarks</div>
-    <p class="section-desc">Sets per week per muscle group. <span class="landmark-legend">MEV = floor · MAV = target zone · MRV = ceiling</span></p>
+    <p class="section-desc">Sets per week targets — edit to match your recovery. <span class="landmark-legend">MEV (floor) · MAV (target zone) · MRV (limit)</span></p>
     <div class="landmarks-wrap">
       <table class="landmarks-table">
         <thead>
           <tr>
             <th>Muscle</th>
-            <th title="Minimum Effective Volume — floor">MEV</th>
-            <th title="Minimum Adaptive Volume — target zone low">MAV Lo</th>
-            <th title="Minimum Adaptive Volume — target zone high">MAV Hi</th>
-            <th title="Maximum Recoverable Volume — ceiling">MRV</th>
+            <th title="MEV — Minimum Effective Volume: sets/week floor; below this, gains stall">MEV</th>
+            <th title="MAV — Minimum Adaptive Volume: target zone low end">MAV Low</th>
+            <th title="MAV — Minimum Adaptive Volume: target zone high end">MAV High</th>
+            <th title="MRV — Maximum Recoverable Volume: limit above which recovery suffers">MRV</th>
           </tr>
         </thead>
         <tbody>

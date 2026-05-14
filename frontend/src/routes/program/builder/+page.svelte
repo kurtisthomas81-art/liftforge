@@ -507,7 +507,7 @@
 <div style="max-width:720px;">
   <div class="flex items-center gap-3 mb-5">
     <a href="/program" class="btn-ghost btn-sm">← Back</a>
-    <h2 style="font-size:20px; font-weight:700;">Build Mesocycle</h2>
+    <h2 style="font-size:20px; font-weight:700;">Build Training Block</h2>
   </div>
 
   <!-- Step indicator -->
@@ -625,7 +625,7 @@
           {#each [
             { val: 1, label: 'A — No variation', desc: 'Same exercises every session. Best for pure beginners learning movement patterns.' },
             { val: 2, label: 'A/B rotation', desc: 'Two alternating workouts. Horizontal push/pull one session, vertical the next. Recommended.' },
-            { val: 3, label: 'A/B/C rotation', desc: 'Three unique workouts cycling continuously. More variety across the mesocycle.' },
+            { val: 3, label: 'A/B/C rotation', desc: 'Three unique workouts cycling continuously. More variety across the training block.' },
           ].filter(opt => opt.val <= selectedDays) as opt}
             <button
               on:click={() => numVariants = opt.val}
@@ -746,7 +746,7 @@
             </button>
           {/each}
         </div>
-        <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">Week {selectedWeeks} will be a deload week</div>
+        <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">Week {selectedWeeks} will be a recovery (deload) week</div>
       </div>
 
       <!-- Start date -->
@@ -757,8 +757,8 @@
 
       <!-- Mesocycle name -->
       <div style="margin-bottom:20px;">
-        <label for="mesoName" style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Mesocycle Name</label>
-        <input id="mesoName" bind:value={mesoName} placeholder="e.g. Mesocycle April 2026" style="width:100%; max-width:400px;" />
+        <label for="mesoName" style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Training Block Name</label>
+        <input id="mesoName" bind:value={mesoName} placeholder="e.g. April 2026 Block" style="width:100%; max-width:400px;" />
       </div>
 
       <!-- Day of week assignment -->
@@ -882,7 +882,7 @@
                         /><span style="color:var(--text-muted); padding:0 1px;">–</span><input type="number" min="1" max="50" bind:value={ex.target_reps_max}
                           on:input={() => customDayExercises = [...customDayExercises]}
                           style="width:32px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--primary); font-size:12px; font-weight:700; padding:2px 2px;"
-                        /><span style="color:var(--text-muted); font-size:11px; padding:0 2px;">@RIR</span><input type="number" min="0" max="5" bind:value={ex.target_rir}
+                        /><span style="color:var(--text-muted); font-size:11px; padding:0 2px;" title="Reps In Reserve — reps left before failure">@RIR</span><input type="number" min="0" max="5" bind:value={ex.target_rir}
                           on:input={() => customDayExercises = [...customDayExercises]}
                           style="width:28px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--text-muted); font-size:11px; font-weight:600; padding:2px 2px;"
                         />
@@ -962,7 +962,7 @@
                   {#each day.exercises as ex, exIdx}
                     <div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-faint);">
                       <span style="flex:1; font-size:13px; color:var(--text);">{ex.exercise_name}</span>
-                      <span style="font-size:11px; color:var(--text-muted); white-space:nowrap;">{ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max} @RIR{ex.target_rir}</span>
+                      <span style="font-size:11px; color:var(--text-muted); white-space:nowrap;" title="@RIR = reps left in tank before failure">{ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max} @RIR{ex.target_rir}</span>
                       <button
                         on:click={() => openSwapModal(day.day_index, exIdx, ex.primary_muscle)}
                         title="Swap exercise"

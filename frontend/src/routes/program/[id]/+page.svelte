@@ -162,7 +162,7 @@
           on:click={() => activeWeek = week.week_number}
           style="padding:6px 14px; border-radius:4px; border:1px solid {activeWeek === week.week_number ? 'var(--primary)' : 'var(--border)'}; background:{activeWeek === week.week_number ? 'rgba(232,160,64,0.15)' : 'var(--surface-2)'}; color:{activeWeek === week.week_number ? 'var(--primary)' : 'var(--text-muted)'}; font-size:12px; font-weight:{activeWeek === week.week_number ? '700' : '400'}; cursor:pointer; transition:all 0.15s;"
         >
-          {week.is_deload ? 'Deload' : `Week ${week.week_number}`}
+          {week.is_deload ? 'Recovery Week' : `Week ${week.week_number}`}
           {#if week.week_number === meso.current_week && meso.status === 'active'}
             <span style="color:var(--primary); margin-left:4px;">•</span>
           {/if}
@@ -293,7 +293,7 @@
     <div class="review-modal">
       <div class="review-hdr">
         <div>
-          <div class="review-title">Mesocycle Complete</div>
+          <div class="review-title">Training Block Complete</div>
           <div class="review-sub">{review.name}</div>
         </div>
         <button class="review-close" on:click={() => showReview = false}>✕</button>
@@ -319,7 +319,7 @@
                 <div class="review-muscle-stats">
                   Avg {m.avg_sets_per_week} sets/wk · Peak {m.peak_sets_per_week}
                   {#if m.avg_rir_early != null && m.avg_rir_late != null}
-                    · RIR {m.avg_rir_early}→{m.avg_rir_late}
+                    · <span title="Reps In Reserve — reps left in tank at start vs. end of block">RIR {m.avg_rir_early}→{m.avg_rir_late}</span>
                   {/if}
                 </div>
                 {#if m.landmark}
@@ -332,18 +332,18 @@
                     </div>
                   </div>
                   <div class="review-lm-labels">
-                    <span>MEV {m.landmark.mev}</span>
-                    <span>MAV {m.landmark.mav_low}–{m.landmark.mav_high}</span>
-                    <span>MRV {m.landmark.mrv}</span>
+                    <span title="Minimum Effective Volume — floor">{m.landmark.mev} sets (MEV floor)</span>
+                    <span title="Minimum Adaptive Volume — target zone">MAV {m.landmark.mav_low}–{m.landmark.mav_high}</span>
+                    <span title="Maximum Recoverable Volume — limit">{m.landmark.mrv} sets (MRV limit)</span>
                   </div>
                 {/if}
               </div>
               {#if hasSuggestion}
                 <div class="review-suggestion">
                   {#if m.suggestion === 'raise_mrv'}
-                    <div class="suggest-text">Raise MRV to {m.suggested_mrv}</div>
+                    <div class="suggest-text">Raise your limit (MRV) to {m.suggested_mrv}</div>
                   {:else if m.suggestion === 'lower_mev'}
-                    <div class="suggest-text">Lower MEV to {m.suggested_mev}</div>
+                    <div class="suggest-text">Lower your floor (MEV) to {m.suggested_mev}</div>
                   {/if}
                   <button class="suggest-btn"
                     on:click={() => applyLandmarkSuggestion(m.muscle, m.suggestion, m.suggested_mrv, m.suggested_mev, m.landmark)}>
@@ -359,7 +359,7 @@
       {/if}
 
       <button class="review-done-btn" on:click={() => { showReview = false; goto('/program/builder'); }}>
-        Start New Mesocycle
+        Start New Training Block
       </button>
       <button class="review-skip-btn" on:click={() => showReview = false}>
         Close

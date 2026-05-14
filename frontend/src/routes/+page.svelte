@@ -254,7 +254,7 @@
   {#if fatigueReport?.deload_recommended}
     <div class="fatigue-banner" style="border-color:{fatigueScore>=8?'rgba(232,54,93,0.4)':'rgba(232,160,54,0.3)'}; background:{fatigueScore>=8?'rgba(232,54,93,0.07)':'rgba(232,160,54,0.07)'}">
       <div class="fatigue-banner-title" style="color:{fatigueScore>=8?'var(--danger)':'var(--warn)'}">
-        {fatigueScore >= 8 ? 'Critical fatigue — deload now' : 'High fatigue — consider a deload'}
+        {fatigueScore >= 8 ? 'Critical fatigue — take a recovery week (deload)' : 'High fatigue — consider a recovery week (deload)'}
       </div>
       {#each (fatigueReport.reasons || []) as r}
         <div class="fatigue-reason">{r}</div>

@@ -54,7 +54,7 @@
 <div class="page">
   <div class="page-header">
     <h2>Recovery Map</h2>
-    <p class="subtitle">Muscle readiness based on training recency and effort (RIR)</p>
+    <p class="subtitle">Muscle readiness based on training recency and effort (RIR — reps left in tank)</p>
     <div class="legend">
       <span class="dot" style="background:var(--success)"></span> Recovered
       <span class="dot" style="background:var(--primary)"></span> Recovering
@@ -167,7 +167,7 @@
               <th>Muscle</th>
               <th>Status</th>
               <th>Last Trained</th>
-              <th>Avg RIR</th>
+              <th title="Average Reps In Reserve — higher means more recovery capacity">Avg RIR</th>
             </tr>
           </thead>
           <tbody>

@@ -237,7 +237,7 @@
                       on:change={() => { if (cfgDeload > cfgWeeks) cfgDeload = cfgWeeks; }} />
                   </label>
                   <label class="field">
-                    <span>Deload on week</span>
+                    <span>Recovery (deload) on week</span>
                     <input type="number" min="1" max={cfgWeeks} bind:value={cfgDeload} />
                   </label>
                 </div>
@@ -279,7 +279,7 @@
                               }} />
                           </label>
                           <label class="mini-field">
-                            <span>RIR</span>
+                            <span title="Reps In Reserve — reps left before failure">RIR</span>
                             <input type="number" min="0" max="5" value={ex.rir}
                               on:change={e => updateExField(si, ei, 'rir', e.target.value)} />
                           </label>

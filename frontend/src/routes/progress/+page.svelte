@@ -40,19 +40,19 @@
   const SCIENCE_CARDS = [
     {
       title: 'Progressive Overload',
-      body: 'The cornerstone of hypertrophy and strength. Each mesocycle, aim to add either weight, reps, or sets compared to the previous one. Small consistent increases compound over months into meaningful gains.',
+      body: 'The cornerstone of hypertrophy and strength. Each training block (mesocycle), aim to add either weight, reps, or sets compared to the previous one. Small consistent increases compound over months into meaningful gains.',
     },
     {
-      title: 'Volume Landmarks (MEV → MRV)',
-      body: 'MEV is the minimum sets/week to maintain muscle. MAV is the sweet spot for growth. MRV is the ceiling — training above it stops driving gains and starts creating more fatigue than signal. Stay in the MAV range most of the time.',
+      title: 'Volume Targets (MEV → MRV)',
+      body: 'MEV (floor) is the minimum sets/week to maintain muscle. MAV (target zone) is the sweet spot for growth. MRV (limit) is the ceiling — training above it stops driving gains and starts creating more fatigue than signal. Stay in the MAV range most of the time.',
     },
     {
-      title: 'RIR & Proximity to Failure',
-      body: 'Reps in Reserve (RIR) tracks how close you are to failure. Staying at RIR 2–3 on most sets optimizes stimulus while limiting junk fatigue. Pushing to RIR 0–1 should be reserved for final sets of a mesocycle.',
+      title: 'RIR — Reps Left in Tank',
+      body: 'Reps in Reserve (RIR) tracks how close you are to failure. Staying at RIR 2–3 on most sets optimizes stimulus while limiting junk fatigue. Pushing to RIR 0–1 should be reserved for final sets of a training block.',
     },
     {
-      title: 'Deload Strategy',
-      body: 'After 4–8 weeks of accumulation, a deload week (50–60% of normal volume, same weights) clears fatigue and often reveals new strength. Don\'t skip it — the next block will be more productive for it.',
+      title: 'Recovery Week (Deload)',
+      body: 'After 4–8 weeks of accumulation, a recovery (deload) week (50–60% of normal volume, same weights) clears fatigue and often reveals new strength. Don\'t skip it — the next block will be more productive for it.',
     },
   ];
 
@@ -111,7 +111,7 @@
     : fatigueData.overall_fatigue === 'low' ? 'Fresh'
     : fatigueData.overall_fatigue === 'moderate' ? 'Building Fatigue'
     : fatigueData.overall_fatigue === 'high' ? 'High Fatigue'
-    : 'Critical — Deload';
+    : 'Critical — Deload Now';
 
   // Heat map: normalize sets to 0–1 relative to ~20 sets (rough MRV)
   function heatValue(muscle) {
@@ -333,7 +333,7 @@
     <div class="score-num" style="color:{scoreColor}">{overallScore ?? '—'}</div>
     <div class="score-label">{scoreLabel}</div>
     {#if fatigueData?.deload_recommended}
-      <div class="deload-badge">Deload Recommended</div>
+      <div class="deload-badge">Recovery Week Recommended</div>
     {/if}
   </div>
   <div class="score-detail">
@@ -349,7 +349,7 @@
     {/if}
     {#if fatigueData?.last_deload_days_ago != null}
       <div class="score-detail-row">
-        <span class="score-detail-lbl">Last Deload</span>
+        <span class="score-detail-lbl">Last Recovery Week</span>
         <span class="score-detail-val">{fatigueData.last_deload_days_ago}d ago</span>
       </div>
     {/if}
@@ -432,7 +432,7 @@
 
 <!-- 1RM Trend -->
 <div class="card section-card">
-  <div class="section-title">1RM Trend</div>
+  <div class="section-title">Max Lift Trend (1RM)</div>
 
   <!-- Quick-select shortcuts -->
   {#if quickExercises.length > 0}

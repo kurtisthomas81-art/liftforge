@@ -730,7 +730,7 @@
                 <div class="sets-cols-hdr">
                   <span>#</span>
                   <span style="flex:1">Weight × Reps</span>
-                  <span style="width:44px;text-align:center">RPE</span>
+                  <span style="width:44px;text-align:center" title="Rate of Perceived Exertion — how hard the set felt (6 = easy, 10 = all-out)">RPE</span>
                   <span style="width:28px"></span>
                 </div>
                 {#each group.sets as s (s.id)}
