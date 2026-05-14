@@ -10,6 +10,9 @@ services:
       - DATABASE_URL=sqlite:////app/data/liftforge.db
       - OLLAMA_URL=http://host.docker.internal:11434
       - OLLAMA_MODEL=llama3.1:8b
+      - GOOGLE_FIT_CLIENT_ID=${GOOGLE_FIT_CLIENT_ID:-}
+      - GOOGLE_FIT_CLIENT_SECRET=${GOOGLE_FIT_CLIENT_SECRET:-}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8080}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

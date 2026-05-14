@@ -168,6 +168,13 @@ export const api = {
     clearImported: () => request('DELETE', '/liftsaur/imported'),
   },
 
+  googleFit: {
+    status: () => request('GET', '/google-fit/status'),
+    authUrl: () => request('GET', '/google-fit/auth-url'),
+    sync: () => request('POST', '/google-fit/sync'),
+    disconnect: () => request('DELETE', '/google-fit/disconnect'),
+  },
+
   analytics: {
     strengthRatioHistory: () => request('GET', '/analytics/strength-ratio-history'),
     volumeSweetSpot: () => request('GET', '/analytics/volume-sweet-spot'),

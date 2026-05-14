@@ -59,6 +59,10 @@ class UserProfile(SQLModel, table=True):
     liftsaur_api_token: Optional[str] = Field(default=None)
     preferred_session_minutes: int = Field(default=60)
     plate_inventory: Optional[str] = Field(default="{}")  # JSON: {barbell:{45:4,...}, dumbbell:[5,10,...]}
+    google_fit_access_token: Optional[str] = Field(default=None)
+    google_fit_refresh_token: Optional[str] = Field(default=None)
+    google_fit_token_expiry: Optional[str] = Field(default=None)   # ISO datetime string
+    google_fit_last_synced: Optional[str] = Field(default=None)    # ISO datetime string
 
 
 class UserEquipment(SQLModel, table=True):

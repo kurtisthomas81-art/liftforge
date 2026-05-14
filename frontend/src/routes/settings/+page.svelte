@@ -27,6 +27,12 @@
   let syncResult = null;
   let syncError = null;
 
+  let googleFitConnected = false;
+  let googleFitLastSynced = null;
+  let googleFitSyncing = false;
+  let googleFitSyncResult = null;
+  let googleFitError = null;
+
   let injuries = [];
   let addingInjury = false;
   let newInjuryPart = '';
@@ -129,6 +135,16 @@
       const d = await api.liftsaur.getToken();
       liftsaurConnected = d.connected;
     } catch {}
+    try {
+      const gf = await api.googleFit.status();
+      googleFitConnected = gf.connected;
+      googleFitLastSynced = gf.last_synced;
+    } catch {}
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('google_fit') === 'connected') {
+      googleFitConnected = true;
+      window.history.replaceState({}, '', '/settings');
+    }
     try { injuries = await api.injuries.list(); } catch {}
   });
 
@@ -187,6 +203,28 @@
 
   function adjustRest(delta) {
     defaultRestSeconds = Math.max(10, Math.min(600, defaultRestSeconds + delta));
+  }
+
+  async function connectGoogleFit() {
+    try {
+      const { url } = await api.googleFit.authUrl();
+      window.location.href = url;
+    } catch (e) { googleFitError = e.message || 'Could not get authorization URL'; }
+  }
+
+  async function syncGoogleFit() {
+    googleFitSyncing = true; googleFitSyncResult = null; googleFitError = null;
+    try {
+      googleFitSyncResult = await api.googleFit.sync();
+      const gf = await api.googleFit.status();
+      googleFitLastSynced = gf.last_synced;
+    } catch (e) { googleFitError = e.message || 'Sync failed'; }
+    googleFitSyncing = false;
+  }
+
+  async function disconnectGoogleFit() {
+    try { await api.googleFit.disconnect(); } catch {}
+    googleFitConnected = false; googleFitSyncResult = null; googleFitError = null; googleFitLastSynced = null;
   }
 
   async function addInjury() {
@@ -405,6 +443,50 @@
       {clearing ? 'Clearing…' : 'Clear imported data'}
     </button>
   {/if}
+</div>
+
+<!-- Connected Health Apps -->
+<div class="settings-section">
+  <div class="section-title">Connected Health Apps</div>
+
+  <div class="health-app-row">
+    <div class="health-app-label">Google Fit</div>
+    <p class="section-desc" style="margin-bottom:10px;">Syncs body weight from Google Fit into your measurements log (last 30 days on first sync, then incremental).</p>
+    {#if !googleFitConnected}
+      <div class="save-row" style="margin-top:0;">
+        <button class="btn-primary" on:click={connectGoogleFit}>Connect Google Fit</button>
+      </div>
+    {:else}
+      <div class="connected-badge">Connected</div>
+      {#if googleFitLastSynced}
+        <div style="font-size:11px; color:var(--muted); margin-bottom:10px;">
+          Last synced {new Date(googleFitLastSynced).toLocaleDateString()}
+        </div>
+      {/if}
+      <div class="save-row">
+        <button class="btn-primary" on:click={syncGoogleFit} disabled={googleFitSyncing}>
+          {googleFitSyncing ? 'Syncing…' : 'Sync Now'}
+        </button>
+        <button class="btn-ghost" on:click={disconnectGoogleFit}>Disconnect</button>
+      </div>
+      {#if googleFitSyncResult}
+        <div class="import-result">
+          ✓ {googleFitSyncResult.imported} weight entr{googleFitSyncResult.imported === 1 ? 'y' : 'ies'} imported
+          {#if googleFitSyncResult.skipped > 0} · {googleFitSyncResult.skipped} already existed{/if}
+        </div>
+      {/if}
+    {/if}
+    {#if googleFitError}
+      <div class="import-error">{googleFitError}</div>
+    {/if}
+  </div>
+
+  <div class="health-app-divider"></div>
+
+  <div class="health-app-row">
+    <div class="health-app-label">Samsung Health</div>
+    <p class="section-desc" style="margin-bottom:0;">Samsung Health doesn't have a web API, but syncs natively to Google Fit. Open Samsung Health → Settings → Connected Services → Google Fit and enable the toggle. Your Samsung data will then flow into Google Fit automatically — connect Google Fit above to bring it into LiftForge.</p>
+  </div>
 </div>
 
 <!-- Injuries & Limitations -->
@@ -658,6 +740,11 @@
     transition:all 0.15s;
   }
   .equip-check.on { border-color:var(--accent); background:var(--accent); color:#fff; }
+
+  /* Connected health apps */
+  .health-app-row { padding:4px 0 10px; }
+  .health-app-label { font-size:13px; font-weight:600; color:var(--text); margin-bottom:6px; }
+  .health-app-divider { border-top:1px solid var(--bdr); margin:14px 0; }
 
   /* Liftosaur sync */
   .connected-badge {

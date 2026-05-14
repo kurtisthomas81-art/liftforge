@@ -44,6 +44,10 @@ def migrate_db():
         ("workoutset", "is_done", "INTEGER DEFAULT 0"),
         ("workoutset", "target_reps", "INTEGER"),
         ("userprofile", "plate_inventory", "TEXT DEFAULT '{}'"),
+        ("userprofile", "google_fit_access_token", "TEXT"),
+        ("userprofile", "google_fit_refresh_token", "TEXT"),
+        ("userprofile", "google_fit_token_expiry", "TEXT"),
+        ("userprofile", "google_fit_last_synced", "TEXT"),
     ]
     with engine.connect() as conn:
         for table, col, typedef in new_cols:
