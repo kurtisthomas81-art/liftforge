@@ -98,6 +98,17 @@
 
   $: avatarInitial = (displayName || '?')[0].toUpperCase();
 
+  // Plate inventory
+  const BARBELL_PLATE_DENOMS_LBS = [45, 35, 25, 10, 5, 2.5, 1.25];
+  const BARBELL_PLATE_DENOMS_KG  = [20, 15, 10, 5, 2.5, 1.25, 0.5];
+  const DUMBBELL_WEIGHTS_LBS = [5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 30, 35, 40, 45, 50, 55, 60];
+  const DUMBBELL_WEIGHTS_KG  = [2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30];
+  let plateTab = 'barbell';
+  let barbellCounts = {};
+  let dumbbellSet = new Set();
+  let savingPlates = false;
+  let savedPlates = false;
+
   onMount(async () => {
     const p = await api.profile.get();
     displayName = p.display_name;
@@ -107,6 +118,10 @@
     defaultRestSeconds = p.default_rest_seconds ?? 90;
     preferredSessionMinutes = p.preferred_session_minutes ?? 60;
     equipment = new Set(p.equipment || []);
+    const inv = p.plate_inventory || {};
+    const denoms = unitPreference === 'kg' ? BARBELL_PLATE_DENOMS_KG : BARBELL_PLATE_DENOMS_LBS;
+    barbellCounts = Object.fromEntries(denoms.map(d => [d, inv.barbell?.[String(d)] ?? 0]));
+    dumbbellSet = new Set((inv.dumbbell || []).map(Number));
     try {
       landmarks = (await api.landmarks.get()).map(lm => ({ ...lm }));
     } catch {}
@@ -143,6 +158,18 @@
     if (equipment.has(key)) equipment.delete(key);
     else equipment.add(key);
     equipment = new Set(equipment);
+  }
+
+  async function savePlates() {
+    savingPlates = true;
+    try {
+      const denoms = unitPreference === 'kg' ? BARBELL_PLATE_DENOMS_KG : BARBELL_PLATE_DENOMS_LBS;
+      const barbell = Object.fromEntries(denoms.map(d => [String(d), barbellCounts[d] ?? 0]));
+      const dumbbell = [...dumbbellSet].sort((a, b) => a - b);
+      await api.profile.update({ plate_inventory: { barbell, dumbbell } });
+      savedPlates = true; setTimeout(() => savedPlates = false, 2500);
+    } catch {}
+    savingPlates = false;
   }
 
   async function saveLandmarks() {
@@ -469,6 +496,49 @@
   </div>
 {/if}
 
+<!-- Plate Inventory -->
+<div class="settings-section">
+  <div class="section-title">Plate Inventory</div>
+  <p class="section-desc">Tell the app what plates and dumbbells you have so the plate calculator shows realistic options.</p>
+  <div class="pi-tabs">
+    <button class="pi-tab" class:active={plateTab === 'barbell'} on:click={() => plateTab = 'barbell'}>Barbell Plates</button>
+    <button class="pi-tab" class:active={plateTab === 'dumbbell'} on:click={() => plateTab = 'dumbbell'}>Dumbbells</button>
+  </div>
+  {#if plateTab === 'barbell'}
+    <div class="pi-plate-list">
+      {#each (unitPreference === 'kg' ? BARBELL_PLATE_DENOMS_KG : BARBELL_PLATE_DENOMS_LBS) as d}
+        {@const count = barbellCounts[d] ?? 0}
+        <div class="pi-plate-row">
+          <span class="pi-denom">{d} {unitPreference}</span>
+          <div class="pi-stepper">
+            <button class="step-btn" on:click={() => { barbellCounts[d] = Math.max(0, (barbellCounts[d] ?? 0) - 2); barbellCounts = { ...barbellCounts }; }}>−</button>
+            <span class="pi-count">{count}</span>
+            <button class="step-btn" on:click={() => { barbellCounts[d] = (barbellCounts[d] ?? 0) + 2; barbellCounts = { ...barbellCounts }; }}>+</button>
+          </div>
+          <span class="pi-pair-hint">{count > 0 ? `${count / 2} per side` : '—'}</span>
+        </div>
+      {/each}
+    </div>
+  {:else}
+    <p class="section-desc" style="margin-bottom:10px;">Tap weights you own (pairs).</p>
+    <div class="pi-db-grid">
+      {#each (unitPreference === 'kg' ? DUMBBELL_WEIGHTS_KG : DUMBBELL_WEIGHTS_LBS) as w}
+        <button
+          class="pi-db-chip"
+          class:active={dumbbellSet.has(w)}
+          on:click={() => { if (dumbbellSet.has(w)) dumbbellSet.delete(w); else dumbbellSet.add(w); dumbbellSet = new Set(dumbbellSet); }}
+        >{w}</button>
+      {/each}
+    </div>
+  {/if}
+  <div class="save-row mt-3">
+    <button class="btn-primary" on:click={savePlates} disabled={savingPlates}>
+      {savingPlates ? 'Saving…' : 'Save Inventory'}
+    </button>
+    {#if savedPlates}<span class="saved-badge">Saved!</span>{/if}
+  </div>
+</div>
+
 <!-- Danger Zone -->
 <div class="settings-section danger-zone">
   <div class="section-title" style="color:var(--danger,#e8365d);">Danger Zone</div>
@@ -657,4 +727,28 @@
     font-size:10px; color:var(--muted); letter-spacing:0.03em;
     opacity:0.8;
   }
+
+  /* Plate Inventory */
+  .pi-tabs { display:flex; gap:4px; margin-bottom:14px; }
+  .pi-tab {
+    padding:5px 12px; background:var(--surf-2); border:1px solid var(--bdr-2);
+    border-radius:var(--radius); font-size:12px; color:var(--muted); cursor:pointer; transition:all 0.15s;
+  }
+  .pi-tab.active { border-color:var(--accent); color:var(--accent); background:var(--accent-bg); }
+  .pi-plate-list { display:flex; flex-direction:column; }
+  .pi-plate-row {
+    display:flex; align-items:center; gap:12px;
+    padding:8px 0; border-bottom:1px solid var(--bdr);
+  }
+  .pi-plate-row:last-child { border-bottom:none; }
+  .pi-denom { font-size:13px; font-weight:600; color:var(--text); min-width:64px; }
+  .pi-stepper { display:flex; align-items:center; gap:8px; }
+  .pi-count { font-size:14px; font-weight:700; color:var(--text); min-width:24px; text-align:center; }
+  .pi-pair-hint { font-size:11px; color:var(--muted); margin-left:auto; }
+  .pi-db-grid { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
+  .pi-db-chip {
+    padding:5px 10px; background:var(--surf-2); border:1px solid var(--bdr-2);
+    border-radius:var(--radius); font-size:12px; color:var(--muted); cursor:pointer; transition:all 0.15s;
+  }
+  .pi-db-chip.active { border-color:var(--accent); color:var(--accent); background:var(--accent-bg); font-weight:600; }
 </style>

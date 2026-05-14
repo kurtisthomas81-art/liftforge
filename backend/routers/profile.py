@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -113,6 +114,7 @@ class ProfileUpdate(BaseModel):
     experience_level: Optional[str] = None
     default_rest_seconds: Optional[int] = None
     preferred_session_minutes: Optional[int] = None
+    plate_inventory: Optional[dict] = None
 
 
 class EquipmentUpdate(BaseModel):
@@ -140,6 +142,7 @@ def _serialize_profile(p: UserProfile) -> dict:
         "experience_level": p.experience_level,
         "default_rest_seconds": p.default_rest_seconds,
         "preferred_session_minutes": p.preferred_session_minutes,
+        "plate_inventory": json.loads(p.plate_inventory or "{}"),
     }
 
 
@@ -170,6 +173,8 @@ def update_profile(payload: ProfileUpdate, session: Session = Depends(get_sessio
         profile.default_rest_seconds = payload.default_rest_seconds
     if payload.preferred_session_minutes is not None:
         profile.preferred_session_minutes = payload.preferred_session_minutes
+    if payload.plate_inventory is not None:
+        profile.plate_inventory = json.dumps(payload.plate_inventory)
     session.add(profile)
     session.commit()
     session.refresh(profile)

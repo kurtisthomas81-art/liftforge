@@ -61,6 +61,7 @@
   function setCount(weight, delta) {
     plateCounts = { ...plateCounts, [weight]: Math.max(0, (plateCounts[weight] ?? 0) + delta) };
     if (targetWeight) calculate();
+    persistInventory();
   }
 
   function switchUnit(u) {
@@ -73,12 +74,32 @@
     if (cableTarget) calculateCable();
   }
 
+  let persistTimer = null;
+  function persistInventory() {
+    clearTimeout(persistTimer);
+    persistTimer = setTimeout(async () => {
+      try {
+        const barbell = Object.fromEntries(Object.entries(plateCounts).map(([w, cnt]) => [String(w), cnt]));
+        await api.profile.update({ plate_inventory: { barbell } });
+      } catch (_) {}
+    }, 1200);
+  }
+
   onMount(async () => {
     try {
       const profile = await api.profile.get();
       if (profile.unit_preference && profile.unit_preference !== unit) {
         switchUnit(profile.unit_preference);
       }
+      const inv = profile.plate_inventory || {};
+      const barbellInv = inv.barbell || {};
+      const current = { ...plateCounts };
+      for (const [w, cnt] of Object.entries(barbellInv)) {
+        const numW = parseFloat(w);
+        if (numW in current) current[numW] = cnt;
+      }
+      plateCounts = current;
+      if (targetWeight) calculate();
     } catch (_) {}
   });
 

@@ -58,6 +58,7 @@ class UserProfile(SQLModel, table=True):
     default_rest_seconds: int = Field(default=90)
     liftsaur_api_token: Optional[str] = Field(default=None)
     preferred_session_minutes: int = Field(default=60)
+    plate_inventory: Optional[str] = Field(default="{}")  # JSON: {barbell:{45:4,...}, dumbbell:[5,10,...]}
 
 
 class UserEquipment(SQLModel, table=True):

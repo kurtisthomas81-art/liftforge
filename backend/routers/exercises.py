@@ -23,6 +23,22 @@ class ExerciseUpdate(BaseModel):
     is_bilateral: Optional[bool] = None
 
 
+_BARBELL_EQUIPMENT = {"barbell", "trap_bar", "ez_bar", "leg_press"}
+
+def _get_loading_type(equipment_json: str) -> str:
+    try:
+        eq = set(json.loads(equipment_json or "[]"))
+    except Exception:
+        return "other"
+    if eq & _BARBELL_EQUIPMENT:
+        return "barbell"
+    if "cable_machine" in eq:
+        return "cable"
+    if "dumbbells" in eq or "dumbbell" in eq:
+        return "dumbbell"
+    return "other"
+
+
 def _serialize(ex: Exercise) -> dict:
     return {
         "id": ex.id,
@@ -39,6 +55,7 @@ def _serialize(ex: Exercise) -> dict:
         "notes": ex.notes,
         "substitution_ids": json.loads(ex.substitution_ids),
         "is_custom": ex.is_custom,
+        "loading_type": _get_loading_type(ex.equipment_required),
     }
 
 

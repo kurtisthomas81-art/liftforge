@@ -71,7 +71,11 @@
     try {
       const profile = await api.profile.get();
       defaultRestSeconds = profile.default_rest_seconds ?? 90;
+      plateInventory = profile.plate_inventory || { barbell: {}, dumbbell: [] };
     } catch {}
+    api.exercises.list().then(list => {
+      exerciseLoadingTypes = Object.fromEntries(list.map(e => [e.id, e.loading_type]));
+    }).catch(() => {});
 
     if (session) {
       await loadSession();
@@ -528,23 +532,46 @@
   let plateCalcSetId = null;
   let plateCalcWeight = '';
   let plateCalcBar = 45;
+  let plateCalcExId = null;
+  let plateCalcMode = 'barbell'; // 'barbell' | 'dumbbell'
+  let plateInventory = { barbell: {}, dumbbell: [] };
+  let exerciseLoadingTypes = {}; // { exercise_id: 'barbell'|'dumbbell'|'cable'|'other' }
   const PLATES_LBS = [45, 35, 25, 10, 5, 2.5, 1.25];
   const PLATE_COLORS = {45:'#c0392b',35:'#f39c12',25:'#27ae60',10:'#dddddd',5:'#2980b9',2.5:'#333333',1.25:'#999999'};
 
-  function openPlateCalc(setId, w) { plateCalcSetId = setId; plateCalcWeight = w || ''; }
-  function closePlateCalc() { plateCalcSetId = null; }
+  function openPlateCalc(setId, w, exerciseId) {
+    plateCalcSetId = setId;
+    plateCalcExId = exerciseId || null;
+    const lt = exerciseId ? (exerciseLoadingTypes[exerciseId] || 'barbell') : 'barbell';
+    plateCalcMode = (lt === 'dumbbell') ? 'dumbbell' : 'barbell';
+    plateCalcWeight = w || '';
+  }
+  function closePlateCalc() { plateCalcSetId = null; plateCalcExId = null; }
 
   function calcPlateResult(target, bar) {
     if (!target || target <= bar) return null;
     let rem = (target - bar) / 2;
     const used = [];
+    const inv = plateInventory?.barbell || {};
+    const hasInventory = Object.values(inv).some(v => v > 0);
     for (const p of PLATES_LBS) {
-      while (rem >= p - 0.001) { used.push(p); rem -= p; rem = Math.round(rem * 1000) / 1000; }
+      const maxPairs = hasInventory ? Math.floor((inv[String(p)] ?? 0) / 2) : Infinity;
+      let pairCount = 0;
+      while (rem >= p - 0.001 && pairCount < maxPairs) {
+        used.push(p); rem -= p; rem = Math.round(rem * 1000) / 1000; pairCount++;
+      }
     }
     return { used, remainder: rem };
   }
 
-  $: plateResult = plateCalcSetId ? calcPlateResult(parseFloat(plateCalcWeight), plateCalcBar) : null;
+  $: plateResult = (plateCalcSetId && plateCalcMode === 'barbell') ? calcPlateResult(parseFloat(plateCalcWeight), plateCalcBar) : null;
+
+  $: dbWeights = (plateInventory?.dumbbell || []).map(Number).sort((a, b) => a - b);
+  $: nearestDbWeight = (() => {
+    const target = parseFloat(plateCalcWeight);
+    if (!target || !dbWeights.length) return null;
+    return dbWeights.reduce((best, w) => Math.abs(w - target) < Math.abs(best - target) ? w : best, dbWeights[0]);
+  })();
 
   // Today's Plan panel
   let planOpen = true;
@@ -745,7 +772,9 @@
                       <input type="number" min="0" step="2.5" value={s.weight ?? ''} placeholder="BW"
                         class="set-input weight-input"
                         on:change={e => updateSetField(s.id, 'weight', e.target.value)} />
-                      <button class="plate-btn" title="Plate calculator" on:click|stopPropagation={() => openPlateCalc(s.id, s.weight)}>⊙</button>
+                      {#if !['cable','other'].includes(exerciseLoadingTypes[group.exercise_id])}
+                        <button class="plate-btn" title="Plate calculator" on:click|stopPropagation={() => openPlateCalc(s.id, s.weight, group.exercise_id)}>⊙</button>
+                      {/if}
                       <span class="set-times">×</span>
                       {#if s.target_reps}
                         <span class="target-hint">{s.target_reps}</span>
@@ -872,7 +901,9 @@
                     class="set-input weight-input"
                     on:change={e => updateSetField(s.id, 'weight', e.target.value)}
                   />
-                  <button class="plate-btn" title="Plate calculator" on:click|stopPropagation={() => openPlateCalc(s.id, s.weight)}>⊙</button>
+                  {#if !['cable','other'].includes(exerciseLoadingTypes[group.exercise_id])}
+                    <button class="plate-btn" title="Plate calculator" on:click|stopPropagation={() => openPlateCalc(s.id, s.weight, group.exercise_id)}>⊙</button>
+                  {/if}
                   <span class="set-times">×</span>
                   {#if s.target_reps}
                     <span class="target-hint">{s.target_reps}</span>
@@ -1130,36 +1161,61 @@
   <div class="modal-overlay" on:click|self={closePlateCalc}>
     <div class="modal" style="max-width:380px;">
       <div class="modal-header">
-        <h3>Plate Calculator</h3>
+        <h3>{plateCalcMode === 'dumbbell' ? 'Dumbbell Select' : 'Plate Calculator'}</h3>
         <button class="btn-ghost btn-sm" on:click={closePlateCalc}>✕</button>
       </div>
       <div class="modal-body" style="display:flex;flex-direction:column;gap:12px;">
-        <div class="flex gap-3">
+
+        {#if plateCalcMode === 'dumbbell'}
+          <!-- Dumbbell picker -->
           <div style="flex:1">
-            <label for="pcW">Target Weight</label>
-            <input id="pcW" type="number" min="0" step="2.5" bind:value={plateCalcWeight} placeholder="e.g. 185" autofocus />
+            <label for="pcW">Target Weight (lbs)</label>
+            <input id="pcW" type="number" min="0" step="2.5" bind:value={plateCalcWeight} placeholder="e.g. 40" autofocus />
           </div>
-          <div style="flex:1">
-            <label for="pcBar">Bar</label>
-            <select id="pcBar" bind:value={plateCalcBar}>
-              {#each [45,35,25,15] as b}<option value={b}>{b} lbs</option>{/each}
-            </select>
-          </div>
-        </div>
-        {#if plateResult}
-          {#if plateResult.remainder < 0.001}
-            <div style="background:var(--surf-2);border-radius:var(--radius);padding:12px;">
-              <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">{(parseFloat(plateCalcWeight)-plateCalcBar)/2} lbs per side</div>
-              <div style="display:flex;flex-wrap:wrap;gap:4px;">
-                {#each plateResult.used as p}
-                  <div style="width:36px;height:36px;border-radius:50%;background:{PLATE_COLORS[p]||'#555'};color:{p===10?'#333':'#fff'};font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,0.1)">{p}</div>
-                {/each}
-              </div>
+          {#if dbWeights.length}
+            <div style="font-size:11px;color:var(--muted);">Your dumbbells — tap to select:</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              {#each dbWeights as w}
+                <button
+                  style="padding:7px 12px;border-radius:var(--radius);border:1.5px solid {w === nearestDbWeight ? 'var(--accent)' : 'var(--bdr-2)'};background:{w === nearestDbWeight ? 'var(--accent-bg)' : 'var(--surf-2)'};color:{w === nearestDbWeight ? 'var(--accent)' : 'var(--text)'};font-size:13px;font-weight:{w === nearestDbWeight ? '700' : '400'};cursor:pointer;"
+                  on:click={() => plateCalcWeight = String(w)}
+                >{w}{w === nearestDbWeight && plateCalcWeight && parseFloat(plateCalcWeight) !== w ? ' ★' : ''}</button>
+              {/each}
             </div>
           {:else}
-            <div style="color:var(--muted);font-size:13px;">Can't hit this weight exactly — adjust target or bar.</div>
+            <div style="font-size:12px;color:var(--muted);padding:8px 0;">No dumbbell inventory set. Go to <strong>Settings → Plate Inventory</strong> to add your dumbbells.</div>
+          {/if}
+
+        {:else}
+          <!-- Barbell plate calculator -->
+          <div class="flex gap-3">
+            <div style="flex:1">
+              <label for="pcW">Target Weight</label>
+              <input id="pcW" type="number" min="0" step="2.5" bind:value={plateCalcWeight} placeholder="e.g. 185" autofocus />
+            </div>
+            <div style="flex:1">
+              <label for="pcBar">Bar</label>
+              <select id="pcBar" bind:value={plateCalcBar}>
+                {#each [45,35,25,15] as b}<option value={b}>{b} lbs</option>{/each}
+              </select>
+            </div>
+          </div>
+          {#if plateResult}
+            {#if plateResult.remainder < 0.001}
+              <div style="background:var(--surf-2);border-radius:var(--radius);padding:12px;">
+                <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">{(parseFloat(plateCalcWeight)-plateCalcBar)/2} lbs per side</div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                  {#each plateResult.used as p}
+                    <div style="width:36px;height:36px;border-radius:50%;background:{PLATE_COLORS[p]||'#555'};color:{p===10?'#333':'#fff'};font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,0.1)">{p}</div>
+                  {/each}
+                </div>
+              </div>
+            {:else}
+              <div style="color:var(--muted);font-size:13px;">Can't hit this weight exactly with your plates — adjust target or bar.</div>
+            {/if}
           {/if}
         {/if}
+
       </div>
       <div class="modal-footer">
         <button class="btn-ghost" on:click={closePlateCalc}>Cancel</button>
