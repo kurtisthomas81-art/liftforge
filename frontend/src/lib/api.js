@@ -75,6 +75,8 @@ export const api = {
   chat: {
     send: (message, context_type = 'general') =>
       request('POST', '/chat', { message, context_type }),
+    sessionRecap: (sessionId) =>
+      request('GET', `/chat/session-recap/${sessionId}`),
   },
 
   programs: {

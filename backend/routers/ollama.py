@@ -358,6 +358,98 @@ def _get_active_session_context(session: Session) -> str | None:
     return "\n".join(lines)
 
 
+# ── Session recap endpoint ────────────────────────────────────────────────────
+
+@router.get("/session-recap/{session_id}")
+async def session_recap(session_id: int, db: Session = Depends(get_session)):
+    """Generate a brief coach-voice narrative recap for a completed session."""
+    wk = db.get(WorkoutSession, session_id)
+    if not wk:
+        return {"summary": "Session not found."}
+
+    # Build session detail text
+    sets = db.exec(
+        select(WorkoutSet).where(WorkoutSet.session_id == session_id)
+    ).all()
+
+    ex_cache: dict[int, str] = {}
+    by_ex: dict[int, list] = {}
+    for ws in sets:
+        if ws.set_type == "warmup":
+            continue
+        by_ex.setdefault(ws.exercise_id, []).append(ws)
+        if ws.exercise_id not in ex_cache:
+            ex = db.get(Exercise, ws.exercise_id)
+            ex_cache[ws.exercise_id] = ex.name if ex else f"Exercise {ws.exercise_id}"
+
+    exercise_lines = []
+    total_weight = 0.0
+    for ex_id, ex_sets in by_ex.items():
+        name = ex_cache[ex_id]
+        parts = []
+        for ws in sorted(ex_sets, key=lambda s: s.set_number):
+            if ws.weight and ws.reps:
+                p = f"{ws.weight}×{ws.reps}"
+                if ws.rir is not None:
+                    p += f" RIR {ws.rir}"
+                parts.append(p)
+                total_weight += ws.weight * ws.reps
+        if parts:
+            exercise_lines.append(f"  {name}: {', '.join(parts)}")
+
+    # PRs hit in this session
+    prs = db.exec(
+        select(PersonalRecord)
+        .where(PersonalRecord.session_id == session_id, PersonalRecord.pr_type == "e1rm")
+    ).all()
+    pr_lines = []
+    for pr in prs:
+        ex_name = ex_cache.get(pr.exercise_id, f"Exercise {pr.exercise_id}")
+        pr_lines.append(f"  NEW PR: {ex_name} — {round(pr.value, 1)} lbs e1RM")
+
+    session_name = wk.name or "Unnamed session"
+    rpe_note = f"Post-session RPE: {wk.post_session_rpe}/10" if wk.post_session_rpe else ""
+
+    session_text = "\n".join([
+        f"Session: {session_name}",
+        *exercise_lines,
+        *(pr_lines),
+        f"Total weight moved: {round(total_weight):,} lbs" if total_weight else "",
+        rpe_note,
+    ]).strip()
+
+    prompt = (
+        f"Here is the athlete's completed training session:\n\n{session_text}\n\n"
+        f"Write a 2-3 sentence coach-voice recap. Be specific — reference actual lifts "
+        f"and numbers from the session. Be encouraging but honest. Keep it under 60 words. "
+        f"Do not start with 'Great session' or generic openers."
+    )
+
+    system = (
+        "You are a concise personal strength coach. Write brief, specific session recaps "
+        "that reference the athlete's actual data. Never give generic encouragement. "
+        "Never mention injury advice. Keep responses under 60 words."
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            response = await client.post(
+                f"{OLLAMA_URL}/api/generate",
+                json={"model": OLLAMA_MODEL, "prompt": prompt, "system": system, "stream": False},
+            )
+            response.raise_for_status()
+            summary = response.json().get("response", "").strip()
+    except httpx.ConnectError:
+        summary = "AI coach is offline."
+    except httpx.TimeoutException:
+        summary = "AI coach timed out — try again in a moment."
+    except Exception as e:
+        print(f"[ollama] session-recap error: {e}")
+        summary = "Could not generate recap."
+
+    return {"summary": summary}
+
+
 # ── Chat endpoint ──────────────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):

@@ -60,6 +60,13 @@
   let sessionRpe = null;
   let submittingRpe = false;
 
+  // Post-session recap
+  let showRecapModal = false;
+  let recapData = null;
+  let newPrs = [];
+  let aiRecap = null;
+  let loadingAiRecap = false;
+
   // Session note
   let showNote = false;
   let sessionNote = '';
@@ -259,7 +266,7 @@
     const sid = session.id;
     if (sessionNote) await api.sessions.update(sid, { notes: sessionNote });
     await api.sessions.finish(sid);
-    try { await api.prs.checkSession(sid); } catch {}
+    try { const prResult = await api.prs.checkSession(sid); newPrs = prResult.new_prs || []; } catch {}
     await refreshActiveSession();
     dismissRestTimer();
     sessionStorage.removeItem(`lf_timer_${sid}`);
@@ -281,7 +288,41 @@
     }
     showRpeModal = false;
     submittingRpe = false;
-    goto('/');
+    // Show recap modal
+    if (finishedSessionId) {
+      try { recapData = await api.sessions.get(finishedSessionId); } catch {}
+    }
+    aiRecap = null;
+    showRecapModal = true;
+  }
+
+  async function loadAiRecap() {
+    if (!finishedSessionId || loadingAiRecap) return;
+    loadingAiRecap = true;
+    try {
+      const r = await api.chat.sessionRecap(finishedSessionId);
+      aiRecap = r.summary || null;
+    } catch {}
+    loadingAiRecap = false;
+  }
+
+  function formatDuration(startedAt, completedAt) {
+    if (!startedAt || !completedAt) return null;
+    const mins = Math.round((new Date(completedAt) - new Date(startedAt)) / 60000);
+    if (mins < 1) return null;
+    return mins >= 60
+      ? `${Math.floor(mins / 60)}h ${mins % 60}m`
+      : `${mins}m`;
+  }
+
+  function bestWorkingSet(sets) {
+    const working = (sets || []).filter(s => s.set_type !== 'warmup' && s.reps > 0 && s.weight);
+    if (!working.length) return null;
+    return working.reduce((best, s) => {
+      const e = s.weight * (1 + s.reps / 30);
+      const b = best.weight * (1 + best.reps / 30);
+      return e > b ? s : best;
+    });
   }
 
   async function saveName() {
@@ -1052,6 +1093,96 @@
   </div>
 {/if}
 
+<!-- ── Session Recap Modal ─────────────────────────────────────────────────── -->
+{#if showRecapModal}
+  <div class="modal-overlay">
+    <div class="modal recap-modal">
+      <!-- Header -->
+      <div class="modal-header" style="border-bottom:1px solid var(--border); padding-bottom:14px;">
+        <div style="font-size:18px; font-weight:700; color:var(--text);">
+          {recapData?.name || 'Session Complete'}
+        </div>
+        {#if recapData?.started_at && recapData?.completed_at}
+          {@const dur = formatDuration(recapData.started_at, recapData.completed_at)}
+          {#if dur}
+            <div style="font-size:12px; color:var(--text-muted); margin-top:3px;">{dur}</div>
+          {/if}
+        {/if}
+      </div>
+
+      <div class="modal-body" style="max-height:65vh; overflow-y:auto;">
+
+        <!-- PRs -->
+        {#if newPrs.length > 0}
+          <div style="margin-bottom:16px;">
+            <div class="recap-section-label">Personal Records</div>
+            {#each newPrs as pr}
+              <div class="recap-pr-row">
+                <span class="pr-badge">PR</span>
+                <span style="font-size:14px; color:var(--text); font-weight:600;">{pr.exercise_name}</span>
+                <span style="font-size:13px; color:var(--text-muted); margin-left:auto;">
+                  {pr.pr_type === 'e1rm' ? 'Est. 1RM' : pr.pr_type === 'weight' ? 'Weight' : 'Reps'} — {Math.round(pr.value * 10) / 10}{pr.pr_type === 'reps' ? ' reps' : ' lbs'}
+                </span>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
+        <!-- Exercises -->
+        {#if recapData?.exercises?.length > 0}
+          <div style="margin-bottom:16px;">
+            <div class="recap-section-label">What You Did</div>
+            {#each recapData.exercises as ex}
+              {@const best = bestWorkingSet(ex.sets)}
+              {#if best}
+                <div class="recap-exercise-row">
+                  <span style="font-size:13px; color:var(--text); flex:1;">{ex.exercise_name}</span>
+                  <span style="font-size:13px; color:var(--text-muted); white-space:nowrap;">
+                    {best.weight}×{best.reps}{best.rir != null ? ` @ RIR ${best.rir}` : ''}
+                  </span>
+                </div>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+
+        <!-- Totals -->
+        {#if recapData?.total_weight_moved > 0}
+          <div class="recap-stat-row" style="margin-bottom:16px;">
+            <span style="font-size:13px; color:var(--text-muted);">Total weight moved</span>
+            <span style="font-size:14px; font-weight:700; color:var(--text);">
+              {recapData.total_weight_moved.toLocaleString()} lbs
+            </span>
+          </div>
+        {/if}
+
+        <!-- AI Coach Summary -->
+        <div style="border-top:1px solid var(--border); padding-top:14px;">
+          {#if aiRecap}
+            <div class="recap-section-label">Coach's Take</div>
+            <p style="font-size:13px; color:var(--text); line-height:1.6; margin:0;">{aiRecap}</p>
+          {:else if loadingAiRecap}
+            <div class="flex items-center gap-2" style="color:var(--text-muted); font-size:13px;">
+              <div class="spinner" style="width:14px; height:14px;"></div>
+              Generating recap…
+            </div>
+          {:else}
+            <button class="btn-ghost btn-sm" on:click={loadAiRecap} style="width:100%; justify-content:center;">
+              Get Coach's Take
+            </button>
+          {/if}
+        </div>
+      </div>
+
+      <div style="padding:14px 16px; border-top:1px solid var(--border);">
+        <button class="start-day-btn" on:click={() => { showRecapModal = false; goto('/'); }}>
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <!-- ── Save Template Modal ─────────────────────────────────────────────────── -->
 {#if showSaveTemplateModal}
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
@@ -1558,6 +1689,34 @@
   .rpe-modal-btn.selected {
     border-color:var(--rc); background:color-mix(in srgb, var(--rc) 15%, transparent);
     color:var(--rc); font-weight:700;
+  }
+
+  /* Recap modal */
+  .recap-modal { max-width:480px; width:100%; padding:0; }
+  .recap-section-label {
+    font-size:10px; text-transform:uppercase; letter-spacing:0.12em;
+    color:var(--accent); font-weight:700; margin-bottom:8px;
+  }
+  .recap-pr-row {
+    display:flex; align-items:center; gap:8px;
+    padding:8px 10px; border-radius:6px;
+    border:1px solid rgba(232,160,64,0.3); background:rgba(232,160,64,0.06);
+    margin-bottom:6px;
+  }
+  .pr-badge {
+    font-size:10px; font-weight:700; color:var(--accent);
+    border:1px solid var(--accent); border-radius:3px;
+    padding:1px 5px; flex-shrink:0;
+  }
+  .recap-exercise-row {
+    display:flex; align-items:center; gap:8px;
+    padding:7px 0; border-bottom:1px solid var(--border);
+  }
+  .recap-exercise-row:last-child { border-bottom:none; }
+  .recap-stat-row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; border-radius:6px; background:var(--surface);
+    border:1px solid var(--border);
   }
 
   /* Superset */
