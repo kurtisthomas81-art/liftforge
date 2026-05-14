@@ -413,22 +413,40 @@ async def session_recap(session_id: int, db: Session = Depends(get_session)):
     session_text = "\n".join([
         f"Session: {session_name}",
         *exercise_lines,
-        *(pr_lines),
         f"Total weight moved: {round(total_weight):,} lbs" if total_weight else "",
         rpe_note,
     ]).strip()
 
+    # Compute average working RIR for coaching context
+    all_rir = [ws.rir for ws in sets if ws.rir is not None and ws.set_type != "warmup" and ws.reps and ws.reps > 0]
+    avg_rir_note = f"Average RIR across all working sets: {round(sum(all_rir)/len(all_rir), 1)}" if all_rir else ""
+
+    # Explicit PR block — model is told the exact count so it cannot miscount.
+    # The UI already displays the PR list accurately; the model must NOT repeat it.
+    if prs:
+        pr_names = [ex_cache.get(pr.exercise_id, "Unknown") for pr in prs]
+        pr_block = (
+            f"VERIFIED PRs (exactly {len(prs)}, no others): {', '.join(pr_names)}. "
+            f"The UI shows these already — do NOT list or count PRs in your response."
+        )
+    else:
+        pr_block = "No new PRs this session. Do not mention PRs."
+
     prompt = (
-        f"Here is the athlete's completed training session:\n\n{session_text}\n\n"
-        f"Write a 2-3 sentence coach-voice recap. Be specific — reference actual lifts "
-        f"and numbers from the session. Be encouraging but honest. Keep it under 60 words. "
-        f"Do not start with 'Great session' or generic openers."
+        f"Session data:\n{session_text}\n"
+        f"{avg_rir_note}\n\n"
+        f"{pr_block}\n\n"
+        f"Write 1-2 sentences of coaching observation. Focus on what the RIR data "
+        f"and RPE suggest about training intensity, and give one specific adjustment "
+        f"for the next session. Do NOT list exercises. Do NOT count or mention PRs. "
+        f"Keep under 45 words."
     )
 
     system = (
-        "You are a concise personal strength coach. Write brief, specific session recaps "
-        "that reference the athlete's actual data. Never give generic encouragement. "
-        "Never mention injury advice. Keep responses under 60 words."
+        "You are a concise personal strength coach. Your job is to give coaching "
+        "observations based on RIR trends and effort data — not to re-list what the "
+        "athlete did. Never count or mention PRs (shown elsewhere). "
+        "Never give injury advice. Keep responses under 45 words."
     )
 
     try:
