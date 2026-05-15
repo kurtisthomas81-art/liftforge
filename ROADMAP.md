@@ -447,17 +447,56 @@ New finish flow: Complete → RPE → **Recap Modal** → Done → Home
 
 ---
 
+## ✅ Phase 11 — Health Platform Integrations & UX Polish (SHIPPED)
+
+### Google Fit OAuth2 Sync
+
+Body weight from Google Fit → `BodyMeasurement` table. 30-day lookback on first sync, incremental after. Converts kg → lbs based on user unit preference. Token refresh handled automatically via stored refresh token.
+
+| Feature | Description |
+|---------|-------------|
+| ~~`/api/google-fit/status`~~ | Returns `{connected, last_synced}` from UserProfile |
+| ~~`/api/google-fit/auth-url`~~ | Builds Google OAuth2 URL (scope: `fitness.body.read`, access_type: offline) |
+| ~~`/api/google-fit/callback`~~ | Handles OAuth redirect from Google; exchanges code for tokens; stores on UserProfile; redirects to `/settings?google_fit=connected` |
+| ~~`/api/google-fit/sync`~~ | Aggregates daily weight buckets from Fitness API; skips dates with existing entries; updates `google_fit_last_synced` |
+| ~~`/api/google-fit/disconnect`~~ | Clears all 4 token fields from UserProfile |
+| ~~Token auto-refresh~~ | `_ensure_valid_token()` checks expiry before every sync; refreshes silently via `refresh_token` grant if within 5 min of expiry |
+| ~~4 new UserProfile fields~~ | `google_fit_access_token`, `google_fit_refresh_token`, `google_fit_token_expiry`, `google_fit_last_synced`; migration-safe |
+| ~~Settings → Connected Health Apps~~ | Google Fit block: Connect button → OAuth flow → Connected badge + Sync Now + Disconnect + last synced date + import result |
+| ~~`googleFit` domain in api.js~~ | `status`, `authUrl`, `sync`, `disconnect` |
+
+**Setup:** Requires `GOOGLE_FIT_CLIENT_ID`, `GOOGLE_FIT_CLIENT_SECRET`, and `APP_BASE_URL` in `/mnt/user/appdata/liftforge/.env`. See `.env.example`.
+
+**Tailscale + Unraid note:** Use `tailscale serve --bg 8443` (not 443 — Unraid web UI occupies 443). Register `https://tower.tailnet.ts.net:8443/api/google-fit/callback` as the redirect URI in Google Cloud Console.
+
+### Samsung Health Passthrough
+
+Samsung Health has no web API. Samsung's app has a built-in "Connect to Google Fit" toggle (Settings → Connected Services → Google Fit). Enabling it auto-syncs Samsung data into Google Fit — connecting Google Fit above then brings it all into LiftForge.
+
+| Feature | Description |
+|---------|-------------|
+| ~~Settings UI note~~ | Explanation in Connected Health Apps section below the Google Fit block; no backend changes needed |
+
+### UX Bug Fix
+
+| Fix | Description |
+|-----|-------------|
+| ~~More sheet scroll cutoff~~ | Bottom sheet was using `on:touchmove\|preventDefault` unconditionally, blocking native scroll even though the sheet already has `max-height: 80vh` + `overflow-y: auto`. Now only calls `e.preventDefault()` when dragging downward from `scrollTop === 0` — content scrolls freely, swipe-to-close still works from the top |
+
+---
+
 ## Architecture Notes
 
 ```
 /home/cashbux/liftforge/
   backend/         FastAPI + SQLModel + SQLite
     engine/        meso_builder.py, progression logic
-    routers/       14 router files
+    routers/       15 router files (incl. google_fit.py)
     seed_data.py   108 exercises + 13 splits + landmarks
   frontend/        SvelteKit (static adapter) + Chart.js
     src/routes/    19 pages
   docker-compose.yml
+  .env.example     Google Fit + APP_BASE_URL config template
   data/            SQLite DB persisted here (mount on Unraid)
 ```
 
