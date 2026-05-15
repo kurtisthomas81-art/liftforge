@@ -14,6 +14,7 @@
   let touchStartY = 0;
   let dragY = 0;
   let isDragging = false;
+  let sheetEl;
 
   onMount(async () => {
     await Promise.all([refreshActiveSession(), refreshProfile(), refreshImportQueueCount()]);
@@ -90,7 +91,10 @@
   }
   function onSheetTouchMove(e) {
     const delta = e.touches[0].clientY - touchStartY;
-    dragY = Math.max(0, delta);
+    if (delta > 0 && (!sheetEl || sheetEl.scrollTop === 0)) {
+      e.preventDefault();
+      dragY = Math.max(0, delta);
+    }
   }
   function onSheetTouchEnd() {
     if (dragY > 80) showMore = false;
@@ -185,9 +189,10 @@
   <div class="more-overlay" on:click|self={() => showMore = false}>
     <div
       class="more-sheet"
+      bind:this={sheetEl}
       style="transform: translateY({dragY}px); transition: {isDragging ? 'none' : 'transform 0.25s ease'};"
       on:touchstart={onSheetTouchStart}
-      on:touchmove|preventDefault={onSheetTouchMove}
+      on:touchmove={onSheetTouchMove}
       on:touchend={onSheetTouchEnd}
     >
       <div class="more-sheet-handle"></div>
