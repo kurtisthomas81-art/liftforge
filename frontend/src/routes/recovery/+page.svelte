@@ -40,10 +40,13 @@
     return m ? STATUS_COLOR[m.status] : '#333333';
   }
 
-  function opa(muscle) {
+  function dColor(muscle) {
     const m = muscles.find(m => m.muscle === muscle);
-    return (!m || m.status === 'gray') ? 0 : 0.45;
+    if (!m || m.status === 'gray') return STATUS_COLOR.green;
+    return STATUS_COLOR[m.status];
   }
+
+  function opa() { return 0.45; }
 
   function capitalize(s) {
     return s.charAt(0).toUpperCase() + s.slice(1);
@@ -84,27 +87,27 @@
             <image href="/muscle.png" x="0" y="0" width="247" height="357"/>
 
             <!-- Chest / Pectorals -->
-            <ellipse cx="48" cy="112" rx="20" ry="20" fill={color('chest')} opacity={opa('chest')}/>
-            <ellipse cx="76" cy="112" rx="20" ry="20" fill={color('chest')} opacity={opa('chest')}/>
+            <ellipse cx="48" cy="112" rx="20" ry="20" fill={dColor('chest')} opacity={opa()}/>
+            <ellipse cx="76" cy="112" rx="20" ry="20" fill={dColor('chest')} opacity={opa()}/>
 
             <!-- Shoulders / Anterior deltoid -->
-            <ellipse cx="22" cy="87" rx="13" ry="12" fill={color('shoulders')} opacity={opa('shoulders')}/>
-            <ellipse cx="101" cy="87" rx="13" ry="12" fill={color('shoulders')} opacity={opa('shoulders')}/>
+            <ellipse cx="22" cy="87" rx="13" ry="12" fill={dColor('shoulders')} opacity={opa()}/>
+            <ellipse cx="101" cy="87" rx="13" ry="12" fill={dColor('shoulders')} opacity={opa()}/>
 
             <!-- Biceps -->
-            <ellipse cx="17" cy="128" rx="8" ry="22" fill={color('biceps')} opacity={opa('biceps')}/>
-            <ellipse cx="106" cy="128" rx="8" ry="22" fill={color('biceps')} opacity={opa('biceps')}/>
+            <ellipse cx="17" cy="128" rx="8" ry="22" fill={dColor('biceps')} opacity={opa()}/>
+            <ellipse cx="106" cy="128" rx="8" ry="22" fill={dColor('biceps')} opacity={opa()}/>
 
             <!-- Abs -->
-            <rect x="38" y="136" width="47" height="68" rx="6" fill={color('abs')} opacity={opa('abs')}/>
+            <rect x="38" y="136" width="47" height="68" rx="6" fill={dColor('abs')} opacity={opa()}/>
 
             <!-- Quads -->
-            <rect x="27" y="220" width="30" height="82" rx="8" fill={color('quads')} opacity={opa('quads')}/>
-            <rect x="66" y="220" width="30" height="82" rx="8" fill={color('quads')} opacity={opa('quads')}/>
+            <rect x="27" y="220" width="30" height="82" rx="8" fill={dColor('quads')} opacity={opa()}/>
+            <rect x="66" y="220" width="30" height="82" rx="8" fill={dColor('quads')} opacity={opa()}/>
 
             <!-- Calves (front) -->
-            <ellipse cx="42" cy="328" rx="13" ry="18" fill={color('calves')} opacity={opa('calves')}/>
-            <ellipse cx="81" cy="328" rx="13" ry="18" fill={color('calves')} opacity={opa('calves')}/>
+            <ellipse cx="42" cy="328" rx="13" ry="18" fill={dColor('calves')} opacity={opa()}/>
+            <ellipse cx="81" cy="328" rx="13" ry="18" fill={dColor('calves')} opacity={opa()}/>
           </svg>
         </div>
 
@@ -115,30 +118,30 @@
             <image href="/muscle.png" x="0" y="0" width="247" height="357"/>
 
             <!-- Trapezius -->
-            <ellipse cx="185" cy="96" rx="33" ry="20" fill={color('traps')} opacity={opa('traps')}/>
+            <ellipse cx="185" cy="96" rx="33" ry="20" fill={dColor('traps')} opacity={opa()}/>
 
             <!-- Lats -->
-            <rect x="137" y="112" width="24" height="70" rx="8" fill={color('lats')} opacity={opa('lats')}/>
-            <rect x="209" y="112" width="24" height="70" rx="8" fill={color('lats')} opacity={opa('lats')}/>
+            <rect x="137" y="112" width="24" height="70" rx="8" fill={dColor('lats')} opacity={opa()}/>
+            <rect x="209" y="112" width="24" height="70" rx="8" fill={dColor('lats')} opacity={opa()}/>
 
             <!-- Mid back / rhomboids -->
-            <rect x="163" y="106" width="44" height="55" rx="6" fill={color('back')} opacity={opa('back')}/>
+            <rect x="163" y="106" width="44" height="55" rx="6" fill={dColor('back')} opacity={opa()}/>
 
             <!-- Triceps -->
-            <ellipse cx="134" cy="128" rx="8" ry="22" fill={color('triceps')} opacity={opa('triceps')}/>
-            <ellipse cx="236" cy="128" rx="8" ry="22" fill={color('triceps')} opacity={opa('triceps')}/>
+            <ellipse cx="134" cy="128" rx="8" ry="22" fill={dColor('triceps')} opacity={opa()}/>
+            <ellipse cx="236" cy="128" rx="8" ry="22" fill={dColor('triceps')} opacity={opa()}/>
 
             <!-- Glutes -->
-            <ellipse cx="167" cy="234" rx="21" ry="21" fill={color('glutes')} opacity={opa('glutes')}/>
-            <ellipse cx="208" cy="234" rx="21" ry="21" fill={color('glutes')} opacity={opa('glutes')}/>
+            <ellipse cx="167" cy="234" rx="21" ry="21" fill={dColor('glutes')} opacity={opa()}/>
+            <ellipse cx="208" cy="234" rx="21" ry="21" fill={dColor('glutes')} opacity={opa()}/>
 
             <!-- Hamstrings -->
-            <rect x="145" y="260" width="32" height="46" rx="8" fill={color('hamstrings')} opacity={opa('hamstrings')}/>
-            <rect x="193" y="260" width="32" height="46" rx="8" fill={color('hamstrings')} opacity={opa('hamstrings')}/>
+            <rect x="145" y="260" width="32" height="46" rx="8" fill={dColor('hamstrings')} opacity={opa()}/>
+            <rect x="193" y="260" width="32" height="46" rx="8" fill={dColor('hamstrings')} opacity={opa()}/>
 
             <!-- Calves (back) -->
-            <ellipse cx="161" cy="327" rx="13" ry="18" fill={color('calves')} opacity={opa('calves')}/>
-            <ellipse cx="209" cy="327" rx="13" ry="18" fill={color('calves')} opacity={opa('calves')}/>
+            <ellipse cx="161" cy="327" rx="13" ry="18" fill={dColor('calves')} opacity={opa()}/>
+            <ellipse cx="209" cy="327" rx="13" ry="18" fill={dColor('calves')} opacity={opa()}/>
           </svg>
         </div>
 
