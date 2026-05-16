@@ -487,7 +487,7 @@
       try { allExercises = await api.exercises.list(); } catch (e) { /* ignore */ }
     }
     if (sessionMode === 'custom_slots') {
-      if (!templateSlug || !customDayExercises.length) initCustomDays();
+      if (!templateSlug && !customDayExercises.length) initCustomDays();
       step = 5;
     } else {
       step = 5;
