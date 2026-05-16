@@ -485,6 +485,25 @@ Samsung Health has no web API. Samsung's app has a built-in "Connect to Google F
 
 ---
 
+## ✅ Phase 12 — Recovery & Volume Accuracy (SHIPPED)
+
+### MEV Bug Fix — Abs, Glutes, Forearms
+
+| Fix / Feature | Description |
+|---------------|-------------|
+| ~~Abs MEV=0 bug~~ | Abs had `mev=0` for all 4 goals, causing 0 sets/week to always show "On track". Fixed to MEV 2 (general_fitness / strength / recomp) and 3 (hypertrophy). `_backfill_mev_zeros()` corrects existing DB rows on startup. |
+| ~~Glutes MEV=0 bug~~ | Same issue as abs. Fixed to MEV 2 (general_fitness / strength / recomp) and 3 (hypertrophy). |
+| ~~Forearms in recovery map~~ | Forearms was missing from `ALL_MUSCLES` in `recovery.py` despite having landmark data and exercises. Now tracked in the recovery map alongside all other muscles. |
+
+### Recovery & Progress Page Redesign
+
+| Feature | Description |
+|---------|-------------|
+| ~~Flat muscle list — Recovery~~ | Removed Push / Pull / Legs / Core section headers. All muscles shown in a single flat list sorted by severity (red → amber → gray → green). |
+| ~~Flat muscle list — Progress~~ | Same treatment on the Weekly Volume section. Muscles sorted by urgency (Under MEV → At MRV → Above sweet spot → On track → Not tracked). |
+
+---
+
 ## Architecture Notes
 
 ```
