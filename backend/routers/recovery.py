@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api", tags=["recovery"])
 USER_ID = 1
 
 ALL_MUSCLES = [
-    "abs", "back", "biceps", "calves", "chest",
+    "abs", "back", "biceps", "calves", "chest", "forearms",
     "glutes", "hamstrings", "lats", "quads", "shoulders", "traps", "triceps",
 ]
 

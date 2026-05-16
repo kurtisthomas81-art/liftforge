@@ -7,12 +7,7 @@
   let loading = true;
   let error = null;
 
-  const GROUPS = [
-    { label: 'Push', names: ['chest', 'shoulders', 'triceps'] },
-    { label: 'Pull', names: ['back', 'lats', 'traps', 'biceps'] },
-    { label: 'Legs', names: ['quads', 'hamstrings', 'glutes', 'calves'] },
-    { label: 'Core', names: ['abs'] },
-  ];
+  const STATUS_ORDER = { red: 0, amber: 1, gray: 2, green: 3 };
 
   const REC_COLOR = {
     green: 'var(--success)',
@@ -58,9 +53,7 @@
     return `${d.toFixed(1)}d ago`;
   }
 
-  function groupMuscles(names) {
-    return names.map(n => muscles.find(m => m.muscle === n)).filter(Boolean);
-  }
+  $: sortedMuscles = [...muscles].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
 
   $: fatiguePct  = fatigue ? (fatigue.fatigue_score / 10) * 100 : 0;
   $: fatigueColor = fatigue ? FAT_COLOR[fatigue.overall_fatigue] : 'var(--text-muted)';
@@ -120,23 +113,17 @@
       </div>
     {/if}
 
-    {#each GROUPS as g}
-      {@const gm = groupMuscles(g.names)}
-      {#if gm.length}
-        <div class="group-block">
-          <div class="group-hdr">{g.label}</div>
-          {#each gm as m}
-            <div class="rec-row">
-              <div class="dot" style="background:{REC_COLOR[m.status]}"></div>
-              <div class="rec-name">{cap(m.muscle)}</div>
-              <div class="rec-since">{fmtDays(m.days_since_trained)}</div>
-              <div class="rec-rir">{m.avg_rir !== null ? `RIR ${m.avg_rir}` : '—'}</div>
-              <div class="rec-status" style="color:{REC_COLOR[m.status]}">{REC_LABEL[m.status]}</div>
-            </div>
-          {/each}
+    <div class="muscle-list">
+      {#each sortedMuscles as m}
+        <div class="rec-row">
+          <div class="dot" style="background:{REC_COLOR[m.status]}"></div>
+          <div class="rec-name">{cap(m.muscle)}</div>
+          <div class="rec-since">{fmtDays(m.days_since_trained)}</div>
+          <div class="rec-rir">{m.avg_rir !== null ? `RIR ${m.avg_rir}` : '—'}</div>
+          <div class="rec-status" style="color:{REC_COLOR[m.status]}">{REC_LABEL[m.status]}</div>
         </div>
-      {/if}
-    {/each}
+      {/each}
+    </div>
 
   {/if}
 </div>
@@ -266,18 +253,8 @@
 
   .no-flags { font-size: 0.82rem; color: var(--text-muted); margin: 0.5rem 0 0; }
 
-  /* Groups */
-  .group-block { margin-bottom: 0.25rem; }
-
-  .group-hdr {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
-    padding: 0.9rem 0 0.4rem;
-    border-top: 1px solid var(--border);
-  }
+  /* Muscle list */
+  .muscle-list { border-top: 1px solid var(--border); margin-top: 0.5rem; }
 
   .rec-row {
     display: grid;

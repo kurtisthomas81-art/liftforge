@@ -229,6 +229,37 @@ def _fix_exercise_categories(session: Session) -> None:
     session.commit()
 
 
+def _backfill_mev_zeros(session: Session) -> None:
+    """Fix MEV=0 for abs and glutes — these muscles have real minimum training volumes."""
+    FIXES = {
+        ("hypertrophy",    "abs"):    3,
+        ("general_fitness","abs"):    2,
+        ("strength",       "abs"):    2,
+        ("recomp",         "abs"):    2,
+        ("hypertrophy",    "glutes"): 3,
+        ("general_fitness","glutes"): 2,
+        ("strength",       "glutes"): 2,
+        ("recomp",         "glutes"): 2,
+    }
+    updated = 0
+    for (goal, muscle), new_mev in FIXES.items():
+        lm = session.exec(
+            select(MuscleVolumeLandmark).where(
+                MuscleVolumeLandmark.user_id == 1,
+                MuscleVolumeLandmark.goal == goal,
+                MuscleVolumeLandmark.muscle == muscle,
+                MuscleVolumeLandmark.mev == 0,
+            )
+        ).first()
+        if lm:
+            lm.mev = new_mev
+            session.add(lm)
+            updated += 1
+    if updated:
+        session.commit()
+        print(f"Backfilled MEV for {updated} abs/glutes landmark rows.")
+
+
 def _backfill_landmark_goals(session: Session) -> None:
     """Seed goal-specific landmark rows for goals not yet in the DB."""
     from seed_data import LANDMARKS as _LANDMARKS
@@ -280,6 +311,8 @@ def on_startup():
         _backfill_compound_secondaries(session)
         # Seed goal-specific landmark rows for any goals not yet in the DB
         _backfill_landmark_goals(session)
+        # Fix MEV=0 for abs and glutes
+        _backfill_mev_zeros(session)
         # Remove redundant duplicate exercises (only if never logged)
         _purge_redundant_exercises(session)
         # Fix miscategorizations and add missing secondary muscles

@@ -55,12 +55,7 @@
     },
   ];
 
-  const GROUPS = [
-    { label: 'Push', names: ['chest', 'shoulders', 'triceps'] },
-    { label: 'Pull', names: ['back', 'lats', 'traps', 'biceps'] },
-    { label: 'Legs', names: ['quads', 'hamstrings', 'glutes', 'calves'] },
-    { label: 'Core', names: ['abs'] },
-  ];
+  const VOL_ORDER = { below_mev: 0, at_mrv: 1, above_mav: 2, in_mav: 3, unknown: 4 };
 
   const VOL_COLOR = {
     below_mev: 'var(--danger)',
@@ -132,9 +127,9 @@
     : fatigueData.overall_fatigue === 'high' ? 'High Fatigue'
     : 'Critical — Deload Now';
 
-  function volMuscle(name) {
-    return weekVolume?.muscles?.find(m => m.muscle === name) ?? null;
-  }
+  $: sortedVolMuscles = weekVolume?.muscles
+    ? [...weekVolume.muscles].sort((a, b) => (VOL_ORDER[a.status] ?? 4) - (VOL_ORDER[b.status] ?? 4))
+    : [];
 
   // WoW data: top muscles, this week vs prev week sets
   $: wowData = (() => {
@@ -636,23 +631,17 @@
     <span class="hdr-sub">sets vs targets</span>
   </div>
 
-  {#each GROUPS as g}
-    {@const gm = g.names.map(n => volMuscle(n)).filter(Boolean)}
-    {#if gm.length}
-      <div class="group-block">
-        <div class="group-hdr">{g.label}</div>
-        {#each gm as m}
-          {@const lm = m.landmarks}
-          <div class="vol-row">
-            <div class="dot" style="background:{VOL_COLOR[m.status] ?? 'var(--muted)'}"></div>
-            <div class="vol-name">{m.muscle.charAt(0).toUpperCase() + m.muscle.slice(1)}</div>
-            <div class="vol-count">{m.sets}<span class="vol-mrv">{lm ? ` / ${lm.mrv}` : ''}</span></div>
-            <div class="vol-status" style="color:{VOL_COLOR[m.status] ?? 'var(--muted)'}">{VOL_LABEL[m.status] ?? '—'}</div>
-          </div>
-        {/each}
+  <div class="muscle-list">
+    {#each sortedVolMuscles as m}
+      {@const lm = m.landmarks}
+      <div class="vol-row">
+        <div class="dot" style="background:{VOL_COLOR[m.status] ?? 'var(--muted)'}"></div>
+        <div class="vol-name">{m.muscle.charAt(0).toUpperCase() + m.muscle.slice(1)}</div>
+        <div class="vol-count">{m.sets}<span class="vol-mrv">{lm ? ` / ${lm.mrv}` : ''}</span></div>
+        <div class="vol-status" style="color:{VOL_COLOR[m.status] ?? 'var(--muted)'}">{VOL_LABEL[m.status] ?? '—'}</div>
       </div>
-    {/if}
-  {/each}
+    {/each}
+  </div>
 
   {/if}
 </div>
@@ -1119,17 +1108,7 @@
   }
 
   /* Weekly volume rows (mirrors Recovery's rec-row) */
-  .group-block { margin-bottom: 0.25rem; }
-
-  .group-hdr {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--muted);
-    padding: 0.9rem 0 0.4rem;
-    border-top: 1px solid var(--bdr);
-  }
+  .muscle-list { border-top: 1px solid var(--bdr); margin-top: 0.25rem; }
 
   .vol-row {
     display: grid;
