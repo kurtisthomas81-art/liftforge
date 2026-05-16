@@ -230,6 +230,7 @@
             </div>
             <div class="lib-row-btns">
               <a class="lib-customize-link" href="/programs-library?open={prog.slug}">Customize</a>
+              <a class="lib-customize-link lib-custom-sched" href="/program/builder?template={prog.slug}">Custom Schedule</a>
               <button class="lib-start-btn" disabled={installing !== null}
                 on:click={() => quickInstall(prog.slug)}>
                 {installing === prog.slug ? '…' : 'Start'}
@@ -590,6 +591,8 @@
     padding:5px 10px; transition:color .15s, border-color .15s;
   }
   .lib-customize-link:hover { color:var(--accent); border-color:var(--accent); }
+  .lib-custom-sched { color:var(--accent); border-color:rgba(232,160,64,0.35); }
+  .lib-custom-sched:hover { border-color:var(--accent); }
   .lib-start-btn {
     background:var(--accent); color:#fff; border:none;
     border-radius:var(--radius); padding:6px 14px;
