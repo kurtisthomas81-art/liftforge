@@ -1,6 +1,14 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { api } from '$lib/api.js';
+  import MuscleVolumeSlider from '$lib/MuscleVolumeSlider.svelte';
+
+  const FRIENDLY = {
+    chest: 'Chest', shoulders: 'Shoulders', triceps: 'Triceps',
+    back: 'Back', lats: 'Lats', biceps: 'Biceps',
+    quads: 'Quads', hamstrings: 'Hamstrings', glutes: 'Glutes', calves: 'Calves',
+    abs: 'Core', traps: 'Traps',
+  };
 
   let loading = true;
   let fatigueData = null;
@@ -631,15 +639,14 @@
     <span class="hdr-sub">sets vs targets</span>
   </div>
 
-  <div class="muscle-list">
+  <div class="muscle-gauge-list">
     {#each sortedVolMuscles as m}
-      {@const lm = m.landmarks}
-      <div class="vol-row">
-        <div class="dot" style="background:{VOL_COLOR[m.status] ?? 'var(--muted)'}"></div>
-        <div class="vol-name">{m.muscle.charAt(0).toUpperCase() + m.muscle.slice(1)}</div>
-        <div class="vol-count">{m.sets}<span class="vol-mrv">{lm ? ` / ${lm.mrv}` : ''}</span></div>
-        <div class="vol-status" style="color:{VOL_COLOR[m.status] ?? 'var(--muted)'}">{VOL_LABEL[m.status] ?? '—'}</div>
-      </div>
+      <MuscleVolumeSlider
+        label={FRIENDLY[m.muscle] ?? (m.muscle.charAt(0).toUpperCase() + m.muscle.slice(1))}
+        sets={m.sets}
+        landmarks={m.landmarks}
+        fatigued={fatigueData?.muscles_at_risk?.includes(m.muscle) ?? false}
+      />
     {/each}
   </div>
 
@@ -1107,22 +1114,12 @@
     border-top: 1px solid var(--bdr);
   }
 
-  /* Weekly volume rows (mirrors Recovery's rec-row) */
-  .muscle-list { border-top: 1px solid var(--bdr); margin-top: 0.25rem; }
-
-  .vol-row {
-    display: grid;
-    grid-template-columns: 10px 140px 1fr 120px;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.6rem 0;
-    border-bottom: 1px solid var(--bdr);
+  /* Weekly volume gauge list */
+  .muscle-gauge-list {
+    border-top: 1px solid var(--bdr);
+    margin-top: 0.25rem;
+    padding: 0 0.1rem;
   }
-
-  .vol-name   { font-size: 0.9rem; font-weight: 500; color: var(--text); }
-  .vol-count  { font-size: 0.9rem; font-weight: 600; color: var(--text); }
-  .vol-mrv    { font-size: 0.78rem; font-weight: 400; color: var(--muted); }
-  .vol-status { font-size: 0.82rem; font-weight: 600; text-align: right; }
 
   /* Spinner */
   .spinner-wrap { display: flex; justify-content: center; padding: 4rem 0; }
