@@ -504,6 +504,54 @@ Samsung Health has no web API. Samsung's app has a built-in "Connect to Google F
 
 ---
 
+## ✅ Phase 13 — Volume Visualization & Template Intelligence (SHIPPED)
+
+### Muscle Volume Gauge Slider
+
+New `MuscleVolumeSlider.svelte` component on the `/progress` page replaces the plain dot-list with a segmented-zone gauge per muscle.
+
+| Feature | Description |
+|---------|-------------|
+| ~~Zone track~~ | Four background zones: under MEV (red), building (subtle green), MAV sweet spot (green), above sweet spot (amber); correct colors per volume status |
+| ~~Filled bar + thumb~~ | Solid bar 0→current sets; circle thumb at exact position; both colored by status (red/green/amber/orange); thumb has gold glow at MRV |
+| ~~Tick marks~~ | 1px faint lines at MEV, mav_low, mav_high boundaries |
+| ~~Landmark labels~~ | Below track at MEV, MAV range, MRV — each shows jargon + plain-English: "MEV (Floor) · 6", "MAV (Sweet Spot) · 12–18", "MRV (Limit) · 22" |
+| ~~Fatigue badge~~ | ⚠ in amber next to muscle name when listed in `fatigueData.muscles_at_risk`; matches existing fatigue-report endpoint |
+| ~~Set count~~ | Right-aligned `N / MRV sets/wk` per muscle |
+| ~~Sorted by urgency~~ | Under MEV → At/near MRV → Above sweet spot → On track; fatigue-flagged muscles float to top within their tier |
+
+### Published Program Custom Schedule Flow
+
+Users can now run any published program (5/3/1 BBB, Starting Strength, GZCLP, etc.) on a custom day/rotation schedule via the mesocycle builder wizard.
+
+| Feature | Description |
+|---------|-------------|
+| ~~"Custom Schedule" link~~ | Gold link on each published program card on the Start a Program page (`/program`); navigates to `/program/builder?template={slug}` |
+| ~~`GET /api/programs/library/{slug}/sessions`~~ | New endpoint returns unique non-deload session structures with `sub_pattern` per exercise; used to pre-load the builder |
+| ~~Template pre-load on mount~~ | Builder detects `?template=` param; fetches session structures; sets goal, weeks, days/week, session mode from template; skips split picker (step 1 → step 3) |
+| ~~Template banner~~ | Gold banner above wizard showing "Based on: [Template Name] · Sessions pre-loaded · pick your schedule below" |
+| ~~Template-aware variant opts~~ | Variant picker shows up to 4 options (A only / A/B / A/B/C / A/B/C/D) matching the template's actual unique session count; normal mode still caps at 3 |
+| ~~Engine-selected exercises~~ | `applyTemplateToCustomDays` stores movement patterns only (`exercise_id=null`); `goToReview()` calls `refreshPrescriptions()` so `previewCustomSlots` picks goal/equipment/level-appropriate exercises — template provides structure, engine provides intelligence |
+| ~~Step 4 day-of-week in template mode~~ | Day 1/2/… rows now appear for training-day assignment (was blank because `selectedSplit` is null in template mode) |
+
+### Builder Display Fixes
+
+| Fix | Description |
+|-----|-------------|
+| ~~"Split: undefined"~~ | Step 5 summary now shows template name in template mode instead of `undefined` |
+| ~~Goal underscores~~ | `general_fitness` → "general fitness" in the summary display |
+| ~~4-variant label~~ | Variation row now handles A/B/C/D rotation (was "A/B/C rotation" for all 4+ variants) |
+| ~~deleteVariantDay letter array~~ | Fixed to include 'D' so removing days from a 4-session rotation re-letters correctly |
+| ~~goToReview() || → && bug~~ | Was `!templateSlug || !customDayExercises.length` — always fired `initCustomDays()` in custom_slots mode, wiping user-selected exercises on every step 5 re-entry. Fixed to `&&`. |
+
+### Infrastructure
+
+| Fix | Description |
+|-----|-------------|
+| ~~nginx index.html cache~~ | Added `location = /index.html` block with `Cache-Control: no-cache, no-store, must-revalidate` — browsers were serving stale JS bundles after Docker rebuilds |
+
+---
+
 ## Architecture Notes
 
 ```
