@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { api } from '$lib/api.js';
   import { dndzone } from 'svelte-dnd-action';
   import VolumeGauge from '$lib/VolumeGauge.svelte';
@@ -49,6 +50,11 @@
   let addExerciseFilter = '';
   let addExerciseCandidates = [];
   let loadingAddExercises = false;
+
+  // Template pre-load (from programs library "Custom Schedule" flow)
+  let templateSlug = null;
+  let templateMeta = null;
+  let templateSessions = [];   // raw [{label, exercises[]}] from the API
 
   const SLOT_OPTIONS = [
     { key: 'knee_dominant',   label: 'Knee Dominant',    example: 'Squat · Lunge · Leg Press',       fatigue: 'high',   color: '#c0392b' },
@@ -189,9 +195,43 @@
     const days = allDays.slice(0, count);
     customDayExercises = days.map((day, i) => ({
       day_name: day.name,
-      variant: ['A', 'B', 'C'][i % numVariants],
+      variant: ['A', 'B', 'C', 'D'][i % 4],
       exercises: [],
     }));
+  }
+
+  function applyTemplateToCustomDays(sessions, variants) {
+    const letters = ['A', 'B', 'C', 'D'];
+    customDayExercises = sessions.slice(0, variants).map((sess, i) => ({
+      day_name: sess.label,
+      variant: letters[i] ?? String(i + 1),
+      exercises: sess.exercises.map(ex => ({
+        ...ex,
+        id: Math.random().toString(36).slice(2),
+        set_type: 'straight',
+        superset_group: null,
+      })),
+    }));
+  }
+
+  // Dynamic variant options: template mode shows all sessions; normal mode caps at 3.
+  $: variantOpts = templateSlug && templateSessions.length
+    ? templateSessions.map((sess, i) => ({
+        val: i + 1,
+        label: ['A only', 'A / B', 'A / B / C', 'A / B / C / D'][i] ?? `${i + 1} sessions`,
+        desc: i === 0
+          ? `Only "${sess.label}" every training day.`
+          : `${i + 1} unique sessions rotating continuously. With ${selectedDays} days/week each session averages ${(selectedDays / (i + 1)).toFixed(1)}×/week.`,
+      }))
+    : [
+        { val: 1, label: 'A — No variation', desc: 'Same exercises every session. Best for pure beginners learning movement patterns.' },
+        { val: 2, label: 'A/B rotation', desc: 'Two alternating workouts. Horizontal push/pull one session, vertical the next. Recommended.' },
+        { val: 3, label: 'A/B/C rotation', desc: 'Three unique workouts cycling continuously. More variety across the training block.' },
+      ].filter(opt => opt.val <= selectedDays);
+
+  // Rebuild custom days when variant count changes in template mode.
+  $: if (templateSlug && templateSessions.length && numVariants) {
+    applyTemplateToCustomDays(templateSessions, numVariants);
   }
 
   async function refreshPrescriptions() {
@@ -338,18 +378,48 @@
     } catch (e) {
       error = e.message;
     }
+
+    // Pre-load from a published template if ?template=slug was passed.
+    const tplParam = $page.url.searchParams.get('template');
+    if (tplParam) {
+      try {
+        const tpl = await api.programs.templateSessions(tplParam);
+        templateSlug = tpl.slug;
+        templateMeta = tpl;
+        templateSessions = tpl.sessions;
+        selectedDays = tpl.days_per_week;
+        selectedGoal = tpl.goal;
+        selectedWeeks = tpl.weeks ?? selectedWeeks;
+        sessionMode = 'custom_slots';
+        numVariants = tpl.sessions.length;
+        daysOfWeek = Array.from({ length: selectedDays }, (_, i) => Math.min(i * Math.floor(7 / selectedDays), 6));
+        applyTemplateToCustomDays(tpl.sessions, tpl.sessions.length);
+        const now = new Date();
+        mesoName = `${tpl.name} — ${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`;
+      } catch (_) {
+        // Silently fall through to normal wizard if template fetch fails.
+      }
+    }
+
     loading = false;
-    const now = new Date();
-    mesoName = `Mesocycle ${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`;
+    if (!mesoName) {
+      const now = new Date();
+      mesoName = `Mesocycle ${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`;
+    }
   });
 
   function selectDays(n) {
     selectedDays = n;
-    selectedSplit = null;
-    isCustom = false;
-    customDays = Array.from({ length: n }, (_, i) => ({ name: `Day ${i + 1}`, muscle_focus: [] }));
     daysOfWeek = Array.from({ length: n }, (_, i) => Math.min(i * Math.floor(7 / n), 6));
-    step = 2;
+    if (templateSlug) {
+      // Template mode: no split to choose — sessions come from the template.
+      step = 3;
+    } else {
+      selectedSplit = null;
+      isCustom = false;
+      customDays = Array.from({ length: n }, (_, i) => ({ name: `Day ${i + 1}`, muscle_focus: [] }));
+      step = 2;
+    }
   }
 
   function selectSplit(split) {
@@ -391,7 +461,9 @@
       num_variants: numVariants,
       session_mode: sessionMode,
     };
-    if (isCustom) {
+    if (templateSlug) {
+      p.custom_days = customDayExercises.map(d => ({ name: d.day_name, muscle_focus: [] }));
+    } else if (isCustom) {
       p.custom_days = customDays;
     } else {
       p.split_slug = selectedSplit.slug;
@@ -415,7 +487,7 @@
       try { allExercises = await api.exercises.list(); } catch (e) { /* ignore */ }
     }
     if (sessionMode === 'custom_slots') {
-      initCustomDays();
+      if (!templateSlug || !customDayExercises.length) initCustomDays();
       step = 5;
     } else {
       step = 5;
@@ -524,6 +596,14 @@
     {/each}
   </div>
 
+  {#if templateMeta}
+    <div style="background:rgba(232,160,64,0.1); border:1px solid var(--primary); border-radius:8px; padding:9px 14px; margin-bottom:16px; font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:6px;">
+      <span style="color:var(--primary); font-weight:700;">Based on:</span>
+      <span>{templateMeta.name}</span>
+      <span style="color:var(--text-faint); margin-left:4px;">· Sessions pre-loaded · pick your schedule below</span>
+    </div>
+  {/if}
+
   {#if loading}
     <div class="flex items-center gap-3" style="padding:32px 0;">
       <div class="spinner"></div>
@@ -613,20 +693,18 @@
     <!-- Step 3: Variation style + exercise mode -->
     <div class="card">
       <div class="flex items-center gap-3 mb-4">
-        <button class="btn-ghost btn-sm" on:click={() => step = 2}>← Back</button>
+        <button class="btn-ghost btn-sm" on:click={() => step = templateSlug ? 1 : 2}>← Back</button>
         <div class="section-title">Variation & Exercise Mode</div>
       </div>
 
-      <!-- Variation picker (auto mode only) -->
-      {#if sessionMode === 'auto'}
+      <!-- Variation picker -->
+      {#if sessionMode === 'auto' || templateSlug}
       <div style="margin-bottom:28px;">
-        <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Exercise variety across sessions</label>
+        <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">
+          {templateSlug ? 'How many unique sessions to rotate?' : 'Exercise variety across sessions'}
+        </label>
         <div style="display:flex; gap:10px; flex-direction:column;">
-          {#each [
-            { val: 1, label: 'A — No variation', desc: 'Same exercises every session. Best for pure beginners learning movement patterns.' },
-            { val: 2, label: 'A/B rotation', desc: 'Two alternating workouts. Horizontal push/pull one session, vertical the next. Recommended.' },
-            { val: 3, label: 'A/B/C rotation', desc: 'Three unique workouts cycling continuously. More variety across the training block.' },
-          ].filter(opt => opt.val <= selectedDays) as opt}
+          {#each variantOpts as opt}
             <button
               on:click={() => numVariants = opt.val}
               style="text-align:left; padding:14px 16px; border-radius:8px; border:2px solid {numVariants === opt.val ? 'var(--primary)' : 'var(--border)'}; background:{numVariants === opt.val ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:var(--text); cursor:pointer; transition:all 0.15s;"
@@ -642,7 +720,8 @@
       </div>
       {/if}
 
-      <!-- Exercise selection mode -->
+      <!-- Exercise selection mode (hidden in template mode — always custom_slots) -->
+      {#if !templateSlug}
       <div style="margin-bottom:24px; padding-top:20px; border-top:1px solid var(--border);">
         <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">How do you want to choose exercises?</label>
         <div style="display:flex; gap:10px; flex-direction:column;">
@@ -667,6 +746,11 @@
           </div>
         {/if}
       </div>
+      {:else}
+      <div style="padding:12px 14px; background:var(--surface-2); border-radius:6px; border:1px solid var(--border); font-size:12px; color:var(--text-muted); margin-bottom:24px; padding-top:20px; border-top:1px solid var(--border);">
+        ✓ Template exercises loaded — review and edit them in the next step
+      </div>
+      {/if}
 
       <button class="btn-primary" on:click={() => step = 4}>Continue →</button>
     </div>

@@ -216,6 +216,7 @@
 
           {#if !isOpen}
             <div class="card-actions">
+              <button class="btn-ghost" on:click={() => goto(`/program/builder?template=${prog.slug}`)}>Custom Schedule</button>
               <button class="btn-outline" disabled={isInstalling} on:click={() => openCustomizer(prog)}>Customize</button>
               <button class="btn-primary" disabled={isInstalling} on:click={() => quickInstall(prog.slug)}>
                 {installing === prog.slug + '_quick' ? 'Starting…' : 'Start'}
@@ -441,6 +442,19 @@
   }
   .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
   .btn-outline:disabled { opacity: .5; cursor: not-allowed; }
+
+  .btn-ghost {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 0.5rem 0.875rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .btn-ghost:hover { color: var(--accent); border-color: var(--border); }
 
   /* ── Customizer ── */
   .customizer {

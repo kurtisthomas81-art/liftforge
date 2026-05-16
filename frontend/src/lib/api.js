@@ -100,6 +100,7 @@ export const api = {
     listLibrary: () => request('GET', '/programs/library'),
     previewLibraryProgram: (slug) => request('GET', `/programs/library/${slug}/preview`),
     installLibraryProgram: (slug, config = {}) => request('POST', `/programs/library/${slug}/install`, config),
+    templateSessions: (slug) => request('GET', `/programs/library/${slug}/sessions`),
   },
 
   landmarks: {

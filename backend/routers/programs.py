@@ -1230,6 +1230,56 @@ def preview_library_program(slug: str, session: Session = Depends(get_session)):
     }
 
 
+@router.get("/library/{slug}/sessions")
+def library_template_sessions(slug: str, session: Session = Depends(get_session)):
+    """Return unique (non-deload) session templates with sub_pattern per exercise — used by the builder pre-load flow."""
+    from published_programs import PROGRAMS, build_schedule
+
+    prog = PROGRAMS.get(slug)
+    if not prog:
+        raise HTTPException(status_code=404, detail="Program not found")
+
+    all_exercises = session.exec(select(Exercise)).all()
+    exercise_lookup = {ex.name: ex.id for ex in all_exercises}
+    id_to_ex = {ex.id: ex for ex in all_exercises}
+
+    weeks_data = build_schedule(slug, exercise_lookup)
+
+    seen_labels: set[str] = set()
+    sessions_out = []
+    for w in weeks_data:
+        if w["is_deload"]:
+            continue
+        for s in w["sessions"]:
+            label = s["split_day_name"]
+            if label in seen_labels:
+                continue
+            seen_labels.add(label)
+            exercises = []
+            for e in s["exercises"]:
+                ex_obj = id_to_ex.get(e["exercise_id"])
+                exercises.append({
+                    "exercise_id": e["exercise_id"],
+                    "exercise_name": e.get("exercise_name", ex_obj.name if ex_obj else ""),
+                    "sub_pattern": ex_obj.sub_pattern if ex_obj else "",
+                    "target_sets": e["target_sets"],
+                    "target_reps_min": e["target_reps_min"],
+                    "target_reps_max": e["target_reps_max"],
+                    "target_rir": e["target_rir"],
+                    "notes": e.get("notes", ""),
+                })
+            sessions_out.append({"label": label, "exercises": exercises})
+
+    return {
+        "slug": prog["slug"],
+        "name": prog["name"],
+        "goal": prog["goal"],
+        "weeks": prog["weeks"],
+        "days_per_week": prog["days_per_week"],
+        "sessions": sessions_out,
+    }
+
+
 class LibraryInstallPayload(BaseModel):
     weeks: Optional[int] = None
     deload_week: Optional[int] = None
