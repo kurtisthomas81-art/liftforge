@@ -321,561 +321,860 @@
 
 <svelte:head><title>Progress — LiftForge</title></svelte:head>
 
-<div class="page-title">Training <em>Progress</em></div>
+<div class="page">
 
-{#if loading}
-  <div class="flex items-center gap-3" style="padding:32px 0;"><div class="spinner"></div></div>
-{:else}
+  <div class="page-header">
+    <h2>Progress</h2>
+    <p class="subtitle">Strength trends, volume, and training readiness</p>
+  </div>
 
-<!-- Score card -->
-<div class="score-card">
-  <div class="score-main">
-    <div class="score-num" style="color:{scoreColor}">{overallScore ?? '—'}</div>
-    <div class="score-label">{scoreLabel}</div>
+  {#if loading}
+    <div class="spinner-wrap"><div class="spinner"></div></div>
+  {:else}
+
+  <!-- Readiness summary card -->
+  <div class="summary-card">
+    <div class="summary-top">
+      <div>
+        <div class="sum-label">Training Readiness</div>
+        <div class="sum-level" style="color:{scoreColor}">{scoreLabel}</div>
+      </div>
+      <div class="score-badge" style="color:{scoreColor}; border-color:{scoreColor}44">
+        <span class="score-num">{overallScore ?? '—'}</span><span class="score-denom">/100</span>
+      </div>
+    </div>
+
+    <div class="gauge-wrap">
+      <div class="gauge-track">
+        <div class="gz gz-crit" style="width:25%"></div>
+        <div class="gz gz-high" style="left:25%;width:20%"></div>
+        <div class="gz gz-mod"  style="left:45%;width:20%"></div>
+        <div class="gz gz-low"  style="left:65%;width:35%"></div>
+        <div class="gauge-fill" style="width:{overallScore ?? 0}%;background:{scoreColor}"></div>
+      </div>
+      <div class="gauge-legend">
+        <span>Critical</span>
+        <span>High</span>
+        <span>Building</span>
+        <span>Fresh</span>
+      </div>
+    </div>
+
     {#if fatigueData?.deload_recommended}
-      <div class="deload-badge">Recovery Week Recommended</div>
+      <div class="deload-pill">Recovery week recommended</div>
     {/if}
-  </div>
-  <div class="score-detail">
-    <div class="score-detail-row">
-      <span class="score-detail-lbl">Fatigue Score</span>
-      <span class="score-detail-val">{fatigueData?.fatigue_score ?? '—'} / 10</span>
-    </div>
+
     {#if fatigueData?.muscles_at_risk?.length}
-      <div class="score-detail-row">
-        <span class="score-detail-lbl">At Risk</span>
-        <span class="score-detail-val" style="color:var(--danger)">{fatigueData.muscles_at_risk.join(', ')}</span>
-      </div>
-    {/if}
-    {#if fatigueData?.last_deload_days_ago != null}
-      <div class="score-detail-row">
-        <span class="score-detail-lbl">Last Recovery Week</span>
-        <span class="score-detail-val">{fatigueData.last_deload_days_ago}d ago</span>
-      </div>
+      <ul class="flag-list">
+        <li>Muscles at risk: {fatigueData.muscles_at_risk.join(', ')}</li>
+        {#each (fatigueData.reasons ?? []) as r}<li>{r}</li>{/each}
+      </ul>
+    {:else if fatigueData}
+      <p class="no-flags">No fatigue flags — training load looks healthy.</p>
     {/if}
   </div>
-</div>
 
-<!-- Strength Level -->
-{#if strengthData}
-<div class="card section-card">
-  <div class="section-title">Strength Level</div>
-  {#if !strengthData.has_body_weight}
-    <p class="strength-prompt">Add body weight in your weekly check-in to unlock strength grading.</p>
-  {:else if !strengthData.lifts.some(l => l.level !== null)}
-    <p class="strength-prompt">Log Squat, Bench, Deadlift, and OHP to calibrate your strength level.</p>
-  {:else}
-    <div class="strength-overall">
-      <span class="strength-badge" style="background:{levelColor(strengthData.overall_level)}">
-        {strengthData.overall_level ?? '—'}
-      </span>
-      <span class="strength-method">Symmetric Strength · weakest lift scores</span>
-    </div>
-    <div class="strength-lifts">
-      {#each strengthData.lifts as lift}
-        <div class="strength-lift-row">
-          <div class="strength-lift-top">
-            <span class="strength-lift-name">{liftLabel(lift.lift_key)}</span>
-            {#if lift.level}
-              <span class="strength-level-chip" style="color:{levelColor(lift.level)}">{lift.level}</span>
-              <span class="strength-e1rm">{lift.e1rm} · {lift.ratio}×BW</span>
-            {:else}
-              <span class="strength-no-data">no data</span>
-            {/if}
-          </div>
-          {#if lift.level}
-            <div class="strength-bar-track">
-              <div class="strength-bar-fill" style="width:{lift.pct_to_next}%;background:{levelColor(lift.level)}"></div>
+  <!-- Strength Level -->
+  {#if strengthData}
+  <div class="card section-card">
+    <div class="card-hdr">Strength Level</div>
+    {#if !strengthData.has_body_weight}
+      <p class="prompt-text">Add body weight in your weekly check-in to unlock strength grading.</p>
+    {:else if !strengthData.lifts.some(l => l.level !== null)}
+      <p class="prompt-text">Log Squat, Bench, Deadlift, and OHP to calibrate your strength level.</p>
+    {:else}
+      <div class="strength-overall">
+        <span class="level-badge" style="background:{levelColor(strengthData.overall_level)}">
+          {strengthData.overall_level ?? '—'}
+        </span>
+        <span class="strength-method">Symmetric Strength · weakest lift scores</span>
+      </div>
+      <div class="lift-list">
+        {#each strengthData.lifts as lift}
+          <div class="lift-row">
+            <div class="dot" style="background:{levelColor(lift.level ?? 'beginner')}"></div>
+            <div class="lift-top">
+              <span class="lift-name">{liftLabel(lift.lift_key)}</span>
+              {#if lift.level}
+                <span class="lift-level" style="color:{levelColor(lift.level)}">{lift.level}</span>
+                <span class="lift-e1rm">{lift.e1rm} · {lift.ratio}×BW</span>
+              {:else}
+                <span class="no-data">no data</span>
+              {/if}
             </div>
-            {#if lift.level !== 'elite'}
-              <div class="strength-bar-label">{lift.pct_to_next}% · next: {lift.next_threshold}×BW ({nextLevelName(lift.level)})</div>
-            {:else}
-              <div class="strength-bar-label" style="color:#cd853f">Elite</div>
+            {#if lift.level}
+              <div class="lift-bar-track">
+                <div class="lift-bar-fill" style="width:{lift.pct_to_next}%;background:{levelColor(lift.level)}"></div>
+              </div>
+              {#if lift.level !== 'elite'}
+                <div class="lift-bar-label">{lift.pct_to_next}% to {nextLevelName(lift.level)} · {lift.next_threshold}×BW</div>
+              {:else}
+                <div class="lift-bar-label" style="color:#cd853f">Elite — top tier</div>
+              {/if}
             {/if}
-          {/if}
-        </div>
-      {/each}
-    </div>
-  {/if}
-</div>
-{/if}
-
-<!-- Strength-to-Bodyweight Ratio Over Time (2A) -->
-<div class="card section-card">
-  <div class="section-title">Strength / Bodyweight Over Time</div>
-  {#if !hasRatioData}
-    <p style="font-size:13px; color:var(--muted); margin:8px 0;">Log PRs and body weight measurements to unlock this chart.</p>
-  {:else}
-    <div class="chart-wrap"><canvas bind:this={chartCanvas2}></canvas></div>
-  {/if}
-</div>
-
-<!-- Volume Sweet Spot (2B) -->
-<div class="card section-card">
-  <div class="section-title">Volume Sweet Spot</div>
-  <p style="font-size:11px; color:var(--muted); margin-bottom:10px;">Weekly sets that preceded your best PRs most often.</p>
-  {#if sweetSpotMuscles.length === 0}
-    <p style="font-size:13px; color:var(--muted);">Need 3+ PRs per lift to detect patterns.</p>
-  {:else}
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      {#each sweetSpotMuscles as [muscle, data]}
-        <div style="font-size:13px;">
-          <span style="color:var(--text); font-weight:600; text-transform:capitalize;">{MUSCLE_LABELS[muscle] ?? muscle}</span>
-          <span style="color:var(--muted);"> — best results at </span>
-          <span style="color:var(--primary); font-weight:600;">{data.peak_bucket} sets/week</span>
-          <span style="color:var(--faint); font-size:11px;"> ({data.buckets.find(b => b.label === data.peak_bucket)?.count ?? 0} of {data.pr_count} PRs)</span>
-        </div>
-      {/each}
-    </div>
-  {/if}
-</div>
-
-<!-- 1RM Trend -->
-<div class="card section-card">
-  <div class="section-title">Max Lift Trend (1RM)</div>
-
-  <!-- Quick-select shortcuts -->
-  {#if quickExercises.length > 0}
-    <div class="quick-pills">
-      {#each quickExercises as ex}
-        <button class="quick-pill" class:active={selectedExId === ex.id}
-          on:click={() => selectedExId = ex.id}>
-          {ex.name.split(' ').slice(0, 2).join(' ')}
-        </button>
-      {/each}
-    </div>
-  {/if}
-
-  <select class="ex-select" bind:value={selectedExId}>
-    <option value={null}>Select exercise…</option>
-    {#each exercises as ex}
-      <option value={ex.id}>{ex.name}</option>
-    {/each}
-  </select>
-
-  {#if selectedExId && (bestOneRM || latestOneRM)}
-    <div class="rm-stats">
-      <div class="rm-stat">
-        <div class="rm-val">{bestOneRM}<span class="rm-unit">lb</span></div>
-        <div class="rm-lbl">Best est. 1RM</div>
-      </div>
-      <div class="rm-stat">
-        <div class="rm-val">{latestOneRM}<span class="rm-unit">lb</span></div>
-        <div class="rm-lbl">Latest</div>
-      </div>
-    </div>
-  {/if}
-
-  {#if loadingChart}
-    <div class="chart-placeholder"><div class="spinner"></div></div>
-  {:else if selectedExId && !progressionData.length}
-    <div class="chart-placeholder" style="color:var(--muted);font-size:13px;">No data yet.</div>
-  {:else if selectedExId}
-    <div class="chart-wrap"><canvas bind:this={chartCanvas}></canvas></div>
-  {:else}
-    <div class="chart-placeholder" style="color:var(--faint);font-size:12px;">Select an exercise to see 1RM trend</div>
-  {/if}
-</div>
-
-<!-- Goals -->
-<div class="card section-card">
-  <div class="goals-hdr">
-    <div class="section-title" style="margin-bottom:0">Goals</div>
-    <button class="add-goal-btn" on:click={() => showGoalForm = !showGoalForm}>
-      {showGoalForm ? 'Cancel' : '+ Add Goal'}
-    </button>
-  </div>
-
-  {#if showGoalForm}
-    <div class="goal-form">
-      <div class="goal-form-row">
-        <input class="goal-input" placeholder="Search exercise…" bind:value={goalSearch} />
-        {#if filteredExercises.length}
-          <div class="goal-ex-dropdown">
-            {#each filteredExercises as ex}
-              <button class="goal-ex-opt" on:click={() => { goalExerciseId = ex.id; goalSearch = ex.name; filteredExercises = []; }}>
-                {ex.name}
-              </button>
-            {/each}
           </div>
-        {/if}
-      </div>
-      <div class="goal-type-row">
-        {#each [['e1rm','Est. 1RM'],['weight','Max Weight'],['reps','Max Reps']] as [val, lbl]}
-          <button class="goal-type-btn" class:active={goalType === val} on:click={() => goalType = val}>{lbl}</button>
         {/each}
       </div>
-      <div class="goal-form-row">
-        <input class="goal-input" type="number" min="1" placeholder="{goalType === 'reps' ? 'Reps target' : 'Weight target (lbs)'}" bind:value={goalTarget} style="flex:1" />
-        <input class="goal-input" type="date" bind:value={goalDeadline} style="flex:1" />
+    {/if}
+  </div>
+  {/if}
+
+  <!-- Strength / Bodyweight Over Time -->
+  <div class="card section-card">
+    <div class="card-hdr">Strength / Bodyweight Over Time</div>
+    {#if !hasRatioData}
+      <p class="prompt-text">Log PRs and body weight measurements to unlock this chart.</p>
+    {:else}
+      <div class="chart-wrap"><canvas bind:this={chartCanvas2}></canvas></div>
+    {/if}
+  </div>
+
+  <!-- Volume Sweet Spot -->
+  <div class="card section-card">
+    <div class="card-hdr">Volume Sweet Spot</div>
+    <p class="card-sub">Weekly sets that preceded your best PRs most often.</p>
+    {#if sweetSpotMuscles.length === 0}
+      <p class="prompt-text">Need 3+ PRs per lift to detect patterns.</p>
+    {:else}
+      <div class="sweet-list">
+        {#each sweetSpotMuscles as [muscle, data]}
+          <div class="sweet-row">
+            <span class="sweet-muscle">{MUSCLE_LABELS[muscle] ?? muscle}</span>
+            <span class="sweet-mid">best results at</span>
+            <span class="sweet-val">{data.peak_bucket} sets/week</span>
+            <span class="sweet-count">{data.buckets.find(b => b.label === data.peak_bucket)?.count ?? 0} / {data.pr_count} PRs</span>
+          </div>
+        {/each}
       </div>
-      <button class="btn-primary" on:click={saveGoal} disabled={savingGoal || !goalExerciseId || !goalTarget}>
-        {savingGoal ? 'Saving…' : 'Save Goal'}
+    {/if}
+  </div>
+
+  <!-- 1RM Trend -->
+  <div class="card section-card">
+    <div class="card-hdr">Max Lift Trend (1RM)</div>
+
+    {#if quickExercises.length > 0}
+      <div class="seg-ctrl">
+        {#each quickExercises as ex}
+          <button class:active={selectedExId === ex.id} on:click={() => selectedExId = ex.id}>
+            {ex.name.split(' ').slice(0, 2).join(' ')}
+          </button>
+        {/each}
+      </div>
+    {/if}
+
+    <select bind:value={selectedExId}>
+      <option value={null}>Select exercise…</option>
+      {#each exercises as ex}
+        <option value={ex.id}>{ex.name}</option>
+      {/each}
+    </select>
+
+    {#if selectedExId && (bestOneRM || latestOneRM)}
+      <div class="rm-stats">
+        <div class="rm-stat">
+          <div class="rm-val">{bestOneRM}<span class="rm-unit"> lb</span></div>
+          <div class="rm-lbl">Best est. 1RM</div>
+        </div>
+        <div class="rm-stat">
+          <div class="rm-val">{latestOneRM}<span class="rm-unit"> lb</span></div>
+          <div class="rm-lbl">Latest</div>
+        </div>
+      </div>
+    {/if}
+
+    {#if loadingChart}
+      <div class="chart-placeholder"><div class="spinner"></div></div>
+    {:else if selectedExId && !progressionData.length}
+      <div class="chart-placeholder">No data yet.</div>
+    {:else if selectedExId}
+      <div class="chart-wrap"><canvas bind:this={chartCanvas}></canvas></div>
+    {:else}
+      <div class="chart-placeholder">Select an exercise to see 1RM trend</div>
+    {/if}
+  </div>
+
+  <!-- Goals -->
+  <div class="card section-card">
+    <div class="card-hdr-row">
+      <div class="card-hdr" style="margin:0">Goals</div>
+      <button class="ghost-btn" on:click={() => showGoalForm = !showGoalForm}>
+        {showGoalForm ? 'Cancel' : '+ Add Goal'}
       </button>
     </div>
-  {/if}
 
-  {#if activeGoals.length === 0 && !showGoalForm}
-    <p class="goals-empty">No active goals. Add one to track your progress.</p>
-  {/if}
-
-  {#each activeGoals as g}
-    {@const barColor = g.pct >= 100 ? 'var(--success)' : 'var(--accent)'}
-    <div class="goal-card">
-      <div class="goal-card-hdr">
-        <div class="goal-ex-name">{g.exercise_name}</div>
-        <div class="goal-right">
-          <span class="goal-type-badge">{g.goal_type}</span>
-          <button class="goal-del" on:click={() => deleteGoal(g.id)}>×</button>
-        </div>
-      </div>
-      <div class="goal-bar-track">
-        <div class="goal-bar-fill" style="width:{g.pct}%;background:{barColor}"></div>
-      </div>
-      <div class="goal-meta">
-        <span style="color:var(--muted)">{g.current_value ?? '—'} → <strong style="color:var(--text)">{g.target_value}</strong> {g.goal_type === 'reps' ? 'reps' : 'lbs'}</span>
-        <span style="color:{barColor};font-weight:600">{g.pct}%</span>
-      </div>
-      {#if g.deadline}
-        <div class="goal-deadline">by {new Date(g.deadline + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}</div>
-      {/if}
-    </div>
-  {/each}
-
-  {#if achievedGoals.length > 0}
-    <div class="achieved-hdr">Achieved</div>
-    {#each achievedGoals as g}
-      <div class="goal-card achieved-card">
-        <div class="goal-card-hdr">
-          <div class="goal-ex-name">{g.exercise_name} <span class="achieved-badge">✓ Achieved</span></div>
-          <button class="goal-del" on:click={() => deleteGoal(g.id)}>×</button>
-        </div>
-        <div class="goal-meta">
-          <span style="color:var(--muted)">{g.target_value} {g.goal_type === 'reps' ? 'reps' : 'lbs'} ({g.goal_type})</span>
-          {#if g.achieved_at}
-            <span style="color:var(--muted)">{new Date(g.achieved_at).toLocaleDateString('en-US', { month:'short', day:'numeric' })}</span>
+    {#if showGoalForm}
+      <div class="goal-form">
+        <div class="goal-form-row">
+          <input placeholder="Search exercise…" bind:value={goalSearch} />
+          {#if filteredExercises.length}
+            <div class="ex-dropdown">
+              {#each filteredExercises as ex}
+                <button class="ex-opt" on:click={() => { goalExerciseId = ex.id; goalSearch = ex.name; filteredExercises = []; }}>
+                  {ex.name}
+                </button>
+              {/each}
+            </div>
           {/if}
         </div>
+        <div class="seg-ctrl">
+          {#each [['e1rm','Est. 1RM'],['weight','Max Weight'],['reps','Max Reps']] as [val, lbl]}
+            <button class:active={goalType === val} on:click={() => goalType = val}>{lbl}</button>
+          {/each}
+        </div>
+        <div class="goal-form-row">
+          <input type="number" min="1" placeholder="{goalType === 'reps' ? 'Reps target' : 'Weight (lbs)'}" bind:value={goalTarget} />
+          <input type="date" bind:value={goalDeadline} />
+        </div>
+        <button class="btn-primary" on:click={saveGoal} disabled={savingGoal || !goalExerciseId || !goalTarget}>
+          {savingGoal ? 'Saving…' : 'Save Goal'}
+        </button>
+      </div>
+    {/if}
+
+    {#if activeGoals.length === 0 && !showGoalForm}
+      <p class="prompt-text">No active goals. Add one to track your progress.</p>
+    {/if}
+
+    {#each activeGoals as g}
+      {@const barColor = g.pct >= 100 ? 'var(--success)' : 'var(--accent)'}
+      <div class="goal-item">
+        <div class="goal-item-hdr">
+          <div class="goal-name">{g.exercise_name}</div>
+          <div class="goal-right">
+            <span class="goal-type-tag">{g.goal_type}</span>
+            <button class="del-btn" on:click={() => deleteGoal(g.id)}>×</button>
+          </div>
+        </div>
+        <div class="bar-track-thin">
+          <div class="bar-fill-thin" style="width:{g.pct}%;background:{barColor}"></div>
+        </div>
+        <div class="goal-meta">
+          <span class="muted-text">{g.current_value ?? '—'} → <strong style="color:var(--text)">{g.target_value}</strong> {g.goal_type === 'reps' ? 'reps' : 'lbs'}</span>
+          <span style="color:{barColor};font-weight:600">{g.pct}%</span>
+        </div>
+        {#if g.deadline}
+          <div class="goal-deadline">by {new Date(g.deadline + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}</div>
+        {/if}
       </div>
     {/each}
-  {/if}
-</div>
 
-<!-- Week-over-Week Volume -->
-{#if wowData.length > 0}
+    {#if achievedGoals.length > 0}
+      <div class="sub-hdr">Achieved</div>
+      {#each achievedGoals as g}
+        <div class="goal-item achieved">
+          <div class="goal-item-hdr">
+            <div class="goal-name">{g.exercise_name} <span class="achieved-mark">✓</span></div>
+            <button class="del-btn" on:click={() => deleteGoal(g.id)}>×</button>
+          </div>
+          <div class="goal-meta">
+            <span class="muted-text">{g.target_value} {g.goal_type === 'reps' ? 'reps' : 'lbs'}</span>
+            {#if g.achieved_at}
+              <span class="muted-text">{new Date(g.achieved_at).toLocaleDateString('en-US', { month:'short', day:'numeric' })}</span>
+            {/if}
+          </div>
+        </div>
+      {/each}
+    {/if}
+  </div>
+
+  <!-- Week-over-Week Volume -->
+  {#if wowData.length > 0}
   <div class="card section-card">
-    <div class="section-title">Week-over-Week Volume</div>
+    <div class="card-hdr">Week-over-Week Volume</div>
     <div class="wow-legend">
-      <span class="wow-dot" style="background:var(--accent)"></span><span>This week</span>
-      <span class="wow-dot" style="background:var(--bdr-2)"></span><span>Last week</span>
+      <span class="dot" style="background:var(--accent);border-radius:2px;width:10px;height:10px"></span><span>This week</span>
+      <span class="dot" style="background:var(--bdr-2);border-radius:2px;width:10px;height:10px"></span><span>Last week</span>
     </div>
-    <div class="wow-bars">
+    <div class="wow-list">
       {#each wowData as row}
         {@const curW = (row.current / wowMax) * 100}
         {@const prvW = (row.prev / wowMax) * 100}
         {@const gained = row.current >= row.prev}
         <div class="wow-row">
           <div class="wow-muscle">{row.muscle}</div>
-          <div class="wow-bar-wrap">
-            <div class="wow-bar current" style="width:{curW}%; background:{gained ? 'var(--accent)' : 'var(--warn)'}"></div>
-            <div class="wow-bar prev" style="width:{prvW}%"></div>
+          <div class="wow-bars">
+            <div class="wow-bar" style="width:{curW}%; background:{gained ? 'var(--accent)' : 'var(--warn)'}"></div>
+            <div class="wow-bar wow-prev" style="width:{prvW}%"></div>
           </div>
-          <div class="wow-num" style="color:{gained ? 'var(--success)' : 'var(--warn)'}">
+          <div class="wow-delta" style="color:{gained ? 'var(--success)' : 'var(--warn)'}">
             {row.current > row.prev ? '+' : ''}{row.current - row.prev}
           </div>
         </div>
       {/each}
     </div>
   </div>
-{/if}
+  {/if}
 
-<!-- Science cards -->
-<div class="section-title mt-4">Training Principles</div>
-{#each SCIENCE_CARDS as card, i}
-  <div class="science-card" class:open={expandedCard === i}>
-    <button class="science-hdr" on:click={() => expandedCard = expandedCard === i ? null : i}>
-      <span class="science-title">{card.title}</span>
-      <span class="science-chevron">{expandedCard === i ? '▲' : '▼'}</span>
-    </button>
-    {#if expandedCard === i}
-      <div class="science-body">{card.body}</div>
-    {/if}
+  <!-- Training Principles -->
+  <div class="card-hdr standalone-hdr">Training Principles</div>
+  {#each SCIENCE_CARDS as card, i}
+    <div class="accordion" class:open={expandedCard === i}>
+      <button class="accordion-hdr" on:click={() => expandedCard = expandedCard === i ? null : i}>
+        <span class="accordion-title">{card.title}</span>
+        <span class="accordion-chevron">{expandedCard === i ? '▲' : '▼'}</span>
+      </button>
+      {#if expandedCard === i}
+        <div class="accordion-body">{card.body}</div>
+      {/if}
+    </div>
+  {/each}
+
+  <!-- Muscle Volume Heatmap -->
+  <div class="card-hdr standalone-hdr" style="margin-top:1.25rem">
+    Muscle Volume Map
+    <span class="hdr-sub">this week</span>
   </div>
-{/each}
+  <div class="card section-card">
+    <div class="seg-ctrl">
+      <button class:active={heatSide === 'front'} on:click={() => heatSide = 'front'}>Front</button>
+      <button class:active={heatSide === 'back'}  on:click={() => heatSide = 'back'}>Back</button>
+    </div>
 
-<!-- Muscle Heatmap -->
-<div class="section-title mt-4">Muscle Volume Map <span style="font-size:11px;color:var(--muted);font-family:var(--sans)">this week</span></div>
-<div class="heatmap-card">
-  <div class="heatmap-toggle">
-    <button class="toggle-btn" class:active={heatSide === 'front'} on:click={() => heatSide = 'front'}>Front</button>
-    <button class="toggle-btn" class:active={heatSide === 'back'}  on:click={() => heatSide = 'back'}>Back</button>
-  </div>
+    <div class="heat-wrap">
+      {#if heatSide === 'front'}
+        <svg viewBox="0 0 120 268" xmlns="http://www.w3.org/2000/svg" class="body-svg">
+          <circle cx="60" cy="18" r="14" fill="#1a1a24" />
+          <rect x="54" y="31" width="12" height="10" rx="3" fill="#1a1a24" />
+          <rect x="35" y="40" width="50" height="82" rx="10" fill="#1a1a24" />
+          <rect x="17" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
+          <rect x="85" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
+          <rect x="20" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
+          <rect x="86" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
+          <rect x="38" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
+          <rect x="62" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
+          <rect x="40" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
+          <rect x="64" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
+          <rect x="36" y="41" width="48" height="34" rx="8" fill={heatFill('chest')} />
+          <ellipse cx="26" cy="50" rx="11" ry="10" fill={heatFill('shoulders')} />
+          <ellipse cx="94" cy="50" rx="11" ry="10" fill={heatFill('shoulders')} />
+          <rect x="18" y="45" width="16" height="44" rx="8" fill={heatFill('biceps')} />
+          <rect x="86" y="45" width="16" height="44" rx="8" fill={heatFill('biceps')} />
+          <rect x="36" y="75" width="48" height="47" rx="8" fill={heatFill('abs')} />
+          <rect x="39" y="125" width="18" height="60" rx="8" fill={heatFill('quads')} />
+          <rect x="63" y="125" width="18" height="60" rx="8" fill={heatFill('quads')} />
+          <rect x="41" y="185" width="14" height="44" rx="6" fill={heatFill('calves')} />
+          <rect x="65" y="185" width="14" height="44" rx="6" fill={heatFill('calves')} />
+        </svg>
+      {:else}
+        <svg viewBox="0 0 120 268" xmlns="http://www.w3.org/2000/svg" class="body-svg">
+          <circle cx="60" cy="18" r="14" fill="#1a1a24" />
+          <rect x="54" y="31" width="12" height="10" rx="3" fill="#1a1a24" />
+          <rect x="35" y="40" width="50" height="82" rx="10" fill="#1a1a24" />
+          <rect x="17" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
+          <rect x="85" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
+          <rect x="20" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
+          <rect x="86" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
+          <rect x="38" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
+          <rect x="62" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
+          <rect x="40" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
+          <rect x="64" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
+          <rect x="40" y="40" width="40" height="24" rx="6" fill={heatFill('traps')} />
+          <ellipse cx="26" cy="50" rx="11" ry="10" fill={heatFill('rear_delts')} />
+          <ellipse cx="94" cy="50" rx="11" ry="10" fill={heatFill('rear_delts')} />
+          <rect x="36" y="56" width="14" height="50" rx="6" fill={heatFill('lats')} />
+          <rect x="70" y="56" width="14" height="50" rx="6" fill={heatFill('lats')} />
+          <rect x="18" y="45" width="16" height="44" rx="8" fill={heatFill('triceps')} />
+          <rect x="86" y="45" width="16" height="44" rx="8" fill={heatFill('triceps')} />
+          <rect x="36" y="122" width="48" height="30" rx="8" fill={heatFill('glutes')} />
+          <rect x="39" y="152" width="18" height="34" rx="8" fill={heatFill('hamstrings')} />
+          <rect x="63" y="152" width="18" height="34" rx="8" fill={heatFill('hamstrings')} />
+        </svg>
+      {/if}
 
-  <div class="body-wrap">
-    {#if heatSide === 'front'}
-      <!-- Front body SVG -->
-      <svg viewBox="0 0 120 268" xmlns="http://www.w3.org/2000/svg" class="body-svg">
-        <!-- silhouette -->
-        <circle cx="60" cy="18" r="14" fill="#1a1a24" />
-        <rect x="54" y="31" width="12" height="10" rx="3" fill="#1a1a24" />
-        <rect x="35" y="40" width="50" height="82" rx="10" fill="#1a1a24" />
-        <rect x="17" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
-        <rect x="85" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
-        <rect x="20" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
-        <rect x="86" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
-        <rect x="38" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
-        <rect x="62" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
-        <rect x="40" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
-        <rect x="64" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
-        <!-- chest -->
-        <rect x="36" y="41" width="48" height="34" rx="8" fill={heatFill('chest')} />
-        <!-- shoulders -->
-        <ellipse cx="26" cy="50" rx="11" ry="10" fill={heatFill('shoulders')} />
-        <ellipse cx="94" cy="50" rx="11" ry="10" fill={heatFill('shoulders')} />
-        <!-- biceps -->
-        <rect x="18" y="45" width="16" height="44" rx="8" fill={heatFill('biceps')} />
-        <rect x="86" y="45" width="16" height="44" rx="8" fill={heatFill('biceps')} />
-        <!-- abs -->
-        <rect x="36" y="75" width="48" height="47" rx="8" fill={heatFill('abs')} />
-        <!-- quads -->
-        <rect x="39" y="125" width="18" height="60" rx="8" fill={heatFill('quads')} />
-        <rect x="63" y="125" width="18" height="60" rx="8" fill={heatFill('quads')} />
-        <!-- calves -->
-        <rect x="41" y="185" width="14" height="44" rx="6" fill={heatFill('calves')} />
-        <rect x="65" y="185" width="14" height="44" rx="6" fill={heatFill('calves')} />
-      </svg>
-
-    {:else}
-      <!-- Back body SVG -->
-      <svg viewBox="0 0 120 268" xmlns="http://www.w3.org/2000/svg" class="body-svg">
-        <!-- silhouette -->
-        <circle cx="60" cy="18" r="14" fill="#1a1a24" />
-        <rect x="54" y="31" width="12" height="10" rx="3" fill="#1a1a24" />
-        <rect x="35" y="40" width="50" height="82" rx="10" fill="#1a1a24" />
-        <rect x="17" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
-        <rect x="85" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
-        <rect x="20" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
-        <rect x="86" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
-        <rect x="38" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
-        <rect x="62" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
-        <rect x="40" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
-        <rect x="64" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
-        <!-- traps -->
-        <rect x="40" y="40" width="40" height="24" rx="6" fill={heatFill('traps')} />
-        <!-- rear delts -->
-        <ellipse cx="26" cy="50" rx="11" ry="10" fill={heatFill('rear_delts')} />
-        <ellipse cx="94" cy="50" rx="11" ry="10" fill={heatFill('rear_delts')} />
-        <!-- lats -->
-        <rect x="36" y="56" width="14" height="50" rx="6" fill={heatFill('lats')} />
-        <rect x="70" y="56" width="14" height="50" rx="6" fill={heatFill('lats')} />
-        <!-- triceps -->
-        <rect x="18" y="45" width="16" height="44" rx="8" fill={heatFill('triceps')} />
-        <rect x="86" y="45" width="16" height="44" rx="8" fill={heatFill('triceps')} />
-        <!-- glutes -->
-        <rect x="36" y="122" width="48" height="30" rx="8" fill={heatFill('glutes')} />
-        <!-- hamstrings -->
-        <rect x="39" y="152" width="18" height="34" rx="8" fill={heatFill('hamstrings')} />
-        <rect x="63" y="152" width="18" height="34" rx="8" fill={heatFill('hamstrings')} />
-      </svg>
-    {/if}
-
-    <!-- Muscle labels -->
-    <div class="heat-labels">
-      {#each (heatSide === 'front' ? FRONT_MUSCLES : BACK_MUSCLES) as muscle}
-        {@const v = heatValue(muscle)}
-        <div class="heat-label">
-          <div class="heat-swatch" style="background:rgba(232,54,93,{Math.max(0.1, v * 0.82).toFixed(2)});opacity:{v > 0 ? 1 : 0.3}"></div>
-          <span style="color:{v > 0 ? 'var(--text)' : 'var(--muted)'}">{muscle.replace('_', ' ')}</span>
-          {#if v > 0}
-            <span class="heat-sets">{(weekVolume.muscles.find(m => m.muscle === muscle || m.muscle === muscle.replace('_',' '))?.sets ?? 0)} sets</span>
-          {/if}
-        </div>
-      {/each}
+      <div class="heat-labels">
+        {#each (heatSide === 'front' ? FRONT_MUSCLES : BACK_MUSCLES) as muscle}
+          {@const v = heatValue(muscle)}
+          <div class="heat-row">
+            <div class="heat-swatch" style="background:rgba(232,54,93,{Math.max(0.1, v * 0.82).toFixed(2)});opacity:{v > 0 ? 1 : 0.3}"></div>
+            <span class="heat-name" style="color:{v > 0 ? 'var(--text)' : 'var(--muted)'}">{muscle.replace('_', ' ')}</span>
+            {#if v > 0}
+              <span class="heat-sets">{weekVolume.muscles.find(m => m.muscle === muscle || m.muscle === muscle.replace('_',' '))?.sets ?? 0} sets</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
     </div>
   </div>
+
+  {/if}
 </div>
 
-{/if}
-
 <style>
-  .page-title { font-family:var(--serif); font-size:26px; color:var(--text); margin-bottom:16px; line-height:1; }
-  .page-title em { font-style:italic; color:var(--accent); }
-
-  /* Score card */
-  .score-card {
-    background:var(--surf); border:1px solid var(--bdr);
-    border-radius:var(--radius-lg); padding:20px 18px;
-    margin-bottom:12px; display:flex; gap:20px; align-items:flex-start;
+  .page {
+    padding: 1.5rem 1.25rem 3rem;
+    max-width: 780px;
+    margin: 0 auto;
   }
-  .score-main { flex-shrink:0; text-align:center; }
-  .score-num { font-family:var(--serif); font-size:52px; line-height:1; }
-  .score-label { font-size:11px; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:0.07em; }
-  .deload-badge {
-    margin-top:8px; font-size:10px; font-weight:600;
-    color:var(--danger); border:1px solid var(--danger);
-    border-radius:4px; padding:2px 8px;
-    background:rgba(232,54,93,0.1);
+
+  /* Page header */
+  .page-header { margin-bottom: 1.5rem; }
+
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 0.2rem;
   }
-  .score-detail { flex:1; display:flex; flex-direction:column; gap:8px; padding-top:4px; }
-  .score-detail-row { display:flex; justify-content:space-between; align-items:baseline; }
-  .score-detail-lbl { font-size:11px; color:var(--muted); }
-  .score-detail-val { font-size:13px; color:var(--text); }
 
-  /* Sections */
-  .section-card { margin-bottom:12px; }
-  .mt-4 { margin-top:16px; }
-
-  /* Quick pills */
-  .quick-pills { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 6px; }
-  .quick-pill {
-    padding:4px 12px; background:transparent;
-    border:1px solid var(--bdr-2); border-radius:4px;
-    font-size:11px; color:var(--muted); cursor:pointer;
-    transition:all 0.15s;
+  .subtitle {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin: 0;
   }
-  .quick-pill.active { border-color:var(--accent); color:var(--accent); background:var(--accent-bg); }
 
-  .ex-select { margin-top:8px; margin-bottom:10px; max-width:300px; }
-  .chart-placeholder { height:100px; display:flex; align-items:center; justify-content:center; }
-  .chart-wrap { height:200px; position:relative; }
+  /* Summary card — matches Recovery */
+  .summary-card {
+    background: var(--surf);
+    border: 1px solid var(--bdr);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .summary-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.25rem;
+  }
+
+  .sum-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+  }
+
+  .sum-level { font-size: 1.25rem; font-weight: 700; }
+
+  .score-badge {
+    display: flex;
+    align-items: baseline;
+    gap: 1px;
+    border: 2px solid;
+    border-radius: 10px;
+    padding: 4px 12px 4px 10px;
+  }
+
+  .score-num  { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+  .score-denom { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
+
+  /* Gauge — matches Recovery */
+  .gauge-wrap { margin-bottom: 0.75rem; }
+
+  .gauge-track {
+    position: relative;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--bdr);
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+
+  .gz { position: absolute; top: 0; height: 100%; }
+  .gz-crit { background: var(--danger); opacity: 0.15; }
+  .gz-high { background: #e07b39; opacity: 0.15; }
+  .gz-mod  { background: var(--warn); opacity: 0.15; }
+  .gz-low  { background: var(--success); opacity: 0.15; }
+
+  .gauge-fill {
+    position: absolute;
+    top: 0; left: 0;
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+  }
+
+  .gauge-legend {
+    display: grid;
+    grid-template-columns: 25fr 20fr 20fr 35fr;
+    font-size: 0.65rem;
+    color: var(--muted);
+  }
+
+  .gauge-legend span:not(:first-child) { text-align: center; }
+  .gauge-legend span:last-child { text-align: right; }
+
+  .deload-pill {
+    display: inline-block;
+    background: var(--danger);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 100px;
+    margin: 0.75rem 0 0.5rem;
+  }
+
+  .flag-list {
+    margin: 0.75rem 0 0;
+    padding: 0 0 0 1.1rem;
+    list-style: disc;
+  }
+
+  .flag-list li { font-size: 0.8rem; color: var(--muted); line-height: 1.5; padding: 0.1rem 0; }
+
+  .no-flags { font-size: 0.82rem; color: var(--muted); margin: 0.5rem 0 0; }
+
+  /* Section cards */
+  .section-card { margin-bottom: 0.75rem; }
+
+  /* Card header — matches Recovery's group-hdr style */
+  .card-hdr {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  .card-hdr-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .standalone-hdr {
+    padding: 0.9rem 0 0.4rem;
+    border-top: 1px solid var(--bdr);
+    margin-bottom: 0.5rem;
+  }
+
+  .hdr-sub {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: 0.5rem;
+    font-weight: 400;
+  }
+
+  .card-sub {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin: -0.5rem 0 0.75rem;
+  }
+
+  .prompt-text { font-size: 0.82rem; color: var(--muted); }
+
+  /* Strength level */
+  .strength-overall {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1rem;
+  }
+
+  .level-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #fff;
+    text-transform: capitalize;
+  }
+
+  .strength-method { font-size: 0.72rem; color: var(--muted); }
+
+  .lift-list { display: flex; flex-direction: column; gap: 0; }
+
+  .lift-row {
+    display: grid;
+    grid-template-columns: 10px 1fr;
+    grid-template-rows: auto auto auto;
+    column-gap: 0.75rem;
+    row-gap: 0;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid var(--bdr);
+    align-items: center;
+  }
+
+  .lift-top {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    grid-column: 2;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    grid-row: 1;
+    align-self: center;
+  }
+
+  .lift-name {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    width: 52px;
+    flex-shrink: 0;
+  }
+
+  .lift-level { font-size: 0.82rem; font-weight: 600; text-transform: capitalize; }
+  .lift-e1rm  { font-size: 0.82rem; color: var(--text); margin-left: auto; }
+  .no-data    { font-size: 0.78rem; color: var(--muted); }
+
+  .lift-bar-track {
+    grid-column: 2;
+    height: 4px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 6px;
+  }
+
+  .lift-bar-fill { height: 100%; border-radius: 2px; transition: width .4s; }
+
+  .lift-bar-label {
+    grid-column: 2;
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  /* Seg control — matches Recovery */
+  .seg-ctrl {
+    display: flex;
+    background: var(--surf-2);
+    border: 1px solid var(--bdr);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+    margin-bottom: 0.75rem;
+    width: fit-content;
+  }
+
+  .seg-ctrl button {
+    background: none;
+    border: none;
+    padding: 5px 16px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--muted);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .seg-ctrl button.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  /* Charts */
+  .chart-wrap { height: 200px; position: relative; margin-top: 0.5rem; }
+  .chart-placeholder { height: 80px; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; color: var(--muted); }
 
   /* 1RM stats */
-  .rm-stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+  .rm-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0.75rem 0; }
+
   .rm-stat {
-    background:var(--surf-2); border:1px solid var(--bdr-2);
-    border-radius:var(--radius); padding:10px 12px;
+    background: var(--surf-2);
+    border: 1px solid var(--bdr-2);
+    border-radius: var(--radius);
+    padding: 10px 12px;
   }
-  .rm-val { font-family:var(--serif); font-size:22px; color:var(--accent); line-height:1; }
-  .rm-unit { font-size:11px; color:var(--muted); margin-left:3px; }
-  .rm-lbl { font-size:10px; color:var(--muted); margin-top:3px; }
+
+  .rm-val  { font-size: 1.4rem; font-weight: 700; color: var(--accent); line-height: 1; }
+  .rm-unit { font-size: 0.72rem; color: var(--muted); }
+  .rm-lbl  { font-size: 0.68rem; color: var(--muted); margin-top: 3px; }
 
   /* Goals */
-  .goals-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
-  .add-goal-btn {
-    font-size:11px; padding:4px 12px; background:transparent;
-    border:1px solid var(--bdr-2); border-radius:4px;
-    color:var(--muted); cursor:pointer; transition:all 0.15s;
+  .ghost-btn {
+    font-size: 0.78rem;
+    padding: 4px 12px;
+    background: transparent;
+    border: 1px solid var(--bdr-2);
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
   }
-  .add-goal-btn:hover { border-color:var(--accent); color:var(--accent); }
-  .goals-empty { font-size:12px; color:var(--muted); padding:8px 0; }
 
-  .goal-form { background:var(--surf-2); border:1px solid var(--bdr-2); border-radius:var(--radius); padding:14px; margin-bottom:14px; display:flex; flex-direction:column; gap:10px; }
-  .goal-form-row { display:flex; gap:8px; position:relative; }
-  .goal-input {
-    flex:1; background:var(--surf); border:1px solid var(--bdr-2);
-    border-radius:var(--radius); padding:8px 10px;
-    font-size:12px; color:var(--text); outline:none;
-  }
-  .goal-ex-dropdown {
-    position:absolute; top:100%; left:0; right:0; z-index:20;
-    background:var(--surf); border:1px solid var(--bdr-2); border-radius:var(--radius);
-    margin-top:2px; overflow:hidden;
-  }
-  .goal-ex-opt {
-    display:block; width:100%; text-align:left; padding:8px 12px;
-    background:transparent; border:none; font-size:12px; color:var(--text);
-    cursor:pointer; transition:background 0.1s;
-  }
-  .goal-ex-opt:hover { background:var(--surf-2); }
-  .goal-type-row { display:flex; gap:6px; }
-  .goal-type-btn {
-    flex:1; padding:5px; background:transparent;
-    border:1px solid var(--bdr-2); border-radius:4px;
-    font-size:11px; color:var(--muted); cursor:pointer; transition:all 0.15s;
-  }
-  .goal-type-btn.active { border-color:var(--accent); color:var(--accent); background:var(--accent-bg); }
+  .ghost-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-  .goal-card {
-    background:var(--surf-2); border:1px solid var(--bdr-2);
-    border-radius:var(--radius); padding:12px 14px; margin-bottom:8px;
+  .goal-form {
+    background: var(--surf-2);
+    border: 1px solid var(--bdr-2);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
-  .goal-card-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-  .goal-ex-name { font-family:var(--serif); font-size:16px; color:var(--text); }
-  .goal-right { display:flex; align-items:center; gap:8px; }
-  .goal-type-badge {
-    font-size:9px; padding:2px 7px; border-radius:3px;
-    background:var(--accent-bg); color:var(--accent);
-    border:1px solid rgba(232,54,93,0.25); text-transform:uppercase; font-weight:600;
-  }
-  .goal-del { background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:0 2px; line-height:1; }
-  .goal-del:hover { color:var(--danger); }
-  .goal-bar-track { height:5px; background:var(--faint); border-radius:3px; overflow:hidden; margin-bottom:6px; }
-  .goal-bar-fill { height:100%; border-radius:3px; transition:width 0.4s ease; }
-  .goal-meta { display:flex; justify-content:space-between; font-size:11px; }
-  .goal-deadline { font-size:10px; color:var(--muted); margin-top:4px; }
 
-  .achieved-hdr { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; font-weight:600; margin:14px 0 8px; }
-  .achieved-card { opacity:0.6; }
-  .achieved-badge { font-size:10px; color:var(--success); font-weight:600; margin-left:8px; font-family:var(--sans); }
+  .goal-form-row { display: flex; gap: 8px; position: relative; }
+  .goal-form-row input { flex: 1; }
 
-  /* WoW bars */
-  .wow-legend { display:flex; gap:12px; align-items:center; font-size:11px; color:var(--muted); margin-bottom:12px; }
-  .wow-dot { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
-  .wow-bars { display:flex; flex-direction:column; gap:8px; }
-  .wow-row { display:flex; align-items:center; gap:8px; }
-  .wow-muscle { width:84px; font-size:11px; color:var(--muted); text-transform:capitalize; flex-shrink:0; }
-  .wow-bar-wrap { flex:1; display:flex; flex-direction:column; gap:3px; }
-  .wow-bar { height:6px; border-radius:3px; min-width:2px; transition:width 0.4s ease; }
-  .wow-bar.prev { background:var(--bdr-2); }
-  .wow-num { width:30px; text-align:right; font-size:11px; font-weight:600; flex-shrink:0; }
+  .ex-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0; right: 0;
+    z-index: 20;
+    background: var(--surf);
+    border: 1px solid var(--bdr-2);
+    border-radius: var(--radius);
+    margin-top: 2px;
+  }
 
-  /* Science cards */
-  .science-card {
-    background:var(--surf); border:1px solid var(--bdr);
-    border-radius:var(--radius-lg); margin-bottom:6px;
-    overflow:hidden; transition:border-color 0.15s;
+  .ex-opt {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    font-size: 0.82rem;
+    color: var(--text);
+    cursor: pointer;
   }
-  .science-card.open { border-color:var(--accent); }
-  .science-hdr {
-    width:100%; text-align:left; background:transparent; border:none;
-    padding:14px 16px; cursor:pointer;
-    display:flex; justify-content:space-between; align-items:center;
+
+  .ex-opt:hover { background: var(--surf-2); }
+
+  .goal-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--bdr);
   }
-  .science-title { font-family:var(--serif); font-size:16px; color:var(--text); }
-  .science-chevron { font-size:10px; color:var(--muted); }
-  .science-body {
-    padding:0 16px 16px;
-    font-size:13px; color:var(--muted); line-height:1.7;
-    border-top:1px solid var(--bdr);
-    padding-top:12px;
+
+  .goal-item-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .goal-name { font-size: 0.9rem; font-weight: 500; color: var(--text); }
+
+  .goal-right { display: flex; align-items: center; gap: 8px; }
+
+  .goal-type-tag {
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    border: 1px solid rgba(232,54,93,0.25);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .del-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+  }
+
+  .del-btn:hover { color: var(--danger); }
+
+  .bar-track-thin { height: 5px; background: var(--bdr-2); border-radius: 3px; overflow: hidden; margin-bottom: 6px; }
+  .bar-fill-thin  { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+
+  .goal-meta { display: flex; justify-content: space-between; font-size: 0.78rem; }
+  .goal-deadline { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+  .muted-text { color: var(--muted); }
+
+  .sub-hdr {
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    margin: 1rem 0 0.5rem;
+  }
+
+  .achieved { opacity: 0.6; }
+  .achieved-mark { font-size: 0.78rem; color: var(--success); font-weight: 600; }
+
+  /* WoW volume */
+  .wow-legend { display: flex; gap: 12px; align-items: center; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.75rem; }
+
+  .wow-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .wow-row { display: flex; align-items: center; gap: 8px; }
+  .wow-muscle { width: 84px; font-size: 0.78rem; color: var(--muted); text-transform: capitalize; flex-shrink: 0; }
+  .wow-bars { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+  .wow-bar { height: 6px; border-radius: 3px; min-width: 2px; transition: width 0.4s ease; }
+  .wow-prev { background: var(--bdr-2); }
+  .wow-delta { width: 30px; text-align: right; font-size: 0.78rem; font-weight: 600; flex-shrink: 0; }
+
+  /* Sweet spot */
+  .sweet-list { display: flex; flex-direction: column; gap: 8px; }
+  .sweet-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; flex-wrap: wrap; }
+  .sweet-muscle { font-weight: 600; color: var(--text); text-transform: capitalize; }
+  .sweet-mid { color: var(--muted); }
+  .sweet-val { color: var(--accent); font-weight: 600; }
+  .sweet-count { font-size: 0.72rem; color: var(--muted); margin-left: auto; }
+
+  /* Science accordion */
+  .accordion {
+    background: var(--surf);
+    border: 1px solid var(--bdr);
+    border-radius: var(--radius-lg);
+    margin-bottom: 6px;
+    overflow: hidden;
+  }
+
+  .accordion.open { border-color: var(--accent); }
+
+  .accordion-hdr {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 14px 16px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .accordion-title { font-size: 0.9rem; font-weight: 500; color: var(--text); }
+  .accordion-chevron { font-size: 0.65rem; color: var(--muted); }
+
+  .accordion-body {
+    padding: 12px 16px 16px;
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.7;
+    border-top: 1px solid var(--bdr);
   }
 
   /* Heatmap */
-  .heatmap-card {
-    background:var(--surf); border:1px solid var(--bdr);
-    border-radius:var(--radius-lg); padding:16px;
-    margin-bottom:12px;
+  .heat-wrap { display: flex; gap: 16px; align-items: flex-start; margin-top: 0.5rem; }
+  .body-svg { width: 120px; flex-shrink: 0; }
+
+  .heat-labels { flex: 1; display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+
+  .heat-row { display: flex; align-items: center; gap: 8px; }
+  .heat-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .heat-name { font-size: 0.78rem; text-transform: capitalize; color: var(--text); }
+  .heat-sets { margin-left: auto; font-size: 0.68rem; color: var(--muted); }
+
+  /* Spinner */
+  .spinner-wrap { display: flex; justify-content: center; padding: 4rem 0; }
+
+  .spinner {
+    width: 24px; height: 24px;
+    border: 2px solid var(--bdr-2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
   }
-  .heatmap-toggle { display:flex; gap:6px; margin-bottom:16px; }
-  .toggle-btn {
-    padding:5px 16px; background:transparent;
-    border:1px solid var(--bdr-2); border-radius:4px;
-    font-size:12px; color:var(--muted); cursor:pointer;
-    transition:all 0.15s;
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 600px) {
+    .page { padding: 1rem 1rem 3rem; }
+    .lift-row { grid-template-columns: 10px 1fr; }
+    .gauge-legend span:not(:first-child):not(:last-child) { display: none; }
+    .rm-stats { grid-template-columns: 1fr 1fr; }
   }
-  .toggle-btn.active { border-color:var(--accent); color:var(--accent); background:var(--accent-bg); }
-
-  .body-wrap { display:flex; gap:16px; align-items:flex-start; }
-  .body-svg { width:120px; flex-shrink:0; }
-
-  .heat-labels { flex:1; display:flex; flex-direction:column; gap:6px; padding-top:4px; }
-  .heat-label { display:flex; align-items:center; gap:8px; font-size:12px; text-transform:capitalize; }
-  .heat-swatch { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
-  .heat-sets { margin-left:auto; font-size:10px; color:var(--muted); }
-
-  /* Strength Level card */
-  .strength-prompt { color:var(--muted); font-size:13px; margin:8px 0; }
-  .strength-overall { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
-  .strength-badge { padding:4px 12px; border-radius:12px; font-size:12px; font-weight:700; color:#fff; text-transform:capitalize; }
-  .strength-method { font-size:10px; color:var(--muted); }
-  .strength-lifts { display:flex; flex-direction:column; gap:12px; }
-  .strength-lift-row {}
-  .strength-lift-top { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
-  .strength-lift-name { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; width:52px; flex-shrink:0; }
-  .strength-level-chip { font-size:11px; font-weight:600; text-transform:capitalize; }
-  .strength-e1rm { font-size:12px; color:var(--text); margin-left:auto; }
-  .strength-no-data { font-size:11px; color:var(--faint); }
-  .strength-bar-track { height:4px; background:rgba(255,255,255,0.06); border-radius:2px; overflow:hidden; }
-  .strength-bar-fill { height:100%; border-radius:2px; transition:width .4s; }
-  .strength-bar-label { font-size:10px; color:var(--muted); margin-top:3px; }
 </style>
