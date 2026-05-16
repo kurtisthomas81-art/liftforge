@@ -630,6 +630,9 @@
   <!-- Weekly Volume by muscle group -->
   <div class="card-hdr standalone-hdr" style="margin-top:1.25rem">
     Weekly Volume
+    {#if weekVolume?.goal}
+      <span class="goal-chip">{weekVolume.goal.replace('_', ' ')}</span>
+    {/if}
     <span class="hdr-sub">sets vs targets</span>
   </div>
 
@@ -796,6 +799,20 @@
     padding: 0.9rem 0 0.4rem;
     border-top: 1px solid var(--bdr);
     margin-bottom: 0.5rem;
+  }
+
+  .goal-chip {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    text-transform: capitalize;
+    letter-spacing: 0.02em;
+    margin-left: 0.5rem;
+    vertical-align: middle;
   }
 
   .hdr-sub {
