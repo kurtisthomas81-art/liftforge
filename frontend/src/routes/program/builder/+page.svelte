@@ -118,7 +118,7 @@
   function deleteVariantDay(dayIdx) {
     customDayExercises = customDayExercises
       .filter((_, i) => i !== dayIdx)
-      .map((day, i) => ({ ...day, variant: ['A', 'B', 'C'][i] }));
+      .map((day, i) => ({ ...day, variant: ['A', 'B', 'C', 'D'][i] }));
   }
 
   // ── Feature 4: Superset + set-type helpers ─────────────────────────────────
@@ -205,9 +205,19 @@
     customDayExercises = sessions.slice(0, variants).map((sess, i) => ({
       day_name: sess.label,
       variant: letters[i] ?? String(i + 1),
+      // Keep only the movement-pattern slot — exercise_id stays null so the engine
+      // picks the best exercise for the user's goal/equipment/level at review time.
       exercises: sess.exercises.map(ex => ({
-        ...ex,
         id: Math.random().toString(36).slice(2),
+        exercise_id: null,
+        exercise_name: ex.sub_pattern
+          ? ex.sub_pattern.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+          : (ex.exercise_name ?? 'Exercise'),
+        sub_pattern: ex.sub_pattern || '',
+        target_sets: ex.target_sets,
+        target_reps_min: ex.target_reps_min,
+        target_reps_max: ex.target_reps_max,
+        target_rir: ex.target_rir ?? 2,
         set_type: 'straight',
         superset_group: null,
       })),
@@ -489,6 +499,9 @@
     if (sessionMode === 'custom_slots') {
       if (!templateSlug && !customDayExercises.length) initCustomDays();
       step = 5;
+      // Template mode: engine picks exercises based on current goal/equipment/level.
+      // refreshPrescriptions sends null exercise_ids → backend selects intelligently.
+      if (templateSlug) refreshPrescriptions();
     } else {
       step = 5;
       previewData = [];
@@ -848,7 +861,7 @@
       <!-- Day of week assignment -->
       <div style="margin-bottom:24px;">
         <label style="font-size:13px; color:var(--text-muted); margin-bottom:8px; display:block;">Training Days</label>
-        {#each (isCustom ? customDays : (selectedSplit?.days ?? [])) as day, i}
+        {#each (templateSlug ? Array.from({length: selectedDays}, (_, i) => ({name: `Day ${i + 1}`})) : isCustom ? customDays : (selectedSplit?.days ?? [])) as day, i}
           <div class="flex items-center gap-3" style="margin-bottom:8px;">
             <span style="font-size:13px; color:var(--text); min-width:130px;">{day.name}</span>
             <select bind:value={daysOfWeek[i]} style="width:120px;">
@@ -882,11 +895,11 @@
       <!-- Compact settings summary -->
       <div style="display:grid; grid-template-columns:auto 1fr; gap:4px 16px; margin-bottom:20px; font-size:12px; padding:12px; background:var(--surface-2); border-radius:6px; border:1px solid var(--border);">
         <span style="color:var(--text-muted);">Name</span><span style="font-weight:600; color:var(--text);">{mesoName}</span>
-        <span style="color:var(--text-muted);">Split</span><span style="color:var(--text);">{isCustom ? 'Custom' : selectedSplit?.name}</span>
-        <span style="color:var(--text-muted);">Goal</span><span style="text-transform:capitalize; color:var(--text);">{selectedGoal}</span>
+        <span style="color:var(--text-muted);">Split</span><span style="color:var(--text);">{templateSlug ? (templateMeta?.name ?? 'Template') : isCustom ? 'Custom' : selectedSplit?.name}</span>
+        <span style="color:var(--text-muted);">Goal</span><span style="text-transform:capitalize; color:var(--text);">{selectedGoal.replace(/_/g, ' ')}</span>
         <span style="color:var(--text-muted);">Duration</span><span style="color:var(--text);">{selectedWeeks} weeks · week {selectedWeeks} = deload · starts {startDate}</span>
         <span style="color:var(--text-muted);">Session</span><span style="color:var(--text);">{selectedDuration} min · {experienceLevel} level</span>
-        <span style="color:var(--text-muted);">Variation</span><span style="color:var(--text);">{numVariants === 1 ? 'A — same every session' : numVariants === 2 ? 'A/B rotation' : 'A/B/C rotation'}</span>
+        <span style="color:var(--text-muted);">Variation</span><span style="color:var(--text);">{numVariants === 1 ? 'A — same every session' : numVariants === 2 ? 'A/B rotation' : numVariants === 3 ? 'A/B/C rotation' : 'A/B/C/D rotation'}</span>
       </div>
 
       {#if sessionMode === 'custom_slots'}
