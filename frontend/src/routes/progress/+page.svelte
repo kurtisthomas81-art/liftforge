@@ -12,7 +12,6 @@
   let loadingChart = false;
   let chart = null;
   let chartCanvas;
-  let heatSide = 'front';
   let expandedCard = null;
 
   let goals = [];
@@ -56,8 +55,28 @@
     },
   ];
 
-  const FRONT_MUSCLES = ['chest', 'shoulders', 'biceps', 'abs', 'quads', 'calves'];
-  const BACK_MUSCLES  = ['traps', 'lats', 'rear_delts', 'triceps', 'glutes', 'hamstrings'];
+  const GROUPS = [
+    { label: 'Push', names: ['chest', 'shoulders', 'triceps'] },
+    { label: 'Pull', names: ['back', 'lats', 'traps', 'biceps'] },
+    { label: 'Legs', names: ['quads', 'hamstrings', 'glutes', 'calves'] },
+    { label: 'Core', names: ['abs'] },
+  ];
+
+  const VOL_COLOR = {
+    below_mev: 'var(--danger)',
+    in_mav:    'var(--success)',
+    above_mav: 'var(--accent)',
+    at_mrv:    'var(--danger)',
+    unknown:   'var(--muted)',
+  };
+
+  const VOL_LABEL = {
+    below_mev: 'Under MEV',
+    in_mav:    'On track',
+    above_mav: 'Above sweet spot',
+    at_mrv:    'At MRV',
+    unknown:   'Not tracked',
+  };
 
   onMount(async () => {
     [fatigueData, weekVolume, exercises, goals, strengthData, strengthRatioHistory, sweetSpotData] = await Promise.all([
@@ -113,20 +132,8 @@
     : fatigueData.overall_fatigue === 'high' ? 'High Fatigue'
     : 'Critical — Deload Now';
 
-  // Heat map: normalize sets to 0–1 relative to ~20 sets (rough MRV)
-  function heatValue(muscle) {
-    if (!weekVolume?.muscles) return 0;
-    const key = muscle.replace('_', ' ');
-    const entry = weekVolume.muscles.find(m => m.muscle === key || m.muscle === muscle);
-    if (!entry) return 0;
-    const mrv = entry.landmarks?.mrv ?? 20;
-    return Math.min(1, entry.sets / mrv);
-  }
-
-  function heatFill(muscle) {
-    const v = heatValue(muscle);
-    if (v <= 0) return 'rgba(255,255,255,0.03)';
-    return `rgba(232,54,93,${(v * 0.82).toFixed(2)})`;
+  function volMuscle(name) {
+    return weekVolume?.muscles?.find(m => m.muscle === name) ?? null;
   }
 
   // WoW data: top muscles, this week vs prev week sets
@@ -620,82 +627,29 @@
     </div>
   {/each}
 
-  <!-- Muscle Volume Heatmap -->
+  <!-- Weekly Volume by muscle group -->
   <div class="card-hdr standalone-hdr" style="margin-top:1.25rem">
-    Muscle Volume Map
-    <span class="hdr-sub">this week</span>
+    Weekly Volume
+    <span class="hdr-sub">sets vs targets</span>
   </div>
-  <div class="card section-card">
-    <div class="seg-ctrl">
-      <button class:active={heatSide === 'front'} on:click={() => heatSide = 'front'}>Front</button>
-      <button class:active={heatSide === 'back'}  on:click={() => heatSide = 'back'}>Back</button>
-    </div>
 
-    <div class="heat-wrap">
-      {#if heatSide === 'front'}
-        <svg viewBox="0 0 120 268" xmlns="http://www.w3.org/2000/svg" class="body-svg">
-          <circle cx="60" cy="18" r="14" fill="#1a1a24" />
-          <rect x="54" y="31" width="12" height="10" rx="3" fill="#1a1a24" />
-          <rect x="35" y="40" width="50" height="82" rx="10" fill="#1a1a24" />
-          <rect x="17" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
-          <rect x="85" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
-          <rect x="20" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
-          <rect x="86" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
-          <rect x="38" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
-          <rect x="62" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
-          <rect x="40" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
-          <rect x="64" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
-          <rect x="36" y="41" width="48" height="34" rx="8" fill={heatFill('chest')} />
-          <ellipse cx="26" cy="50" rx="11" ry="10" fill={heatFill('shoulders')} />
-          <ellipse cx="94" cy="50" rx="11" ry="10" fill={heatFill('shoulders')} />
-          <rect x="18" y="45" width="16" height="44" rx="8" fill={heatFill('biceps')} />
-          <rect x="86" y="45" width="16" height="44" rx="8" fill={heatFill('biceps')} />
-          <rect x="36" y="75" width="48" height="47" rx="8" fill={heatFill('abs')} />
-          <rect x="39" y="125" width="18" height="60" rx="8" fill={heatFill('quads')} />
-          <rect x="63" y="125" width="18" height="60" rx="8" fill={heatFill('quads')} />
-          <rect x="41" y="185" width="14" height="44" rx="6" fill={heatFill('calves')} />
-          <rect x="65" y="185" width="14" height="44" rx="6" fill={heatFill('calves')} />
-        </svg>
-      {:else}
-        <svg viewBox="0 0 120 268" xmlns="http://www.w3.org/2000/svg" class="body-svg">
-          <circle cx="60" cy="18" r="14" fill="#1a1a24" />
-          <rect x="54" y="31" width="12" height="10" rx="3" fill="#1a1a24" />
-          <rect x="35" y="40" width="50" height="82" rx="10" fill="#1a1a24" />
-          <rect x="17" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
-          <rect x="85" y="44" width="18" height="46" rx="9" fill="#1a1a24" />
-          <rect x="20" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
-          <rect x="86" y="88" width="14" height="36" rx="7" fill="#1a1a24" />
-          <rect x="38" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
-          <rect x="62" y="124" width="20" height="62" rx="9" fill="#1a1a24" />
-          <rect x="40" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
-          <rect x="64" y="184" width="16" height="46" rx="7" fill="#1a1a24" />
-          <rect x="40" y="40" width="40" height="24" rx="6" fill={heatFill('traps')} />
-          <ellipse cx="26" cy="50" rx="11" ry="10" fill={heatFill('rear_delts')} />
-          <ellipse cx="94" cy="50" rx="11" ry="10" fill={heatFill('rear_delts')} />
-          <rect x="36" y="56" width="14" height="50" rx="6" fill={heatFill('lats')} />
-          <rect x="70" y="56" width="14" height="50" rx="6" fill={heatFill('lats')} />
-          <rect x="18" y="45" width="16" height="44" rx="8" fill={heatFill('triceps')} />
-          <rect x="86" y="45" width="16" height="44" rx="8" fill={heatFill('triceps')} />
-          <rect x="36" y="122" width="48" height="30" rx="8" fill={heatFill('glutes')} />
-          <rect x="39" y="152" width="18" height="34" rx="8" fill={heatFill('hamstrings')} />
-          <rect x="63" y="152" width="18" height="34" rx="8" fill={heatFill('hamstrings')} />
-        </svg>
-      {/if}
-
-      <div class="heat-labels">
-        {#each (heatSide === 'front' ? FRONT_MUSCLES : BACK_MUSCLES) as muscle}
-          {@const v = heatValue(muscle)}
-          <div class="heat-row">
-            <div class="heat-swatch" style="background:rgba(232,54,93,{Math.max(0.1, v * 0.82).toFixed(2)});opacity:{v > 0 ? 1 : 0.3}"></div>
-            <span class="heat-name" style="color:{v > 0 ? 'var(--text)' : 'var(--muted)'}">{muscle.replace('_', ' ')}</span>
-            {#if v > 0}
-              <span class="heat-sets">{weekVolume.muscles.find(m => m.muscle === muscle || m.muscle === muscle.replace('_',' '))?.sets ?? 0} sets</span>
-            {/if}
+  {#each GROUPS as g}
+    {@const gm = g.names.map(n => volMuscle(n)).filter(Boolean)}
+    {#if gm.length}
+      <div class="group-block">
+        <div class="group-hdr">{g.label}</div>
+        {#each gm as m}
+          {@const lm = m.landmarks}
+          <div class="vol-row">
+            <div class="dot" style="background:{VOL_COLOR[m.status] ?? 'var(--muted)'}"></div>
+            <div class="vol-name">{m.muscle.charAt(0).toUpperCase() + m.muscle.slice(1)}</div>
+            <div class="vol-count">{m.sets}<span class="vol-mrv">{lm ? ` / ${lm.mrv}` : ''}</span></div>
+            <div class="vol-status" style="color:{VOL_COLOR[m.status] ?? 'var(--muted)'}">{VOL_LABEL[m.status] ?? '—'}</div>
           </div>
         {/each}
       </div>
-    </div>
-  </div>
+    {/if}
+  {/each}
 
   {/if}
 </div>
@@ -1147,16 +1101,32 @@
     border-top: 1px solid var(--bdr);
   }
 
-  /* Heatmap */
-  .heat-wrap { display: flex; gap: 16px; align-items: flex-start; margin-top: 0.5rem; }
-  .body-svg { width: 120px; flex-shrink: 0; }
+  /* Weekly volume rows (mirrors Recovery's rec-row) */
+  .group-block { margin-bottom: 0.25rem; }
 
-  .heat-labels { flex: 1; display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+  .group-hdr {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    padding: 0.9rem 0 0.4rem;
+    border-top: 1px solid var(--bdr);
+  }
 
-  .heat-row { display: flex; align-items: center; gap: 8px; }
-  .heat-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
-  .heat-name { font-size: 0.78rem; text-transform: capitalize; color: var(--text); }
-  .heat-sets { margin-left: auto; font-size: 0.68rem; color: var(--muted); }
+  .vol-row {
+    display: grid;
+    grid-template-columns: 10px 140px 1fr 120px;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--bdr);
+  }
+
+  .vol-name   { font-size: 0.9rem; font-weight: 500; color: var(--text); }
+  .vol-count  { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+  .vol-mrv    { font-size: 0.78rem; font-weight: 400; color: var(--muted); }
+  .vol-status { font-size: 0.82rem; font-weight: 600; text-align: right; }
 
   /* Spinner */
   .spinner-wrap { display: flex; justify-content: center; padding: 4rem 0; }
