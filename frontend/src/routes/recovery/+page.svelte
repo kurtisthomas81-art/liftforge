@@ -2,33 +2,38 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
 
-  let view = 'fatigue'; // 'fatigue' | 'balance'
+  let view = 'fatigue';
   let muscles = [];
   let fatigue = null;
   let weekVolume = null;
   let loading = true;
   let error = null;
 
-  const STATUS_COLOR = {
+  const GROUPS = [
+    { key: 'push', label: 'Push',  names: ['chest', 'shoulders', 'triceps'] },
+    { key: 'pull', label: 'Pull',  names: ['back', 'lats', 'traps', 'biceps'] },
+    { key: 'legs', label: 'Legs',  names: ['quads', 'hamstrings', 'glutes', 'calves'] },
+    { key: 'core', label: 'Core',  names: ['abs'] },
+  ];
+
+  const REC_COLOR = {
     green: 'var(--success)',
     amber: 'var(--primary)',
     red:   'var(--danger)',
-    gray:  '#666666',
+    gray:  '#505050',
   };
 
-  const STATUS_LABEL = {
+  const REC_LABEL = {
     green: 'Recovered',
     amber: 'Recovering',
     red:   'Fatigued',
-    gray:  'Not logged',
+    gray:  'Not trained',
   };
 
-  const STATUS_ORDER = { red: 0, amber: 1, gray: 2, green: 3 };
-
-  const FATIGUE_COLOR = {
+  const FAT_COLOR = {
     low:      'var(--success)',
     moderate: 'var(--primary)',
-    high:     'var(--danger)',
+    high:     '#e07b39',
     critical: 'var(--danger)',
   };
 
@@ -37,14 +42,14 @@
     in_mav:    'var(--success)',
     above_mav: 'var(--primary)',
     at_mrv:    'var(--danger)',
-    unknown:   '#555555',
+    unknown:   '#505050',
   };
 
   const VOL_LABEL = {
-    below_mev: 'Under target',
+    below_mev: 'Under MEV',
     in_mav:    'On track',
     above_mav: 'Above sweet spot',
-    at_mrv:    'At max',
+    at_mrv:    'At MRV',
     unknown:   '—',
   };
 
@@ -55,9 +60,7 @@
         api.volume.fatigueReport(),
         api.volume.forWeek(null),
       ]);
-      muscles = mapData.muscles.slice().sort(
-        (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]
-      );
+      muscles = mapData.muscles;
       fatigue = fatigueData;
       weekVolume = weekData;
     } catch (e) {
@@ -67,9 +70,8 @@
     }
   });
 
-  function capitalize(s) {
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }
+  function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+  function goalLabel(g) { return cap(g ? g.replace(/_/g, ' ') : ''); }
 
   function fmtDays(d) {
     if (d === null || d === undefined) return '—';
@@ -77,38 +79,30 @@
     return `${d.toFixed(1)}d ago`;
   }
 
-  function barPct(sets, mrv) {
-    if (!mrv || mrv === 0) return 0;
+  function fillPct(sets, mrv) {
+    if (!mrv) return 0;
     return Math.min(100, (sets / mrv) * 100);
   }
 
-  function landmarkPct(val, mrv) {
+  function pct(val, mrv) {
     if (!mrv) return 0;
     return Math.min(100, (val / mrv) * 100);
   }
 
-  $: balanceMuscles = weekVolume
-    ? [...weekVolume.muscles].sort((a, b) => {
-        const order = { below_mev: 0, unknown: 1, above_mav: 2, at_mrv: 3, in_mav: 4 };
-        return (order[a.status] ?? 5) - (order[b.status] ?? 5);
-      })
-    : [];
+  function groupMuscles(names, list) {
+    return names.map(n => list.find(m => m.muscle === n)).filter(Boolean);
+  }
 
-  $: fatigueBarPct = fatigue ? (fatigue.fatigue_score / 10) * 100 : 0;
+  $: fatiguePct = fatigue ? (fatigue.fatigue_score / 10) * 100 : 0;
+  $: fatigueColor = fatigue ? FAT_COLOR[fatigue.overall_fatigue] : 'var(--text-muted)';
 </script>
 
 <div class="page">
   <div class="page-header">
-    <div class="header-row">
-      <h2>Recovery</h2>
-      <div class="toggle-group">
-        <button class="toggle-btn" class:active={view === 'fatigue'} on:click={() => view = 'fatigue'}>
-          Fatigue
-        </button>
-        <button class="toggle-btn" class:active={view === 'balance'} on:click={() => view = 'balance'}>
-          Balance
-        </button>
-      </div>
+    <h2>Recovery</h2>
+    <div class="seg-ctrl">
+      <button class:active={view === 'fatigue'} on:click={() => view = 'fatigue'}>Fatigue</button>
+      <button class:active={view === 'balance'} on:click={() => view = 'balance'}>Balance</button>
     </div>
   </div>
 
@@ -116,121 +110,127 @@
     <div class="spinner-wrap"><div class="spinner"></div></div>
   {:else if error}
     <div class="error-box">{error}</div>
+
   {:else if view === 'fatigue'}
 
     {#if fatigue}
-      <div class="fatigue-card">
-        <div class="fatigue-top">
+      <div class="summary-card">
+        <div class="summary-top">
           <div>
-            <div class="fatigue-label">Overall Fatigue</div>
-            <div class="fatigue-level" style="color:{FATIGUE_COLOR[fatigue.overall_fatigue]}">
-              {capitalize(fatigue.overall_fatigue)}
-            </div>
+            <div class="sum-label">Overall Fatigue</div>
+            <div class="sum-level" style="color:{fatigueColor}">{cap(fatigue.overall_fatigue)}</div>
           </div>
-          <div class="fatigue-score" style="color:{FATIGUE_COLOR[fatigue.overall_fatigue]}">
-            {fatigue.fatigue_score}<span class="score-denom">/10</span>
+          <div class="score-badge" style="color:{fatigueColor}; border-color:{fatigueColor}40">
+            <span class="score-num">{fatigue.fatigue_score}</span><span class="score-denom">/10</span>
           </div>
         </div>
 
-        <div class="gauge-track">
-          <div class="gauge-fill" style="width:{fatigueBarPct}%; background:{FATIGUE_COLOR[fatigue.overall_fatigue]}"></div>
-          <div class="gauge-tick" style="left:30%"><span class="tick-label">3</span></div>
-          <div class="gauge-tick" style="left:60%"><span class="tick-label">6</span></div>
-          <div class="gauge-tick" style="left:80%"><span class="tick-label">8</span></div>
+        <div class="gauge-wrap">
+          <div class="gauge-track">
+            <div class="gz gz-low"  style="width:30%"></div>
+            <div class="gz gz-mod"  style="left:30%;width:30%"></div>
+            <div class="gz gz-high" style="left:60%;width:20%"></div>
+            <div class="gz gz-crit" style="left:80%;width:20%"></div>
+            <div class="gauge-fill" style="width:{fatiguePct}%;background:{fatigueColor}"></div>
+          </div>
+          <div class="gauge-legend">
+            <span>Low</span>
+            <span>Moderate</span>
+            <span>High</span>
+            <span>Critical</span>
+          </div>
         </div>
 
         {#if fatigue.deload_recommended}
-          <div class="deload-banner">
-            ⚠ Deload recommended — your body needs a lighter week
-          </div>
+          <div class="deload-banner">Deload recommended — take a lighter week</div>
         {/if}
 
         {#if fatigue.reasons.length}
-          <ul class="reasons-list">
-            {#each fatigue.reasons as r}
-              <li>{r}</li>
-            {/each}
+          <ul class="flag-list">
+            {#each fatigue.reasons as r}<li>{r}</li>{/each}
           </ul>
         {:else}
-          <p class="reasons-none">No fatigue flags — you're in good shape.</p>
+          <p class="no-flags">No fatigue flags — training load looks healthy.</p>
         {/if}
       </div>
     {/if}
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Muscle</th>
-            <th>Status</th>
-            <th>Last Trained</th>
-            <th title="Average Reps In Reserve — higher means more left in the tank">Avg RIR</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each muscles as m}
-            <tr>
-              <td class="muscle-name">{capitalize(m.muscle)}</td>
-              <td>
-                <span class="badge"
-                  style="background:{STATUS_COLOR[m.status]}22; color:{STATUS_COLOR[m.status]}; border-color:{STATUS_COLOR[m.status]}44">
-                  {STATUS_LABEL[m.status]}
-                </span>
-              </td>
-              <td class="muted">{fmtDays(m.days_since_trained)}</td>
-              <td class="muted">{m.avg_rir !== null ? m.avg_rir : '—'}</td>
-            </tr>
+    {#each GROUPS as g}
+      {@const gm = groupMuscles(g.names, muscles)}
+      {#if gm.length}
+        <div class="group-block">
+          <div class="group-hdr">{g.label}</div>
+          {#each gm as m}
+            <div class="rec-row">
+              <div class="dot" style="background:{REC_COLOR[m.status]}"></div>
+              <div class="rec-name">{cap(m.muscle)}</div>
+              <div class="rec-since">{fmtDays(m.days_since_trained)}</div>
+              <div class="rec-rir">{m.avg_rir !== null ? `RIR ${m.avg_rir}` : '—'}</div>
+              <div class="rec-status" style="color:{REC_COLOR[m.status]}">{REC_LABEL[m.status]}</div>
+            </div>
           {/each}
-        </tbody>
-      </table>
-    </div>
+        </div>
+      {/if}
+    {/each}
 
   {:else}
 
     {#if weekVolume}
       <div class="balance-meta">
-        <span class="meta-week">Week of {weekVolume.week_start}</span>
-        <span class="meta-goal">{capitalize(weekVolume.goal.replace('_', ' '))} goal</span>
+        <span class="bm-week">Week of {weekVolume.week_start}</span>
+        <span class="bm-goal">{goalLabel(weekVolume.goal)}</span>
       </div>
 
       <div class="balance-legend">
-        <span class="leg-item"><span class="leg-dot" style="background:var(--danger)"></span>Under MEV</span>
-        <span class="leg-item"><span class="leg-dot" style="background:var(--success)"></span>Sweet spot</span>
-        <span class="leg-item"><span class="leg-dot" style="background:var(--primary)"></span>Above MAV</span>
-        <span class="leg-item"><span class="leg-dot" style="background:var(--danger); opacity:.65"></span>At MRV</span>
+        <span class="bl-item"><span class="bl-dot" style="background:var(--danger)"></span>Under MEV</span>
+        <span class="bl-item"><span class="bl-dot" style="background:var(--success)"></span>In sweet spot</span>
+        <span class="bl-item"><span class="bl-dot" style="background:var(--primary)"></span>Above MAV</span>
+        <span class="bl-item"><span class="bl-dot" style="background:var(--danger);opacity:.6"></span>At MRV</span>
       </div>
 
-      <div class="balance-list">
-        {#each balanceMuscles as m}
-          {@const lm = m.landmarks}
-          <div class="balance-row">
-            <div class="balance-name">{capitalize(m.muscle)}</div>
-            <div class="balance-bar-col">
-              <div class="bar-track">
-                {#if lm}
-                  <div class="mav-zone"
-                    style="left:{landmarkPct(lm.mav_low, lm.mrv)}%; width:{landmarkPct(lm.mav_high - lm.mav_low, lm.mrv)}%">
+      {#each GROUPS as g}
+        {@const gm = groupMuscles(g.names, weekVolume.muscles)}
+        {#if gm.length}
+          <div class="group-block">
+            <div class="group-hdr">{g.label}</div>
+            {#each gm as m}
+              {@const lm = m.landmarks}
+              <div class="vol-row">
+                <div class="dot" style="background:{VOL_COLOR[m.status]}"></div>
+                <div class="vol-name">{cap(m.muscle)}</div>
+                <div class="vol-bar-wrap">
+                  <div class="bar-shell">
+                    {#if lm}
+                      <!-- sweet spot zone -->
+                      <div class="bar-sweet"
+                        style="left:{pct(lm.mav_low,lm.mrv)}%;width:{pct(lm.mav_high - lm.mav_low, lm.mrv)}%">
+                      </div>
+                    {/if}
+                    <!-- fill -->
+                    <div class="bar-fill" style="width:{fillPct(m.sets,lm?.mrv)}%;background:{VOL_COLOR[m.status]}">
+                    </div>
+                    {#if lm}
+                      <!-- MEV tick line drawn above fill -->
+                      <div class="bar-mev" style="left:{pct(lm.mev,lm.mrv)}%"></div>
+                    {/if}
                   </div>
-                  <div class="bar-marker" style="left:{landmarkPct(lm.mev, lm.mrv)}%" title="MEV {lm.mev}"></div>
-                  <div class="bar-marker mav-marker" style="left:{landmarkPct(lm.mav_low, lm.mrv)}%" title="MAV {lm.mav_low}"></div>
-                  <div class="bar-marker mav-marker" style="left:{landmarkPct(lm.mav_high, lm.mrv)}%" title="MAV {lm.mav_high}"></div>
-                {/if}
-                <div class="bar-fill" style="width:{barPct(m.sets, lm?.mrv)}%; background:{VOL_COLOR[m.status]}"></div>
+                  {#if lm}
+                    <div class="bar-targets">
+                      <span>MEV {lm.mev}</span>
+                      <span>MAV {lm.mav_low}–{lm.mav_high}</span>
+                      <span>MRV {lm.mrv}</span>
+                    </div>
+                  {/if}
+                </div>
+                <div class="vol-right">
+                  <div class="vol-count">{m.sets}<span class="vol-unit"> sets</span></div>
+                  <div class="vol-label" style="color:{VOL_COLOR[m.status]}">{VOL_LABEL[m.status]}</div>
+                </div>
               </div>
-              {#if lm}
-                <div class="bar-targets">MEV {lm.mev} · MAV {lm.mav_low}–{lm.mav_high} · MRV {lm.mrv}</div>
-              {/if}
-            </div>
-            <div class="balance-right">
-              <span class="sets-count">{m.sets}</span>
-              <span class="badge-sm"
-                style="background:{VOL_COLOR[m.status]}22; color:{VOL_COLOR[m.status]}; border-color:{VOL_COLOR[m.status]}44">
-                {VOL_LABEL[m.status]}
-              </span>
-            </div>
+            {/each}
           </div>
-        {/each}
-      </div>
+        {/if}
+      {/each}
     {/if}
 
   {/if}
@@ -238,105 +238,127 @@
 
 <style>
   .page {
-    padding: 2rem;
-    max-width: 780px;
+    padding: 1.5rem 2rem 3rem;
+    max-width: 820px;
     margin: 0 auto;
   }
 
   .page-header {
-    margin-bottom: 1.5rem;
-  }
-
-  .header-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    margin-bottom: 1.5rem;
   }
 
   h2 {
-    font-size: 1.4rem;
+    font-size: 1.25rem;
     font-weight: 600;
     color: var(--text);
     margin: 0;
   }
 
-  /* Toggle */
-  .toggle-group {
+  /* Segmented control */
+  .seg-ctrl {
     display: flex;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: 8px;
     padding: 3px;
     gap: 2px;
   }
 
-  .toggle-btn {
+  .seg-ctrl button {
     background: none;
     border: none;
-    padding: 5px 16px;
+    padding: 5px 18px;
     font-size: 0.82rem;
     font-weight: 500;
     color: var(--text-muted);
-    border-radius: calc(var(--radius) - 2px);
+    border-radius: 6px;
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
+    line-height: 1.4;
   }
 
-  .toggle-btn.active {
+  .seg-ctrl button.active {
     background: var(--primary);
     color: #fff;
   }
 
-  /* Fatigue card */
-  .fatigue-card {
+  /* Summary card */
+  .summary-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1.25rem 1.5rem;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem 1rem;
     margin-bottom: 1.5rem;
   }
 
-  .fatigue-top {
+  .summary-top {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
   }
 
-  .fatigue-label {
-    font-size: 0.75rem;
+  .sum-label {
+    font-size: 0.72rem;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.07em;
     color: var(--text-muted);
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.25rem;
   }
 
-  .fatigue-level {
-    font-size: 1.15rem;
-    font-weight: 600;
+  .sum-level {
+    font-size: 1.25rem;
+    font-weight: 700;
   }
 
-  .fatigue-score {
-    font-size: 2rem;
+  .score-badge {
+    display: flex;
+    align-items: baseline;
+    gap: 1px;
+    border: 2px solid;
+    border-radius: 10px;
+    padding: 4px 12px 4px 10px;
+  }
+
+  .score-num {
+    font-size: 1.6rem;
     font-weight: 700;
     line-height: 1;
   }
 
   .score-denom {
-    font-size: 1rem;
-    font-weight: 400;
+    font-size: 0.85rem;
+    font-weight: 500;
     color: var(--text-muted);
+  }
+
+  /* Gauge */
+  .gauge-wrap {
+    margin-bottom: 0.75rem;
   }
 
   .gauge-track {
     position: relative;
     height: 8px;
-    background: var(--border);
     border-radius: 4px;
-    overflow: visible;
-    margin-bottom: 1rem;
+    background: var(--border);
+    overflow: hidden;
+    margin-bottom: 4px;
   }
+
+  .gz {
+    position: absolute;
+    top: 0;
+    height: 100%;
+  }
+
+  .gz-low  { background: var(--success); opacity: 0.15; }
+  .gz-mod  { background: var(--primary); opacity: 0.15; }
+  .gz-high { background: #e07b39; opacity: 0.15; }
+  .gz-crit { background: var(--danger); opacity: 0.15; }
 
   .gauge-fill {
     position: absolute;
@@ -346,119 +368,125 @@
     transition: width 0.5s ease;
   }
 
-  .gauge-tick {
-    position: absolute;
-    top: -2px;
-    width: 1px;
-    height: 12px;
-    background: var(--border);
-    transform: translateX(-50%);
-  }
-
-  .tick-label {
-    position: absolute;
-    top: 14px;
-    left: 50%;
-    transform: translateX(-50%);
+  .gauge-legend {
+    display: grid;
+    grid-template-columns: 30fr 30fr 20fr 20fr;
     font-size: 0.65rem;
     color: var(--text-muted);
+    letter-spacing: 0.02em;
   }
 
+  .gauge-legend span:not(:first-child) { text-align: center; }
+  .gauge-legend span:last-child { text-align: right; }
+
+  /* Deload / flags */
   .deload-banner {
-    background: var(--danger)18;
-    border: 1px solid var(--danger)44;
-    color: var(--danger);
-    border-radius: calc(var(--radius) - 2px);
-    padding: 0.5rem 0.75rem;
-    font-size: 0.82rem;
-    font-weight: 500;
-    margin-top: 1.25rem;
-    margin-bottom: 0.5rem;
+    display: inline-block;
+    background: var(--danger);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 100px;
+    margin: 0.75rem 0 0.5rem;
   }
 
-  .reasons-list {
+  .flag-list {
     margin: 0.75rem 0 0;
-    padding-left: 1.2rem;
+    padding: 0 0 0 1.1rem;
     list-style: disc;
   }
 
-  .reasons-list li {
+  .flag-list li {
     font-size: 0.8rem;
     color: var(--text-muted);
-    padding: 0.15rem 0;
+    line-height: 1.5;
+    padding: 0.1rem 0;
   }
 
-  .reasons-none {
+  .no-flags {
     font-size: 0.82rem;
     color: var(--text-muted);
     margin: 0.5rem 0 0;
   }
 
-  /* Muscle table */
-  .table-wrap {
-    overflow-x: auto;
+  /* Group sections */
+  .group-block {
+    margin-bottom: 0.5rem;
   }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.875rem;
-  }
-
-  th {
-    text-align: left;
-    color: var(--text-muted);
-    font-weight: 500;
-    font-size: 0.72rem;
+  .group-hdr {
+    font-size: 0.7rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0 0.75rem 0.6rem;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    padding: 0.9rem 0 0.4rem;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Fatigue rows */
+  .rec-row {
+    display: grid;
+    grid-template-columns: 10px 130px 1fr 70px 100px;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
     border-bottom: 1px solid var(--border);
   }
 
-  td {
-    padding: 0.55rem 0.75rem;
-    border-bottom: 1px solid var(--border);
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .rec-name {
+    font-size: 0.9rem;
+    font-weight: 500;
     color: var(--text);
   }
 
-  .muscle-name {
-    font-weight: 500;
-  }
-
-  .muted {
-    color: var(--text-muted);
-  }
-
-  .badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 500;
-    border: 1px solid transparent;
-  }
-
-  /* Balance view */
-  .balance-meta {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 0.75rem;
-  }
-
-  .meta-week {
+  .rec-since {
     font-size: 0.82rem;
     color: var(--text-muted);
   }
 
-  .meta-goal {
-    font-size: 0.75rem;
-    padding: 2px 8px;
+  .rec-rir {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    text-align: right;
+  }
+
+  .rec-status {
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  /* Balance meta */
+  .balance-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .bm-week {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+
+  .bm-goal {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 100px;
     background: var(--primary)22;
     color: var(--primary);
-    border-radius: 4px;
-    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   .balance-legend {
@@ -466,119 +494,111 @@
     gap: 1.2rem;
     font-size: 0.75rem;
     color: var(--text-muted);
-    margin-bottom: 1.25rem;
+    margin-bottom: 0.25rem;
     flex-wrap: wrap;
   }
 
-  .leg-item {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
+  .bl-item { display: flex; align-items: center; gap: 5px; }
 
-  .leg-dot {
-    width: 9px;
-    height: 9px;
+  .bl-dot {
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
   }
 
-  .balance-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .balance-row {
+  /* Volume rows */
+  .vol-row {
     display: grid;
-    grid-template-columns: 110px 1fr auto;
+    grid-template-columns: 10px 110px 1fr 100px;
     align-items: center;
     gap: 0.75rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--border);
   }
 
-  .balance-name {
-    font-size: 0.875rem;
+  .vol-name {
+    font-size: 0.9rem;
     font-weight: 500;
     color: var(--text);
     white-space: nowrap;
   }
 
-  .balance-bar-col {
+  /* Zone bar */
+  .vol-bar-wrap {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
   }
 
-  .bar-track {
+  .bar-shell {
     position: relative;
-    height: 12px;
+    height: 10px;
     background: var(--border);
-    border-radius: 6px;
+    border-radius: 5px;
     overflow: hidden;
   }
 
-  .mav-zone {
+  .bar-sweet {
     position: absolute;
     top: 0;
     height: 100%;
-    background: var(--success)22;
-    pointer-events: none;
-  }
-
-  .bar-marker {
-    position: absolute;
-    top: 0;
-    width: 1.5px;
-    height: 100%;
-    background: rgba(255,255,255,0.3);
-    z-index: 1;
-    pointer-events: none;
-  }
-
-  .mav-marker {
-    background: rgba(255,255,255,0.2);
+    background: var(--success);
+    opacity: 0.18;
   }
 
   .bar-fill {
     position: absolute;
     top: 0; left: 0;
     height: 100%;
-    border-radius: 6px;
-    transition: width 0.4s ease;
+    border-radius: 5px;
+    transition: width 0.45s ease;
+  }
+
+  .bar-mev {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: rgba(255,255,255,0.45);
     z-index: 2;
   }
 
   .bar-targets {
-    font-size: 0.67rem;
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.65rem;
     color: var(--text-muted);
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
   }
 
-  .balance-right {
+  /* Volume right side */
+  .vol-right {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 3px;
-    white-space: nowrap;
+    gap: 1px;
   }
 
-  .sets-count {
+  .vol-count {
     font-size: 1rem;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text);
-    line-height: 1;
+    line-height: 1.1;
   }
 
-  .badge-sm {
-    display: inline-block;
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: 0.68rem;
+  .vol-unit {
+    font-size: 0.72rem;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+
+  .vol-label {
+    font-size: 0.72rem;
     font-weight: 500;
-    border: 1px solid transparent;
   }
 
-  /* Spinner */
+  /* Spinner / error */
   .spinner-wrap {
     display: flex;
     justify-content: center;
@@ -594,9 +614,7 @@
     animation: spin 0.7s linear infinite;
   }
 
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   .error-box {
     background: var(--surface);
@@ -608,9 +626,11 @@
   }
 
   @media (max-width: 600px) {
-    .page { padding: 1rem; }
-    .balance-row { grid-template-columns: 90px 1fr auto; gap: 0.5rem; }
-    .balance-name { font-size: 0.8rem; }
-    .gauge-tick .tick-label { display: none; }
+    .page { padding: 1rem 1rem 3rem; }
+    .rec-row { grid-template-columns: 10px 1fr 60px 80px; }
+    .rec-rir { display: none; }
+    .vol-row { grid-template-columns: 10px 90px 1fr 80px; }
+    .bar-targets { display: none; }
+    .gauge-legend span:not(:first-child):not(:last-child) { display: none; }
   }
 </style>
