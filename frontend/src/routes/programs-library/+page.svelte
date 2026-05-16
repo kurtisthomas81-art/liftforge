@@ -216,10 +216,14 @@
 
           {#if !isOpen}
             <div class="card-actions">
-              <button class="btn-ghost" on:click={() => goto(`/program/builder?template=${prog.slug}`)}>Custom Schedule</button>
               <button class="btn-outline" disabled={isInstalling} on:click={() => openCustomizer(prog)}>Customize</button>
               <button class="btn-primary" disabled={isInstalling} on:click={() => quickInstall(prog.slug)}>
                 {installing === prog.slug + '_quick' ? 'Starting…' : 'Start'}
+              </button>
+            </div>
+            <div style="padding: 0 1.1rem 0.85rem;">
+              <button class="btn-custom-sched" on:click={() => goto(`/program/builder?template=${prog.slug}`)}>
+                ↗ Run as custom schedule (choose days & rotation)
               </button>
             </div>
           {:else}
@@ -443,18 +447,21 @@
   .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
   .btn-outline:disabled { opacity: .5; cursor: not-allowed; }
 
-  .btn-ghost {
-    background: none;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 0.5rem 0.875rem;
+  .btn-custom-sched {
+    display: block;
+    width: 100%;
+    padding: 0.55rem 1rem;
+    background: rgba(232,160,64,0.08);
+    border: 1px solid rgba(232,160,64,0.3);
+    border-radius: 8px;
     font-size: 0.82rem;
     font-weight: 500;
-    color: var(--text-muted);
+    color: var(--accent);
     cursor: pointer;
-    transition: color .15s, border-color .15s;
+    text-align: center;
+    transition: background .15s, border-color .15s;
   }
-  .btn-ghost:hover { color: var(--accent); border-color: var(--border); }
+  .btn-custom-sched:hover { background: rgba(232,160,64,0.16); border-color: var(--accent); }
 
   /* ── Customizer ── */
   .customizer {
