@@ -122,6 +122,15 @@ def _serialize_planned_exercise(pe: PlannedExercise, exercise_name: str = "") ->
     }
 
 
+# ── Program presets ────────────────────────────────────────────────────────────
+
+@router.get("/presets")
+def get_program_presets():
+    """Return quick-start program style presets for the mesocycle wizard."""
+    from program_presets import PROGRAM_PRESETS
+    return PROGRAM_PRESETS
+
+
 # ── Splits ─────────────────────────────────────────────────────────────────────
 
 @router.get("/splits")
@@ -517,15 +526,17 @@ def preview_custom_slots(payload: CustomSlotPreviewPayload, session: Session = D
             "day_name": day_name, "variant": variant, "slots": slots, "exercises": preview_exercises,
         })
 
-    return result
+    from engine.balance_checker import check_program_balance
+    return {"sessions": result, "balance": check_program_balance(result)}
 
 
 @router.post("/mesocycles/preview")
 def preview_mesocycle_endpoint(payload: MesocycleCreate, session: Session = Depends(get_session)):
     from engine.meso_builder import preview_mesocycle
+    from engine.balance_checker import check_program_balance
     _, _, template_data, user_equipment, landmarks, exercises_db, experience_level = _resolve_meso_resources(payload, session)
     excluded_patterns, excluded_muscles = _get_injury_exclusions(session)
-    return preview_mesocycle(
+    sessions = preview_mesocycle(
         split_template=template_data,
         goal=payload.goal,
         weeks=payload.weeks,
@@ -539,6 +550,7 @@ def preview_mesocycle_endpoint(payload: MesocycleCreate, session: Session = Depe
         excluded_patterns=excluded_patterns,
         excluded_muscles=excluded_muscles,
     )
+    return {"sessions": sessions, "balance": check_program_balance(sessions)}
 
 
 @router.post("/mesocycles")

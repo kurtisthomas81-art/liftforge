@@ -285,15 +285,19 @@ def _fit_to_time(
 
 def _exercise_budget(session_minutes: Optional[int], goal: str) -> Optional[int]:
     """
-    Rough upper bound on exercise count for initial selection cap.
-    The actual set count is then fitted by _fit_to_time.
+    Rough upper bound on exercise count for initial slot-filling.
+    Uses a blended compound/isolation time estimate (60/40 mix) so that
+    short sessions (45 min) can still accommodate 4 exercises — enough for
+    a balanced push + pull + lower pattern in full-body sessions.
+    The actual set count is then fitted precisely by _fit_to_time.
     """
     if not session_minutes:
         return None
-    # Conservative: each exercise takes at least 2 sets × (compound time + rest)
-    min_seconds_per_ex = (COMPOUND_SET_SECONDS + REST_COMPOUND) * 2
+    avg_set_time = COMPOUND_SET_SECONDS * 0.6 + ISOLATION_SET_SECONDS * 0.4  # ~72s
+    avg_rest_time = REST_COMPOUND * 0.6 + REST_ISOLATION * 0.4               # ~156s
+    avg_seconds_per_ex = (avg_set_time + avg_rest_time) * 2                  # 2 sets minimum
     available = session_minutes * 60 - WARMUP_BUDGET_SECONDS
-    return max(3, int(available / min_seconds_per_ex))
+    return max(4, int(available / avg_seconds_per_ex))
 
 
 def _deload_sets(normal_sets: int, mev: int) -> int:
@@ -418,21 +422,68 @@ VARIANT_PUSH_PULL: dict[str, tuple[str, str]] = {
     "C": ("horizontal_push", "horizontal_pull"),  # different exercise via variant_index=2
 }
 
-SESSION_SLOT_TEMPLATES: dict[str, list[str]] = {
-    "full_body":   ["knee_dominant", "hip_dominant", "{push}", "{pull}"],
-    "push":        ["horizontal_push", "vertical_push"],
-    "pull":        ["horizontal_pull", "vertical_pull"],
-    "legs":        ["knee_dominant", "hip_dominant"],
-    "lower":       ["knee_dominant", "hip_dominant"],
-    "upper":       ["horizontal_push", "vertical_push", "horizontal_pull", "vertical_pull"],
-    "upper_lower": ["knee_dominant", "hip_dominant", "{push}", "{pull}"],  # fallback, resolved per day
-    "chest":       ["horizontal_push"],
-    "back":        ["horizontal_pull", "vertical_pull"],
-    "shoulders":   ["vertical_push"],
-    "arms":        [],
-    "custom":      ["knee_dominant", "hip_dominant", "{push}", "{pull}"],
-    "default":     ["knee_dominant", "hip_dominant", "{push}", "{pull}"],
+# ── Time-aware slot templates ─────────────────────────────────────────────────
+# Buckets: "short" ≤45 min, "medium" 46–60 min, "long" >60 min
+# full_body / upper_lower / custom always include both push AND pull as a paired
+# unit so push/pull balance is maintained even in short sessions.
+_SESSION_SLOT_TEMPLATES_TIERED: dict[str, dict[str, list[str]]] = {
+    "full_body": {
+        "short":  ["knee_dominant", "{push}", "{pull}", "hip_dominant"],
+        "medium": ["knee_dominant", "hip_dominant", "{push}", "{pull}", "vertical_push"],
+        "long":   ["knee_dominant", "hip_dominant", "horizontal_push", "vertical_push", "horizontal_pull", "vertical_pull", "core"],
+    },
+    "push": {
+        "short":  ["horizontal_push", "vertical_push"],
+        "medium": ["horizontal_push", "vertical_push", "core"],
+        "long":   ["horizontal_push", "vertical_push", "core"],
+    },
+    "pull": {
+        "short":  ["horizontal_pull", "vertical_pull"],
+        "medium": ["horizontal_pull", "vertical_pull"],
+        "long":   ["horizontal_pull", "vertical_pull"],
+    },
+    "legs": {
+        "short":  ["knee_dominant", "hip_dominant"],
+        "medium": ["knee_dominant", "hip_dominant", "core"],
+        "long":   ["knee_dominant", "hip_dominant", "core"],
+    },
+    "lower": {
+        "short":  ["knee_dominant", "hip_dominant"],
+        "medium": ["knee_dominant", "hip_dominant"],
+        "long":   ["knee_dominant", "hip_dominant", "core"],
+    },
+    "upper": {
+        "short":  ["horizontal_push", "horizontal_pull"],
+        "medium": ["horizontal_push", "vertical_push", "horizontal_pull", "vertical_pull"],
+        "long":   ["horizontal_push", "vertical_push", "horizontal_pull", "vertical_pull", "core"],
+    },
+    "upper_lower": {  # resolved per-day via _infer_day_split_type
+        "short":  ["knee_dominant", "{push}", "{pull}", "hip_dominant"],
+        "medium": ["knee_dominant", "hip_dominant", "{push}", "{pull}"],
+        "long":   ["knee_dominant", "hip_dominant", "{push}", "{pull}"],
+    },
+    "chest":     {"short": ["horizontal_push"], "medium": ["horizontal_push"], "long": ["horizontal_push"]},
+    "back":      {"short": ["horizontal_pull", "vertical_pull"], "medium": ["horizontal_pull", "vertical_pull"], "long": ["horizontal_pull", "vertical_pull"]},
+    "shoulders": {"short": ["vertical_push"], "medium": ["vertical_push"], "long": ["vertical_push"]},
+    "arms":      {"short": [], "medium": [], "long": []},
+    "custom":    {"short": ["knee_dominant", "{push}", "{pull}", "hip_dominant"], "medium": ["knee_dominant", "hip_dominant", "{push}", "{pull}"], "long": ["knee_dominant", "hip_dominant", "{push}", "{pull}"]},
+    "default":   {"short": ["knee_dominant", "{push}", "{pull}", "hip_dominant"], "medium": ["knee_dominant", "hip_dominant", "{push}", "{pull}"], "long": ["knee_dominant", "hip_dominant", "{push}", "{pull}"]},
 }
+
+# Backward-compatible flat dict (used when session_minutes is unknown)
+SESSION_SLOT_TEMPLATES: dict[str, list[str]] = {
+    k: v["medium"] for k, v in _SESSION_SLOT_TEMPLATES_TIERED.items()
+}
+
+
+def _minutes_to_bucket(session_minutes: Optional[int]) -> str:
+    if not session_minutes:
+        return "medium"
+    if session_minutes <= 45:
+        return "short"
+    if session_minutes <= 60:
+        return "medium"
+    return "long"
 
 
 def _infer_day_split_type(day_name: str) -> str:
@@ -460,17 +511,29 @@ def _infer_day_split_type(day_name: str) -> str:
     return "default"
 
 
-def _build_slot_template(split_type: str, day_name: str, variant_letter: str) -> list[str]:
-    """Return ordered sub_pattern slot list for a session. Push/pull resolve by variant."""
+def _build_slot_template(
+    split_type: str,
+    day_name: str,
+    variant_letter: str,
+    session_minutes: Optional[int] = None,
+) -> list[str]:
+    """Return ordered sub_pattern slot list for a session. Push/pull resolve by variant.
+
+    session_minutes is used to pick the appropriate time bucket from the tiered templates,
+    ensuring push AND pull are always paired in short sessions for better balance.
+    """
     day_type = _infer_day_split_type(day_name)
 
     # For upper_lower splits, resolve per-day type from name
     if split_type in ("upper_lower",):
         effective_type = day_type
     else:
-        effective_type = split_type if split_type in SESSION_SLOT_TEMPLATES else day_type
+        effective_type = split_type if split_type in _SESSION_SLOT_TEMPLATES_TIERED else day_type
 
-    template = SESSION_SLOT_TEMPLATES.get(effective_type, SESSION_SLOT_TEMPLATES["default"])
+    bucket = _minutes_to_bucket(session_minutes)
+    tiered = _SESSION_SLOT_TEMPLATES_TIERED.get(effective_type, _SESSION_SLOT_TEMPLATES_TIERED["default"])
+    template = tiered.get(bucket, tiered.get("medium", []))
+
     push_slot, pull_slot = VARIANT_PUSH_PULL.get(variant_letter, VARIANT_PUSH_PULL["A"])
 
     result = []
@@ -611,7 +674,7 @@ def preview_mesocycle(
     for idx, day in enumerate(days):
         muscles = _parse_list(day.get("muscle_focus", []))
         variant = _variant_letter(idx, num_variants)
-        slots = _build_slot_template(split_type, day["name"], variant)
+        slots = _build_slot_template(split_type, day["name"], variant, session_minutes)
         exercises_for_day = _select_session_exercises(
             slots, equip_set, exercises_db, experience_level, variant, max_total,
             excluded_patterns=excluded_patterns,
@@ -758,6 +821,11 @@ def generate_mesocycle(
                 slot_exercise_ids = sess_def.get("slot_exercises", [])
                 superset_groups = sess_def.get("superset_groups", [])
                 set_types = sess_def.get("set_types", [])
+                # Optional per-exercise overrides (populated when user edits in auto-mode preview)
+                sets_overrides     = sess_def.get("target_sets_list", [])
+                reps_min_overrides = sess_def.get("target_reps_min_list", [])
+                reps_max_overrides = sess_def.get("target_reps_max_list", [])
+                rir_overrides      = sess_def.get("target_rir_list", [])
                 variant_index = {"A": 0, "B": 1, "C": 2}.get(variant, 0)
                 exercises_for_day = []
                 selected_ids: set[int] = set()
@@ -775,10 +843,19 @@ def generate_mesocycle(
                         ex_candidate = dict(ex_candidate)
                     ex_candidate["superset_group"] = superset_groups[i] if i < len(superset_groups) else None
                     ex_candidate["set_type"] = set_types[i] if i < len(set_types) else "straight"
+                    # Carry overrides on the exercise object; week-1 code uses them
+                    if i < len(sets_overrides)     and sets_overrides[i]     is not None:
+                        ex_candidate["_override_sets"]     = int(sets_overrides[i])
+                    if i < len(reps_min_overrides) and reps_min_overrides[i] is not None:
+                        ex_candidate["_override_reps_min"] = int(reps_min_overrides[i])
+                    if i < len(reps_max_overrides) and reps_max_overrides[i] is not None:
+                        ex_candidate["_override_reps_max"] = int(reps_max_overrides[i])
+                    if i < len(rir_overrides)      and rir_overrides[i]      is not None:
+                        ex_candidate["_override_rir"]      = int(rir_overrides[i])
                     selected_ids.add(ex_candidate["id"])
                     exercises_for_day.append(ex_candidate)
             else:
-                slots = _build_slot_template(split_type, day["name"], variant)
+                slots = _build_slot_template(split_type, day["name"], variant, session_minutes)
                 exercises_for_day = _select_session_exercises(
                     slots, equip_set, exercises_db, experience_level, variant, max_total,
                     excluded_patterns=excluded_patterns,
@@ -807,6 +884,10 @@ def generate_mesocycle(
                 sec_credit = secondary_credits.get(primary, 0.0)
                 adjusted_weekly = max(mev, weekly_sets - sec_credit)
                 per_session = min(max(2, math.ceil(adjusted_weekly / num_sessions)), 6)
+
+                # Week-1 set count override (from user edits in auto-mode preview)
+                if week_num == 1 and "_override_sets" in ex:
+                    per_session = ex["_override_sets"]
 
                 mechanics = ex.get("mechanics", "compound")
                 warmup_sets = _warmup_sets_needed(ex, activated_muscles)
@@ -841,6 +922,12 @@ def generate_mesocycle(
                 else:
                     reps_min, reps_max = _rep_range_for_goal(goal, mechanics)
                     rir = _rir_for_goal(goal, is_deload)
+
+                # Apply reps/RIR overrides for week 1 if user edited the preview
+                if week_num == 1:
+                    reps_min = ex.get("_override_reps_min", reps_min)
+                    reps_max = ex.get("_override_reps_max", reps_max)
+                    rir      = ex.get("_override_rir",      rir)
 
                 session_exercises.append({
                     "exercise_id": ex["id"],

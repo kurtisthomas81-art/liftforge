@@ -80,6 +80,7 @@ export const api = {
   },
 
   programs: {
+    getPresets: () => request('GET', '/programs/presets'),
     getSplits: () => request('GET', '/programs/splits'),
     getSplit: (slug) => request('GET', `/programs/splits/${slug}`),
     previewMesocycle: (data) => request('POST', '/programs/mesocycles/preview', data),

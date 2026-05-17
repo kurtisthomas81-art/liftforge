@@ -11,6 +11,13 @@
   let creating = false;
   let error = null;
 
+  // Quick Start presets
+  let presets = [];
+  let balance = null;        // { is_balanced, push_pull_ratio, upper_lower_ratio, warnings, suggestions, ... }
+
+  // Custom schedule split selector
+  let customStartingSplit = null;
+
   // Step 1
   let selectedDays = null;
 
@@ -39,6 +46,7 @@
   let previewLoading = false;
   let previewError = '';
   let editedDays = {};           // { dayIndex: [exerciseId, ...] } — tracks swaps
+  let autoParamsEdited = false;  // true when user has edited any set/rep in auto mode
 
   // Step 5 — Custom slots mode
   let customDayExercises = [];     // [{day_name, variant, exercises: [{exercise_id, exercise_name, sub_pattern, target_sets, target_reps_min, target_reps_max, target_rir, ...}]}]
@@ -78,6 +86,93 @@
     shoulders:  ['vertical_push'],
     default:    ['knee_dominant', 'hip_dominant', 'horizontal_push', 'horizontal_pull'],
   };
+
+  // Custom split templates — pre-load slots per day when user picks a split type in custom_slots mode
+  const CUSTOM_SPLIT_TEMPLATES = {
+    ppl: [
+      { day_name: 'Push',  variant: 'A', slots: ['horizontal_push', 'vertical_push', 'core'] },
+      { day_name: 'Pull',  variant: 'A', slots: ['horizontal_pull', 'vertical_pull'] },
+      { day_name: 'Legs',  variant: 'A', slots: ['knee_dominant', 'hip_dominant', 'core'] },
+    ],
+    upper_lower: [
+      { day_name: 'Upper A', variant: 'A', slots: ['horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull'] },
+      { day_name: 'Lower A', variant: 'A', slots: ['knee_dominant', 'hip_dominant'] },
+      { day_name: 'Upper B', variant: 'B', slots: ['horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull'] },
+      { day_name: 'Lower B', variant: 'B', slots: ['knee_dominant', 'hip_dominant', 'core'] },
+    ],
+    full_body: [
+      { day_name: 'Full Body A', variant: 'A', slots: ['knee_dominant', 'horizontal_push', 'horizontal_pull', 'hip_dominant'] },
+      { day_name: 'Full Body B', variant: 'B', slots: ['knee_dominant', 'vertical_push', 'vertical_pull', 'hip_dominant'] },
+    ],
+    bro: [
+      { day_name: 'Chest & Triceps', variant: 'A', slots: ['horizontal_push', 'vertical_push'] },
+      { day_name: 'Back & Biceps',   variant: 'A', slots: ['horizontal_pull', 'vertical_pull'] },
+      { day_name: 'Shoulders',       variant: 'A', slots: ['vertical_push'] },
+      { day_name: 'Legs',            variant: 'A', slots: ['knee_dominant', 'hip_dominant'] },
+    ],
+  };
+
+  const CUSTOM_SPLIT_OPTIONS = [
+    { key: 'ppl',         label: 'Push / Pull / Legs' },
+    { key: 'upper_lower', label: 'Upper / Lower' },
+    { key: 'full_body',   label: 'Full Body A/B' },
+    { key: 'bro',         label: 'Bro Split' },
+    { key: 'empty',       label: 'Start Empty' },
+  ];
+
+  function applyPreset(preset) {
+    if (preset.route === 'install') {
+      goto(`/program/library/${preset.published_slug}`);
+      return;
+    }
+    selectedDays         = preset.days_per_week;
+    selectedGoal         = preset.goal;
+    selectedDuration     = preset.session_minutes;
+    selectedPeriodization = preset.periodization ?? 'standard';
+    numVariants          = preset.num_variants ?? 2;
+    daysOfWeek = Array.from({ length: selectedDays }, (_, i) => Math.min(i * Math.floor(7 / selectedDays), 6));
+    const match = splitGroups.flatMap(g => g.templates ?? []).find(s => s.slug === preset.split_slug);
+    if (match) {
+      isCustom = false;
+      selectedSplit = match;
+    }
+    step = 4;
+  }
+
+  function loadCustomSplitTemplate(key) {
+    customStartingSplit = key;
+    if (key === 'empty') {
+      const allDays = isCustom ? customDays : (selectedSplit?.days ?? []);
+      const count = effectiveDayCount(allDays, numVariants);
+      customDayExercises = allDays.slice(0, count).map((day, i) => ({
+        day_name: day.name,
+        variant: ['A', 'B', 'C', 'D'][i % 4],
+        exercises: [],
+      }));
+      return;
+    }
+    const templates = CUSTOM_SPLIT_TEMPLATES[key];
+    if (!templates) return;
+    customDayExercises = templates.map(t => ({
+      day_name: t.day_name,
+      variant: t.variant,
+      exercises: t.slots.map(slot => {
+        const opt = SLOT_OPTIONS.find(o => o.key === slot);
+        return {
+          id: Math.random().toString(36).slice(2),
+          exercise_id: null,
+          exercise_name: opt ? opt.label : slot.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          sub_pattern: slot,
+          target_sets: 3,
+          target_reps_min: 8,
+          target_reps_max: 12,
+          target_rir: 2,
+          set_type: 'straight',
+          superset_group: null,
+        };
+      }),
+    }));
+  }
 
   // ── Feature 3: Live time estimate helpers ──────────────────────────────────
   function getFatigue(sub_pattern) {
@@ -256,12 +351,15 @@
         slots: (day.exercises || []).map(e => e.sub_pattern || ''),
         slot_exercises: (day.exercises || []).map(e => e.exercise_id),
       }));
-      const result = await api.programs.previewCustomSlots({
+      const raw = await api.programs.previewCustomSlots({
         sessions,
         goal: selectedGoal,
         experience_level: experienceLevel,
         num_variants: numVariants,
       });
+      // Backend now returns {sessions, balance}
+      const result = Array.isArray(raw) ? raw : (raw.sessions ?? []);
+      if (!Array.isArray(raw) && raw.balance) balance = raw.balance;
       customDayExercises = result.map((day, di) => ({
         ...day,
         exercises: day.exercises.map((ex, ei) => ({
@@ -375,11 +473,13 @@
 
   onMount(async () => {
     try {
-      const [raw, profile] = await Promise.all([
+      const [raw, profile, presetsRaw] = await Promise.all([
         api.programs.getSplits(),
         api.profile.get().catch(() => null),
+        api.programs.getPresets().catch(() => []),
       ]);
       splitGroups = raw;
+      presets = presetsRaw;
       if (profile) {
         selectedDuration = profile.preferred_session_minutes ?? 60;
         experienceLevel = profile.experience_level ?? 'intermediate';
@@ -505,11 +605,19 @@
     } else {
       step = 5;
       previewData = [];
+      balance = null;
       editedDays = {};
       previewError = '';
       previewLoading = true;
       try {
-        previewData = await api.programs.previewMesocycle(buildPayload());
+        const res = await api.programs.previewMesocycle(buildPayload());
+        // Backend now returns {sessions, balance} — handle both old (array) and new (object) shapes
+        if (Array.isArray(res)) {
+          previewData = res;
+        } else {
+          previewData = res.sessions ?? [];
+          balance = res.balance ?? null;
+        }
       } catch (e) {
         previewError = e.message;
       }
@@ -524,6 +632,24 @@
       const payload = buildPayload();
       if (sessionMode === 'auto' && Object.keys(editedDays).length > 0) {
         payload.day_exercises = editedDays;
+      }
+      // If user edited sets/reps in auto mode, promote to custom_slots so the engine honors the changes
+      if (sessionMode === 'auto' && autoParamsEdited && previewData.length > 0) {
+        payload.session_mode = 'custom_slots';
+        payload.num_variants = previewData.length;
+        payload.custom_slot_sessions = previewData.map(day => ({
+          day_name:        day.day_name,
+          variant:         day.variant ?? 'A',
+          slots:                (day.exercises ?? []).map(e => e.sub_pattern || ''),
+          slot_exercises:       (day.exercises ?? []).map(e => e.exercise_id),
+          superset_groups:      (day.exercises ?? []).map(() => null),
+          set_types:            (day.exercises ?? []).map(() => 'straight'),
+          target_sets_list:     (day.exercises ?? []).map(e => e.target_sets),
+          target_reps_min_list: (day.exercises ?? []).map(e => e.target_reps_min),
+          target_reps_max_list: (day.exercises ?? []).map(e => e.target_reps_max),
+          target_rir_list:      (day.exercises ?? []).map(e => e.target_rir),
+        }));
+        delete payload.day_exercises;
       }
       await api.programs.createMesocycle(payload);
       goto('/program');
@@ -623,7 +749,35 @@
     </div>
 
   {:else if step === 1}
-    <!-- Step 1: Days per week -->
+    <!-- Step 1: Quick Start + Days per week -->
+    {#if presets.length > 0}
+      <div class="card" style="margin-bottom:12px;">
+        <div class="section-title mb-3" style="font-size:13px;">Quick Start</div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px; margin-bottom:14px;">
+          {#each presets as preset}
+            <button
+              on:click={() => applyPreset(preset)}
+              style="text-align:left; padding:12px; border-radius:8px; border:2px solid var(--border); background:var(--surface-2); cursor:pointer; transition:all 0.15s; display:flex; flex-direction:column; gap:4px;"
+              onmouseenter="this.style.borderColor='var(--primary)'; this.style.background='rgba(232,160,64,0.07)'"
+              onmouseleave="this.style.borderColor='var(--border)'; this.style.background='var(--surface-2)'"
+            >
+              <span style="font-size:18px; line-height:1;">{preset.icon}</span>
+              <span style="font-size:12px; font-weight:700; color:var(--text);">{preset.name}</span>
+              <span style="font-size:10px; color:var(--text-muted); line-height:1.4;">{preset.days_per_week}d · {preset.session_minutes}min · {preset.goal.replace(/_/g,' ')}</span>
+              {#if preset.route === 'install'}
+                <span style="font-size:9px; font-weight:700; color:var(--primary); background:rgba(232,160,64,0.15); border:1px solid rgba(232,160,64,0.3); border-radius:3px; padding:1px 5px; width:fit-content;">LIBRARY</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:0; color:var(--text-faint); font-size:11px;">
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+          <span>or choose manually</span>
+          <div style="flex:1; height:1px; background:var(--border);"></div>
+        </div>
+      </div>
+    {/if}
+
     <div class="card">
       <div class="section-title mb-4">How many days per week?</div>
       <div style="display:flex; gap:12px; flex-wrap:wrap;">
@@ -756,6 +910,23 @@
         {#if sessionMode === 'custom_slots'}
           <div style="font-size:11px; color:var(--text-faint); margin-top:8px;">
             Each session you build repeats on its scheduled day — no rotation variants needed. You define exactly what to train.
+          </div>
+          <!-- Split type selector for custom slots mode -->
+          <div style="margin-top:16px; padding:14px; background:var(--surface-2); border-radius:8px; border:1px solid var(--border);">
+            <div style="font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:10px;">Start your schedule from:</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              {#each CUSTOM_SPLIT_OPTIONS as opt}
+                <button
+                  on:click={() => loadCustomSplitTemplate(opt.key)}
+                  style="padding:6px 12px; border-radius:6px; border:1px solid {customStartingSplit === opt.key ? 'var(--primary)' : 'var(--border)'}; background:{customStartingSplit === opt.key ? 'rgba(232,160,64,0.15)' : 'transparent'}; color:{customStartingSplit === opt.key ? 'var(--primary)' : 'var(--text-muted)'}; font-size:11px; font-weight:600; cursor:pointer; transition:all 0.15s;"
+                >{opt.label}</button>
+              {/each}
+            </div>
+            {#if customStartingSplit && customStartingSplit !== 'empty'}
+              <div style="font-size:10px; color:var(--text-faint); margin-top:8px;">
+                Sessions pre-loaded — edit movement patterns in the next step to customize.
+              </div>
+            {/if}
           </div>
         {/if}
       </div>
@@ -901,6 +1072,46 @@
         <span style="color:var(--text-muted);">Session</span><span style="color:var(--text);">{selectedDuration} min · {experienceLevel} level</span>
         <span style="color:var(--text-muted);">Variation</span><span style="color:var(--text);">{numVariants === 1 ? 'A — same every session' : numVariants === 2 ? 'A/B rotation' : numVariants === 3 ? 'A/B/C rotation' : 'A/B/C/D rotation'}</span>
       </div>
+
+      <!-- ── Balance panel ───────────────────────────────────────────────── -->
+      {#if balance && !previewLoading}
+        {@const ratio = balance.push_pull_ratio ?? 1}
+        {@const ratioColor = (ratio >= 0.8 && ratio <= 1.25) ? '#2ecc71' : (ratio >= 0.65 && ratio <= 1.5) ? '#f39c12' : '#e74c3c'}
+        <div style="margin-bottom:16px; padding:12px 14px; border-radius:8px; border:1px solid {balance.is_balanced ? '#2ecc71' : '#f39c12'}; background:{balance.is_balanced ? 'rgba(46,204,113,0.06)' : 'rgba(243,156,18,0.06)'};">
+          <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+            <span style="font-size:12px; font-weight:700; color:{balance.is_balanced ? '#2ecc71' : '#f39c12'};">
+              {balance.is_balanced ? '✓ Program is balanced' : '⚠ Balance check'}
+            </span>
+          </div>
+          <!-- Ratio bars -->
+          <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:{balance.warnings.length ? '10px' : '0'};">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-size:10px; color:var(--text-muted); white-space:nowrap;">Push / Pull</span>
+              <div style="width:60px; height:6px; border-radius:3px; background:var(--border); overflow:hidden;">
+                <div style="width:{Math.min(100, (balance.push_pull_ratio / 1.5) * 100)}%; height:100%; background:{ratioColor}; border-radius:3px;"></div>
+              </div>
+              <span style="font-size:10px; color:{ratioColor}; font-weight:700;">{balance.push_pull_ratio.toFixed(2)}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              {@const ulRatio = balance.upper_lower_ratio ?? 1}
+              {@const ulColor = (ulRatio >= 0.6 && ulRatio <= 2.5) ? '#2ecc71' : '#f39c12'}
+              <span style="font-size:10px; color:var(--text-muted); white-space:nowrap;">Upper / Lower</span>
+              <div style="width:60px; height:6px; border-radius:3px; background:var(--border); overflow:hidden;">
+                <div style="width:{Math.min(100, (ulRatio / 4) * 100)}%; height:100%; background:{ulColor}; border-radius:3px;"></div>
+              </div>
+              <span style="font-size:10px; color:{ulColor}; font-weight:700;">{ulRatio.toFixed(2)}</span>
+            </div>
+          </div>
+          {#if balance.warnings.length}
+            <ul style="margin:0; padding-left:14px; font-size:11px; color:var(--text-muted); margin-bottom:6px;">
+              {#each balance.warnings as w}<li style="margin-bottom:2px;">{w}</li>{/each}
+            </ul>
+            <ul style="margin:0; padding-left:14px; font-size:11px; color:var(--text-faint);">
+              {#each balance.suggestions as s}<li style="margin-bottom:2px;">💡 {s}</li>{/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
 
       {#if sessionMode === 'custom_slots'}
         <!-- ── Custom mode: exercise list per day ─── -->
@@ -1057,9 +1268,27 @@
                   <div style="font-size:12px; color:var(--text-faint); padding:6px 0;">No exercises matched your equipment for this day.</div>
                 {:else}
                   {#each day.exercises as ex, exIdx}
-                    <div style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--border-faint);">
-                      <span style="flex:1; font-size:13px; color:var(--text);">{ex.exercise_name}</span>
-                      <span style="font-size:11px; color:var(--text-muted); white-space:nowrap;" title="@RIR = reps left in tank before failure">{ex.target_sets}×{ex.target_reps_min}–{ex.target_reps_max} @RIR{ex.target_rir}</span>
+                    <div style="display:flex; align-items:center; gap:6px; padding:7px 0; border-bottom:1px solid var(--border-faint); flex-wrap:wrap;">
+                      <span style="flex:1; min-width:120px; font-size:13px; color:var(--text);">{ex.exercise_name}</span>
+                      <div style="display:flex; align-items:center; gap:2px; font-size:12px; flex-shrink:0;">
+                        <input type="number" min="1" max="20" bind:value={ex.target_sets}
+                          on:input={() => { previewData = [...previewData]; autoParamsEdited = true; }}
+                          style="width:32px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--primary); font-size:12px; font-weight:700; padding:2px;"
+                          title="Sets"
+                        /><span style="color:var(--text-muted); padding:0 1px;">×</span><input type="number" min="1" max="50" bind:value={ex.target_reps_min}
+                          on:input={() => { previewData = [...previewData]; autoParamsEdited = true; }}
+                          style="width:32px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--primary); font-size:12px; font-weight:700; padding:2px;"
+                          title="Min reps"
+                        /><span style="color:var(--text-muted); padding:0 1px;">–</span><input type="number" min="1" max="50" bind:value={ex.target_reps_max}
+                          on:input={() => { previewData = [...previewData]; autoParamsEdited = true; }}
+                          style="width:32px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--primary); font-size:12px; font-weight:700; padding:2px;"
+                          title="Max reps"
+                        /><span style="color:var(--text-muted); font-size:10px; padding:0 2px;" title="Reps In Reserve">@RIR</span><input type="number" min="0" max="5" bind:value={ex.target_rir}
+                          on:input={() => { previewData = [...previewData]; autoParamsEdited = true; }}
+                          style="width:28px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--text-muted); font-size:11px; font-weight:600; padding:2px;"
+                          title="Reps In Reserve"
+                        />
+                      </div>
                       <button
                         on:click={() => openSwapModal(day.day_index, exIdx, ex.primary_muscle)}
                         title="Swap exercise"
