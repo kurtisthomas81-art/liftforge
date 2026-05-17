@@ -1077,6 +1077,8 @@
       {#if balance && !previewLoading}
         {@const ratio = balance.push_pull_ratio ?? 1}
         {@const ratioColor = (ratio >= 0.8 && ratio <= 1.25) ? '#2ecc71' : (ratio >= 0.65 && ratio <= 1.5) ? '#f39c12' : '#e74c3c'}
+        {@const ulRatio = balance.upper_lower_ratio ?? 1}
+        {@const ulColor = (ulRatio >= 0.6 && ulRatio <= 2.5) ? '#2ecc71' : '#f39c12'}
         <div style="margin-bottom:16px; padding:12px 14px; border-radius:8px; border:1px solid {balance.is_balanced ? '#2ecc71' : '#f39c12'}; background:{balance.is_balanced ? 'rgba(46,204,113,0.06)' : 'rgba(243,156,18,0.06)'};">
           <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
             <span style="font-size:12px; font-weight:700; color:{balance.is_balanced ? '#2ecc71' : '#f39c12'};">
@@ -1093,8 +1095,6 @@
               <span style="font-size:10px; color:{ratioColor}; font-weight:700;">{balance.push_pull_ratio.toFixed(2)}</span>
             </div>
             <div style="display:flex; align-items:center; gap:6px;">
-              {@const ulRatio = balance.upper_lower_ratio ?? 1}
-              {@const ulColor = (ulRatio >= 0.6 && ulRatio <= 2.5) ? '#2ecc71' : '#f39c12'}
               <span style="font-size:10px; color:var(--text-muted); white-space:nowrap;">Upper / Lower</span>
               <div style="width:60px; height:6px; border-radius:3px; background:var(--border); overflow:hidden;">
                 <div style="width:{Math.min(100, (ulRatio / 4) * 100)}%; height:100%; background:{ulColor}; border-radius:3px;"></div>
