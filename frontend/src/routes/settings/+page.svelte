@@ -297,6 +297,16 @@
 
 <div class="page-title">Account <em>Settings</em></div>
 
+<!-- Setup Guide quick-action -->
+<a href="/setup" class="setup-guide-btn">
+  <span class="setup-guide-icon">⚑</span>
+  <div class="setup-guide-text">
+    <div class="setup-guide-title">Setup Guide</div>
+    <div class="setup-guide-sub">Walk through goal, equipment, and profile again</div>
+  </div>
+  <span class="setup-guide-arrow">→</span>
+</a>
+
 <!-- Profile card -->
 <div class="profile-card">
   <div class="avatar">{avatarInitial}</div>
@@ -839,4 +849,18 @@
     border-radius:var(--radius); font-size:12px; color:var(--muted); cursor:pointer; transition:all 0.15s;
   }
   .pi-db-chip.active { border-color:var(--accent); color:var(--accent); background:var(--accent-bg); font-weight:600; }
+
+  .setup-guide-btn {
+    display:flex; align-items:center; gap:12px;
+    background:var(--surf); border:1px solid var(--bdr);
+    border-radius:var(--radius-lg); padding:12px 14px;
+    text-decoration:none; margin-bottom:16px;
+    transition:border-color 0.15s;
+  }
+  .setup-guide-btn:hover { border-color:var(--muted); }
+  .setup-guide-icon { font-size:18px; color:var(--accent); flex-shrink:0; }
+  .setup-guide-text { flex:1; min-width:0; }
+  .setup-guide-title { font-size:14px; font-weight:600; color:var(--text); }
+  .setup-guide-sub { font-size:12px; color:var(--muted); margin-top:2px; }
+  .setup-guide-arrow { font-size:16px; color:var(--muted); flex-shrink:0; }
 </style>

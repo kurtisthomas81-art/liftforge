@@ -1,9 +1,10 @@
 <script>
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import '../app.css';
-  import { activeSession, refreshActiveSession, refreshProfile, getElapsed, importQueueCount, refreshImportQueueCount } from '$lib/stores.js';
+  import { activeSession, userProfile, refreshActiveSession, refreshProfile, getElapsed, importQueueCount, refreshImportQueueCount } from '$lib/stores.js';
   import HexMark from '$lib/HexMark.svelte';
   import Toast from '$lib/Toast.svelte';
 
@@ -19,6 +20,16 @@
 
   onMount(async () => {
     await Promise.all([refreshActiveSession(), refreshProfile(), refreshImportQueueCount()]);
+
+    // First-run redirect: once per browser session, send new users to /setup
+    if (window.location.pathname !== '/setup' && !sessionStorage.getItem('_lf_setup_checked')) {
+      sessionStorage.setItem('_lf_setup_checked', '1');
+      const _p = get(userProfile);
+      if (_p && _p.display_name === 'Lifter' && !localStorage.getItem('lf_setup_done')) {
+        goto('/setup');
+        return () => {};
+      }
+    }
 
     intervalId = setInterval(() => {
       if ($activeSession) {
