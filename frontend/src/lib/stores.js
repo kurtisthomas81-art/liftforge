@@ -43,6 +43,16 @@ export const sessionPlan = writable(null);
 // Autoregulation hints — set by planned/[id] before navigating to /log
 export const arHints = writable({});
 
+// Toast notifications
+export const toasts = writable([]);
+
+let _toastId = 0;
+export function showToast(message, type = 'success', duration = 2500) {
+  const id = ++_toastId;
+  toasts.update(t => [...t, { id, message, type }]);
+  setTimeout(() => toasts.update(t => t.filter(x => x.id !== id)), duration);
+}
+
 // Elapsed time for active session
 export function getElapsed(startedAt) {
   if (!startedAt) return '0:00';

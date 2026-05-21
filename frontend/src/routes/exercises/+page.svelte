@@ -193,6 +193,13 @@
 {:else}
   <div class="ex-count">{filtered.length} exercise{filtered.length !== 1 ? 's' : ''}</div>
 
+  {#if filtered.length === 0 && (search || muscleFilter || patternFilter)}
+    <div class="ex-empty-state">
+      <div class="ex-empty-text">No exercises match those filters.</div>
+      <button class="ex-clear-btn" on:click={() => { search = ''; muscleFilter = ''; patternFilter = ''; }}>Clear filters</button>
+    </div>
+  {/if}
+
   <div class="ex-list">
     {#each filtered as ex}
       <div class="ex-row" class:is-expanded={expandedId === ex.id}>
@@ -373,6 +380,15 @@
   .page-title em { font-style:italic; color:var(--accent); }
 
   .ex-count { font-size:11px; color:var(--muted); margin-bottom:10px; }
+  .ex-empty-state { text-align:center; padding:32px 16px; }
+  .ex-empty-text { font-size:0.85rem; color:var(--muted); margin-bottom:12px; }
+  .ex-clear-btn {
+    background:var(--surf); border:1px solid var(--bdr);
+    border-radius:var(--radius); padding:8px 18px;
+    font-size:0.82rem; color:var(--muted); cursor:pointer;
+    transition:border-color 0.15s, color 0.15s;
+  }
+  .ex-clear-btn:hover { border-color:var(--accent); color:var(--accent); }
 
   .ex-list { display:flex; flex-direction:column; }
   .ex-row {

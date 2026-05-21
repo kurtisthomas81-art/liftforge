@@ -3,8 +3,9 @@
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
   import { get } from 'svelte/store';
-  import { activeSession, refreshActiveSession, getElapsed, sessionPlan, arHints } from '$lib/stores.js';
+  import { activeSession, refreshActiveSession, getElapsed, sessionPlan, arHints, showToast } from '$lib/stores.js';
   import { autoSessionName, formatDate } from '$lib/utils.js';
+  import Term from '$lib/Term.svelte';
 
   let session = null;
   let exercises = [];
@@ -141,6 +142,19 @@
     } catch {}
   }
 
+  // ── Rest duration by movement pattern ──────────────────────────────────────
+  const HEAVY_PATTERNS = new Set(['hip_dominant','knee_dominant']);
+  const MEDIUM_PATTERNS = new Set(['horizontal_push','vertical_push','horizontal_pull','vertical_pull','overhead_press']);
+
+  function restSecondsForExercise(exerciseId) {
+    const group = exercises.find(e => e.exercise_id === exerciseId);
+    const sub = group?.sub_pattern || '';
+    if (HEAVY_PATTERNS.has(sub)) return 180;
+    if (MEDIUM_PATTERNS.has(sub)) return 120;
+    if (sub === 'core' || sub === 'isolation') return 60;
+    return defaultRestSeconds;
+  }
+
   // ── Rest Timer ──────────────────────────────────────────────────────────────
   function playChime() {
     try {
@@ -202,7 +216,7 @@
   $: restColor = restRemaining <= 15 ? 'var(--accent)' : 'var(--success)';
 
   // ── Set "done" toggle ───────────────────────────────────────────────────────
-  function toggleDone(setId, exerciseName, weight, reps, restSeconds = null) {
+  function toggleDone(setId, exerciseName, weight, reps, restSeconds = null, exerciseId = null) {
     if (doneIds.has(setId)) {
       doneIds.delete(setId);
       doneIds = new Set(doneIds);
@@ -211,7 +225,8 @@
     } else {
       doneIds.add(setId);
       doneIds = new Set(doneIds);
-      api.sessions.updateSet(session.id, setId, { is_done: true }).catch(() => {});
+      api.sessions.updateSet(session.id, setId, { is_done: true }).catch(() => showToast("Couldn't save — check connection", 'error'));
+      showToast('✓ Set logged', 'success', 1500);
       if (!timerStartedAt) {
         timerStartedAt = new Date().toISOString().slice(0, -1);
         sessionStorage.setItem(`lf_timer_${session.id}`, timerStartedAt);
@@ -220,7 +235,8 @@
         intervalId = setInterval(() => { elapsed = getElapsed(timerStartedAt); }, 1000);
       }
       if (weight && reps) {
-        startRestTimer(exerciseName, restSeconds ?? defaultRestSeconds);
+        const derivedRest = restSeconds ?? (exerciseId ? restSecondsForExercise(exerciseId) : defaultRestSeconds);
+        startRestTimer(exerciseName, derivedRest);
         rpeSetId = setId;
       }
     }
@@ -279,6 +295,7 @@
     finishedSessionId = sid;
     sessionRpe = null;
     showRpeModal = true;
+    showToast('Session saved!', 'success');
   }
 
   async function submitRpe() {
@@ -395,6 +412,26 @@
   }
 
   // ── Set management ─────────────────────────────────────────────────────────
+  async function copyLastSet(exerciseId, exerciseName) {
+    const prev = prevSessions[exerciseId] || await api.history.lastSession(exerciseId).catch(() => null);
+    if (!prev) { addSet(exerciseId, exerciseName); return; }
+    const ws = prev.sets?.filter(s => s.set_type !== 'warmup' && s.reps > 0);
+    const ref = ws?.[ws.length - 1];
+    if (!ref) { addSet(exerciseId, exerciseName); return; }
+    const group = exercises.find(e => e.exercise_id === exerciseId);
+    const nextNum = (group?.sets?.[group.sets.length - 1]?.set_number ?? 0) + 1;
+    await api.sessions.addSet(session.id, {
+      exercise_id: exerciseId,
+      set_number: nextNum,
+      weight: ref.weight ?? null,
+      reps: ref.reps ?? 0,
+      target_reps: ref.reps ?? null,
+      rir: null,
+      set_type: 'straight',
+    });
+    await loadSession();
+  }
+
   async function addSet(exerciseId, exerciseName) {
     if (!session) return;
     const group = exercises.find(e => e.exercise_id === exerciseId);
@@ -427,7 +464,12 @@
     const parsed = field === 'reps' || field === 'rir' || field === 'set_number'
       ? (value === '' ? null : parseInt(value))
       : (value === '' ? null : parseFloat(value));
-    await api.sessions.updateSet(session.id, setId, { [field]: parsed });
+    try {
+      await api.sessions.updateSet(session.id, setId, { [field]: parsed });
+    } catch {
+      showToast("Couldn't save set — check connection", 'error');
+      return;
+    }
     for (const group of exercises) {
       const s = group.sets.find(s => s.id === setId);
       if (s) { s[field] = parsed; break; }
@@ -524,6 +566,7 @@
       await api.sessions.removeExercise(session.id, exerciseId);
       exercises = exercises.filter(e => e.exercise_id !== exerciseId);
       removeConfirmExId = null;
+      showToast('Exercise removed', 'success');
     } finally {
       removing = false;
     }
@@ -759,7 +802,11 @@
                 <div class="ex-hdr-left">
                   <div class="ex-name">{group.exercise_name}</div>
                   {#if overloadSuggestions[group.exercise_id]}
-                    <div class="overload-hint" class:overload-ar={overloadSuggestions[group.exercise_id].startsWith('AR:')}>{overloadSuggestions[group.exercise_id]}</div>
+                    {@const _hint = overloadSuggestions[group.exercise_id]}
+                    {@const _isAR = _hint.startsWith('AR:')}
+                    <div class="overload-hint" class:overload-ar={_isAR}>
+                      {#if _isAR}<Term t="ar" />: {_hint.slice(4)}{:else}{_hint}{/if}
+                    </div>
                   {/if}
                 </div>
                 <div class="ex-actions">
@@ -798,7 +845,7 @@
                 <div class="sets-cols-hdr">
                   <span>#</span>
                   <span style="flex:1">Weight × Reps</span>
-                  <span style="width:44px;text-align:center" title="Rate of Perceived Exertion — how hard the set felt (6 = easy, 10 = all-out)">RPE</span>
+                  <span style="width:44px;text-align:center"><Term t="rpe" /></span>
                   <span style="width:28px"></span>
                 </div>
                 {#each group.sets as s (s.id)}
@@ -844,7 +891,7 @@
                       <!-- svelte-ignore a11y-click-events-have-key-events -->
                       <!-- svelte-ignore a11y-no-static-element-interactions -->
                       <div class="set-check" class:checked={isDone}
-                        on:click={() => toggleDone(s.id, ssLabel, s.weight, s.reps, s.rest_seconds)}>
+                        on:click={() => toggleDone(s.id, ssLabel, s.weight, s.reps, s.rest_seconds, group.exercise_id)}>
                         {#if isDone}<span class="check-mark">✓</span>{/if}
                       </div>
                       <button class="del-btn" on:click={() => deleteSet(s.id)}>✕</button>
@@ -862,7 +909,12 @@
                     </div>
                   {/if}
                 {/each}
-                <button class="add-set-btn" on:click={() => addSet(group.exercise_id, group.exercise_name)}>+ Add Set</button>
+                <div class="add-set-row">
+                  <button class="add-set-btn" on:click={() => addSet(group.exercise_id, group.exercise_name)}>+ Add Set</button>
+                  {#if prevSessions[group.exercise_id]?.sets?.some(s => s.reps > 0)}
+                    <button class="copy-prev-btn" title="Copy last session's weight & reps" on:click={() => copyLastSet(group.exercise_id, group.exercise_name)}>↙ Copy</button>
+                  {/if}
+                </div>
               </div>
             </div>
           {/each}
@@ -875,7 +927,11 @@
             <div class="ex-hdr-left">
               <div class="ex-name">{group.exercise_name}</div>
               {#if overloadSuggestions[group.exercise_id]}
-                <div class="overload-hint" class:overload-ar={overloadSuggestions[group.exercise_id].startsWith('AR:')}>{overloadSuggestions[group.exercise_id]}</div>
+                {@const _hint = overloadSuggestions[group.exercise_id]}
+                {@const _isAR = _hint.startsWith('AR:')}
+                <div class="overload-hint" class:overload-ar={_isAR}>
+                  {#if _isAR}<Term t="ar" />: {_hint.slice(4)}{:else}{_hint}{/if}
+                </div>
               {/if}
             </div>
             <div class="ex-actions">
@@ -974,7 +1030,7 @@
                   <!-- svelte-ignore a11y-click-events-have-key-events -->
                   <!-- svelte-ignore a11y-no-static-element-interactions -->
                   <div class="set-check" class:checked={isDone}
-                    on:click={() => toggleDone(s.id, group.exercise_name, s.weight, s.reps, s.rest_seconds)}>
+                    on:click={() => toggleDone(s.id, group.exercise_name, s.weight, s.reps, s.rest_seconds, group.exercise_id)}>
                     {#if isDone}<span class="check-mark">✓</span>{/if}
                   </div>
                   <button class="del-btn" on:click={() => deleteSet(s.id)}>✕</button>
@@ -995,7 +1051,12 @@
               {/if}
             {/each}
 
-            <button class="add-set-btn" on:click={() => addSet(group.exercise_id, group.exercise_name)}>+ Add Set</button>
+            <div class="add-set-row">
+              <button class="add-set-btn" on:click={() => addSet(group.exercise_id, group.exercise_name)}>+ Add Set</button>
+              {#if prevSessions[group.exercise_id]?.sets?.some(s => s.reps > 0)}
+                <button class="copy-prev-btn" title="Copy last session's weight & reps" on:click={() => copyLastSet(group.exercise_id, group.exercise_name)}>↙ Copy</button>
+              {/if}
+            </div>
           </div>
         </div>
       {/if}
@@ -1591,14 +1652,24 @@
   }
 
   /* Add set + add exercise */
+  .add-set-row {
+    display:flex; align-items:center;
+    border-top:1px dashed var(--faint);
+  }
   .add-set-btn {
-    display:block; width:100%; padding:9px 14px;
+    flex:1; padding:9px 14px;
     background:transparent; border:none; cursor:pointer;
     color:var(--muted); font-size:11px; text-align:left;
-    border-top:1px dashed var(--faint);
     transition:color 0.15s;
   }
   .add-set-btn:hover { color:var(--accent); }
+  .copy-prev-btn {
+    padding:9px 12px; background:transparent; border:none;
+    border-left:1px dashed var(--faint);
+    color:var(--muted); font-size:11px; cursor:pointer;
+    transition:color 0.15s; white-space:nowrap;
+  }
+  .copy-prev-btn:hover { color:var(--accent); }
   .no-exercises {
     text-align:center; padding:32px 0;
     color:var(--muted);

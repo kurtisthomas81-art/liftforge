@@ -170,6 +170,7 @@
   }
 
   $: displayPlates = result?.isExact ? result.exact : (result?.below?.plates || []);
+  $: allPlatesZero = Object.values(plateCounts).every(v => v === 0);
 
   // ── Cable machine state ──────────────────────────────────────────────────────
   let stackPlateWeight = 10;
@@ -274,6 +275,9 @@
       </div>
 
       <!-- Plate inventory -->
+      {#if allPlatesZero}
+        <div class="plate-setup-banner">Set your plate counts below for accurate loading suggestions.</div>
+      {/if}
       <div class="section-title">Your Plates ({unit}) — tap to set count</div>
       <div class="plate-grid">
         {#each plateOptions as plate}
@@ -597,6 +601,16 @@
     box-sizing: border-box;
   }
 
+  .plate-setup-banner {
+    font-size: 0.78rem;
+    color: var(--warn, #e8a036);
+    background: rgba(232,160,54,0.08);
+    border: 1px solid rgba(232,160,54,0.25);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+
   .section-title {
     font-size: 0.75rem;
     color: var(--text-muted);
@@ -640,13 +654,13 @@
   }
 
   .step-btn {
-    width: 22px;
-    height: 22px;
+    min-width: 44px;
+    min-height: 44px;
     border-radius: 50%;
     border: 1px solid var(--border-2);
     background: var(--surface-2);
     color: var(--text);
-    font-size: 14px;
+    font-size: 18px;
     line-height: 1;
     cursor: pointer;
     display: flex;
@@ -659,9 +673,9 @@
   .step-btn:active { background: var(--border); }
 
   .step-btn.lg {
-    width: 30px;
-    height: 30px;
-    font-size: 16px;
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 18px;
   }
 
   .step-val {

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
+  import Term from '$lib/Term.svelte';
 
   let loading = true;
   let activeMeso = null;
@@ -121,16 +122,16 @@
     const { sets } = entry;
     const { mev, mav_low, mav_high, mrv } = entry.landmarks;
     if (sets === 0)
-      return { label: 'Not started', color: 'var(--muted)',   rec: `Target this week: ${mav_low}–${mav_high} sets` };
+      return { label: 'Not started',       color: 'var(--muted)',   rec: `Target this week: ${mav_low}–${mav_high} sets` };
     if (mev && sets < mev)
-      return { label: 'Under minimum', color: 'var(--muted)', rec: `Add ${mev - sets} more set${mev - sets !== 1 ? 's' : ''} to reach the floor` };
+      return { label: 'Not enough volume', color: 'var(--muted)',   rec: `Add ${mev - sets} more set${mev - sets !== 1 ? 's' : ''} to reach the minimum` };
     if (sets < mav_low)
-      return { label: 'Building up',   color: 'var(--muted)', rec: `${mav_low - sets} more set${mav_low - sets !== 1 ? 's' : ''} to enter the target zone` };
+      return { label: 'Building up',       color: 'var(--muted)',   rec: `${mav_low - sets} more set${mav_low - sets !== 1 ? 's' : ''} to enter the target zone` };
     if (sets <= mav_high)
-      return { label: 'In the zone',   color: 'var(--success)', rec: "You're in the optimal range" };
+      return { label: 'In the zone',       color: 'var(--success)', rec: "You're in the optimal range" };
     if (sets < mrv)
-      return { label: 'Getting close', color: 'var(--warn)',   rec: `${mrv - sets} set${mrv - sets !== 1 ? 's' : ''} from your weekly limit` };
-    return   { label: 'At limit',      color: 'var(--danger)', rec: 'At your ceiling — back off next session' };
+      return { label: 'Getting close',     color: 'var(--warn)',    rec: `${mrv - sets} set${mrv - sets !== 1 ? 's' : ''} from your weekly limit` };
+    return   { label: 'At your limit',     color: 'var(--danger)',  rec: 'Back off — at your recovery ceiling' };
   }
 
   function dayCatColor(name) {
@@ -255,7 +256,7 @@
         <div class="prog-bar-fill" style="width:{weekProgress}%"></div>
       </div>
       {#if activeMeso.current_week_is_deload}
-        <div class="deload-badge">Recovery Week (Deload)</div>
+        <div class="deload-badge">Recovery Week (<Term t="deload" />)</div>
       {/if}
     </div>
 
@@ -309,7 +310,7 @@
     {#if fatigueReport?.deload_recommended}
       <div class="fatigue-warn" style="border-color:{fatigueReport.fatigue_score>=8?'rgba(232,54,93,0.4)':'rgba(232,160,54,0.3)'}">
         <div class="fatigue-warn-title" style="color:{fatigueReport.fatigue_score>=8?'var(--danger)':'var(--warn)'}">
-          {fatigueReport.fatigue_score>=8?'Critical fatigue — take a recovery week (deload)':'High fatigue — consider a recovery week (deload)'}
+          {fatigueReport.fatigue_score>=8?'Critical fatigue — take a recovery week':'High fatigue — consider a recovery week'} (<Term t="deload" />)
         </div>
       </div>
     {/if}
@@ -357,7 +358,7 @@
           <div class="section-title" style="margin-bottom:0">Weekly Volume</div>
           <div class="vol-legend">
             <span class="vol-leg-band"></span>
-            <span class="vol-leg-text">Target zone</span>
+            <span class="vol-leg-text">Target zone (<Term t="mav" />)</span>
             <span class="vol-leg-sep">·</span>
             <span class="vol-leg-dot" style="background:var(--success)"></span>
             <span class="vol-leg-text">On track</span>

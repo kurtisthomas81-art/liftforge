@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
+  import Term from '$lib/Term.svelte';
 
   let muscles = [];
   let fatigue = null;
@@ -100,7 +101,7 @@
         </div>
 
         {#if fatigue.deload_recommended}
-          <div class="deload-pill">Deload recommended — take a lighter week</div>
+          <div class="deload-pill"><Term t="deload" /> recommended — take a lighter week</div>
         {/if}
 
         {#if fatigue.reasons.length}
@@ -119,7 +120,9 @@
           <div class="dot" style="background:{REC_COLOR[m.status]}"></div>
           <div class="rec-name">{cap(m.muscle)}</div>
           <div class="rec-since">{fmtDays(m.days_since_trained)}</div>
-          <div class="rec-rir">{m.avg_rir !== null ? `RIR ${m.avg_rir}` : '—'}</div>
+          <div class="rec-rir">
+            {#if m.avg_rir !== null}<Term t="rir" /> {m.avg_rir}{:else}—{/if}
+          </div>
           <div class="rec-status" style="color:{REC_COLOR[m.status]}">{REC_LABEL[m.status]}</div>
         </div>
       {/each}

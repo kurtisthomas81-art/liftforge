@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { api } from '$lib/api.js';
   import MuscleVolumeSlider from '$lib/MuscleVolumeSlider.svelte';
+  import Term from '$lib/Term.svelte';
 
   const FRIENDLY = {
     chest: 'Chest', shoulders: 'Shoulders', triceps: 'Triceps',
@@ -74,10 +75,10 @@
   };
 
   const VOL_LABEL = {
-    below_mev: 'Under MEV',
+    below_mev: 'Not enough volume',
     in_mav:    'On track',
     above_mav: 'Above sweet spot',
-    at_mrv:    'At MRV',
+    at_mrv:    'At your limit',
     unknown:   'Not tracked',
   };
 
@@ -484,7 +485,7 @@
       <div class="rm-stats">
         <div class="rm-stat">
           <div class="rm-val">{bestOneRM}<span class="rm-unit"> lb</span></div>
-          <div class="rm-lbl">Best est. 1RM</div>
+          <div class="rm-lbl">Best <Term t="e1rm" /></div>
         </div>
         <div class="rm-stat">
           <div class="rm-val">{latestOneRM}<span class="rm-unit"> lb</span></div>

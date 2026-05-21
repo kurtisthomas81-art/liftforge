@@ -9,7 +9,7 @@ from models import (
 )
 from sqlmodel import Session, select
 from routers import exercises, sessions, history, profile, ollama
-from routers import programs, landmarks, volume, prs, templates, measurements, export, recovery, liftsaur_sync, goals, injuries, analytics, import_queue, google_fit
+from routers import programs, landmarks, volume, prs, templates, measurements, export, recovery, liftsaur_sync, goals, injuries, analytics, import_queue, google_fit, insights
 
 app = FastAPI(title="LiftForge API", version="2.0.0")
 
@@ -40,6 +40,7 @@ app.include_router(injuries.router)
 app.include_router(analytics.router)
 app.include_router(import_queue.router)
 app.include_router(google_fit.router)
+app.include_router(insights.router)
 
 
 def _backfill_exercise_aliases(session: Session) -> None:

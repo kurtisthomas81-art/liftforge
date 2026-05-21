@@ -193,10 +193,28 @@
         <button class="upcoming-go-btn" on:click={() => goto('/program')}>Go →</button>
       </div>
     {/each}
+  {:else if sessionsThisMonth === 0}
+    <div class="cal-empty-state">
+      <div class="cal-empty-text">Log your first workout and it'll appear here.</div>
+      <a href="/log" class="cal-empty-cta">Start Workout →</a>
+    </div>
   {/if}
 {/if}
 
 <style>
+  .cal-empty-state {
+    text-align: center; padding: 32px 20px;
+    background: var(--surf); border: 1px solid var(--bdr);
+    border-radius: var(--radius-lg); margin-top: 16px;
+  }
+  .cal-empty-text { font-size: 0.85rem; color: var(--muted); margin-bottom: 14px; }
+  .cal-empty-cta {
+    display: inline-block; background: var(--accent); color: #fff;
+    padding: 10px 22px; border-radius: var(--radius); font-size: 0.85rem;
+    font-weight: 600; text-decoration: none; transition: background 0.15s;
+  }
+  .cal-empty-cta:hover { background: #f05070; }
+
   .cal-header { margin-bottom: 12px; }
   .cal-title { font-family: var(--serif); font-size: 26px; color: var(--text); line-height: 1; margin-bottom: 4px; }
   .cal-title em { font-style: italic; color: var(--accent); }

@@ -4,6 +4,7 @@
   import { api } from '$lib/api.js';
   import { activeSession, refreshActiveSession, userProfile, getElapsed, sessionPlan } from '$lib/stores.js';
   import { autoSessionName } from '$lib/utils.js';
+  import InsightCard from '$lib/InsightCard.svelte';
 
   let recentSessions = [];
   let loading = true;
@@ -13,6 +14,7 @@
   let fatigueReport = null;
   let nextPlanned = null;
   let weekDays = [];
+  let insights = [];
 
   // Weekly check-in
   let checkinDue = false;
@@ -72,6 +74,10 @@
         const cs = await api.recovery.checkinStatus();
         checkinDue = cs.due;
       } catch { /* graceful */ }
+
+      try {
+        insights = await api.insights.get();
+      } catch { /* graceful */ }
     } catch (e) {
       console.error(e);
     }
@@ -83,6 +89,33 @@
   $: weekSessions = weekDays.filter(d => d.trained).length;
   $: weekSets = weekDays.reduce((a, d) => a + d.sets, 0);
   $: maxWeekSets = Math.max(...weekDays.map(d => d.sets), 1);
+
+  function calcStreakWeeks(sessions) {
+    if (!sessions?.length) return 0;
+    const weekKey = d => {
+      const dt = new Date(d);
+      const offset = (dt.getDay() + 6) % 7;
+      const mon = new Date(dt);
+      mon.setDate(dt.getDate() - offset);
+      return mon.toISOString().slice(0, 10);
+    };
+    const weeksWithSessions = new Set(sessions.filter(s => s.completed_at).map(s => weekKey(s.started_at)));
+    let streak = 0;
+    const now = new Date();
+    for (let w = 0; w <= 52; w++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - w * 7);
+      const k = weekKey(d.toISOString());
+      if (weeksWithSessions.has(k)) {
+        streak++;
+      } else if (w > 0) {
+        break;
+      }
+    }
+    return streak;
+  }
+
+  $: streakWeeks = calcStreakWeeks(recentSessions);
 
   $: fatigueScore = fatigueReport?.fatigue_score ?? 0;
   $: fatigueColor = fatigueScore >= 8 ? 'var(--danger)' : fatigueScore >= 5 ? 'var(--warn)' : 'var(--success)';
@@ -157,6 +190,7 @@
     </div>
     <div class="hdr-right">
       <div class="fatigue-label">Fatigue</div>
+      <div class="fatigue-sublabel">Training load /10</div>
       <svg width="58" height="58" class="fatigue-ring">
         <circle cx="29" cy="29" r="22" fill="none" stroke="var(--faint)" stroke-width="4"/>
         <circle cx="29" cy="29" r="22" fill="none"
@@ -233,6 +267,22 @@
       <div class="stat-lbl">Fatigue /10</div>
     </div>
   </div>
+  {#if streakWeeks > 0}
+    <div class="streak-banner">
+      <span class="streak-fire">🔥</span>
+      <span class="streak-num">{streakWeeks}</span>
+      <span class="streak-txt">{streakWeeks === 1 ? 'week streak — keep going!' : `week streak — stay consistent!`}</span>
+    </div>
+  {/if}
+
+  <!-- Insight cards -->
+  {#if insights.length > 0}
+    <div class="insights-section">
+      {#each insights as card (card.type + card.headline)}
+        <InsightCard {card} />
+      {/each}
+    </div>
+  {/if}
 
   <!-- Week chart -->
   <div class="week-card">
@@ -371,6 +421,12 @@
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.08em;
+    margin-bottom: 1px;
+  }
+  .fatigue-sublabel {
+    font-size: 8px;
+    color: var(--faint);
+    text-align: center;
     margin-bottom: 3px;
   }
   .date-line {
@@ -384,8 +440,19 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
+    margin-bottom: 8px;
+  }
+  .streak-banner {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(232,160,54,0.08);
+    border: 1px solid rgba(232,160,54,0.25);
+    border-radius: var(--radius-lg);
+    padding: 10px 14px;
     margin-bottom: 12px;
   }
+  .streak-fire { font-size: 16px; }
+  .streak-num { font-family: var(--serif); font-size: 20px; color: var(--warn); line-height: 1; }
+  .streak-txt { font-size: 12px; color: var(--muted); }
   .stat-card {
     background: var(--surf);
     border: 1px solid var(--bdr);
@@ -404,6 +471,9 @@
     color: var(--muted);
     margin-top: 3px;
   }
+
+  /* Insight cards */
+  .insights-section { margin-bottom: 4px; }
 
   /* Week chart */
   .week-card {

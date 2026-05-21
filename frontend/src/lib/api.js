@@ -182,6 +182,10 @@ export const api = {
     volumeSweetSpot: () => request('GET', '/analytics/volume-sweet-spot'),
   },
 
+  insights: {
+    get: () => request('GET', '/insights'),
+  },
+
   importQueue: {
     list: () => request('GET', '/import-queue'),
     resolve: (id, payload) => request('POST', `/import-queue/${id}/resolve`, payload),

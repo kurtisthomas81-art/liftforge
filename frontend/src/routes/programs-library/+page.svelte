@@ -564,12 +564,12 @@
 
   .ex-btns { display: flex; gap: 0.2rem; flex-shrink: 0; }
   .icon-btn {
-    width: 26px; height: 26px;
+    min-width: 36px; min-height: 36px;
     border-radius: 5px;
     border: 1px solid var(--border);
     background: transparent;
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: 0.82rem;
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: border-color .15s, color .15s;

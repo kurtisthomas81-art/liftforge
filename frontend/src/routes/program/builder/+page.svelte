@@ -5,6 +5,7 @@
   import { api } from '$lib/api.js';
   import { dndzone } from 'svelte-dnd-action';
   import VolumeGauge from '$lib/VolumeGauge.svelte';
+  import Term from '$lib/Term.svelte';
 
   let step = 1;
   let loading = true;
@@ -450,17 +451,17 @@
   const ALL_MUSCLES = ['chest', 'back', 'quads', 'hamstrings', 'glutes', 'shoulders',
                        'biceps', 'triceps', 'calves', 'abs', 'lats', 'traps'];
   const GOALS = [
-    { key: 'general_fitness', label: 'General Fitness', desc: 'Athletic & strong — 6-12 reps, balanced volume' },
-    { key: 'hypertrophy',     label: 'Hypertrophy',     desc: 'Maximize muscle size — 8-12 reps, RIR 2' },
-    { key: 'strength',        label: 'Strength',        desc: 'Build raw strength — 3-6 reps, RIR 1' },
-    { key: 'recomp',          label: 'Recomp',          desc: 'Build muscle, lose fat — 10-15 reps, RIR 2-3' },
+    { key: 'general_fitness', label: 'General Fitness', desc: 'Athletic & functional — 6–12 reps, balanced volume across the week' },
+    { key: 'hypertrophy',     label: 'Hypertrophy',     desc: 'Maximize muscle size — 8–12 reps, stop 2 reps short of failure' },
+    { key: 'strength',        label: 'Strength',        desc: 'Build raw strength — 3–6 reps, push close to your limit' },
+    { key: 'recomp',          label: 'Recomp',          desc: 'Build muscle and reduce body fat — 10–15 reps, moderate effort' },
   ];
   const PERIODIZATIONS = [
     { key: 'standard',          label: 'Standard',           badge: null,            desc: 'Volume grows week to week. Rep ranges stay fixed.' },
     { key: 'double_progression',label: 'Double Progression', badge: null,            desc: 'Hit the top of your rep range, then add weight next session.' },
     { key: 'linear',            label: 'Linear',             badge: null,            desc: 'Reps start high, descend to low reps by final week.' },
     { key: 'wave_loading',      label: 'Wave Loading',       badge: 'Intermediate+', desc: 'Heavy / moderate / light weeks repeat in a 3-week wave.' },
-    { key: 'dup',               label: 'DUP',                badge: 'Intermediate+', desc: 'Rep zones rotate each session: hypertrophy / strength / volume.' },
+    { key: 'dup',               label: 'DUP',                badge: 'Intermediate+', desc: 'Daily Undulating Periodization — rep zones rotate each session: hypertrophy / strength / volume.' },
     { key: 'block',             label: 'Block',              badge: 'Advanced',      desc: 'Accumulation → Intensification → Peak phases.' },
   ];
 
@@ -956,8 +957,8 @@
               on:click={() => selectedGoal = goal.key}
               style="flex:1; min-width:100px; padding:14px 10px; border-radius:6px; border:2px solid {selectedGoal === goal.key ? 'var(--primary)' : 'var(--border)'}; background:{selectedGoal === goal.key ? 'rgba(232,160,64,0.1)' : 'var(--surface-2)'}; color:{selectedGoal === goal.key ? 'var(--primary)' : 'var(--text)'}; cursor:pointer; transition:all 0.15s; text-align:center;"
             >
-              <div style="font-weight:700; margin-bottom:4px;">{goal.label}</div>
-              <div style="font-size:11px; opacity:0.8;">{goal.desc}</div>
+              <div style="font-weight:700; margin-bottom:6px;">{goal.label}</div>
+              <div style="font-size:12px; opacity:0.9; line-height:1.4;">{goal.desc}</div>
             </button>
           {/each}
         </div>
@@ -1014,7 +1015,7 @@
             </button>
           {/each}
         </div>
-        <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">Week {selectedWeeks} will be a recovery (deload) week</div>
+        <div style="font-size:11px; color:var(--text-faint); margin-top:6px;">Week {selectedWeeks} will be a recovery (<Term t="deload" />) week</div>
       </div>
 
       <!-- Start date -->
@@ -1190,7 +1191,7 @@
                         /><span style="color:var(--text-muted); padding:0 1px;">–</span><input type="number" min="1" max="50" bind:value={ex.target_reps_max}
                           on:input={() => customDayExercises = [...customDayExercises]}
                           style="width:32px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--primary); font-size:12px; font-weight:700; padding:2px 2px;"
-                        /><span style="color:var(--text-muted); font-size:11px; padding:0 2px;" title="Reps In Reserve — reps left before failure">@RIR</span><input type="number" min="0" max="5" bind:value={ex.target_rir}
+                        /><span style="color:var(--text-muted); font-size:11px; padding:0 2px;">@<Term t="rir" /></span><input type="number" min="0" max="5" bind:value={ex.target_rir}
                           on:input={() => customDayExercises = [...customDayExercises]}
                           style="width:28px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--text-muted); font-size:11px; font-weight:600; padding:2px 2px;"
                         />
@@ -1283,10 +1284,9 @@
                           on:input={() => { previewData = [...previewData]; autoParamsEdited = true; }}
                           style="width:32px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--primary); font-size:12px; font-weight:700; padding:2px;"
                           title="Max reps"
-                        /><span style="color:var(--text-muted); font-size:10px; padding:0 2px;" title="Reps In Reserve">@RIR</span><input type="number" min="0" max="5" bind:value={ex.target_rir}
+                        /><span style="color:var(--text-muted); font-size:10px; padding:0 2px;">@<Term t="rir" /></span><input type="number" min="0" max="5" bind:value={ex.target_rir}
                           on:input={() => { previewData = [...previewData]; autoParamsEdited = true; }}
                           style="width:28px; text-align:center; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; color:var(--text-muted); font-size:11px; font-weight:600; padding:2px;"
-                          title="Reps In Reserve"
                         />
                       </div>
                       <button

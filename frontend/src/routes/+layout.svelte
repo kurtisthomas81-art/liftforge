@@ -5,6 +5,7 @@
   import '../app.css';
   import { activeSession, refreshActiveSession, refreshProfile, getElapsed, importQueueCount, refreshImportQueueCount } from '$lib/stores.js';
   import HexMark from '$lib/HexMark.svelte';
+  import Toast from '$lib/Toast.svelte';
 
   let elapsed = '0:00';
   let intervalId;
@@ -165,6 +166,8 @@
     {/if}
     <slot />
   </main>
+
+  <Toast />
 
   <!-- Bottom tab bar -->
   <nav class="bottom-nav">
