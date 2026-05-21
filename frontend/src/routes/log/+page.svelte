@@ -12,7 +12,6 @@
   let loading = true;
   let elapsed = '0:00';
   let intervalId;
-  let timerStartedAt = null;
   let editingName = false;
   let sessionName = '';
   let finishing = false;
@@ -87,12 +86,7 @@
 
     if (session) {
       await loadSession();
-      const saved = sessionStorage.getItem(`lf_timer_${session.id}`);
-      if (saved) {
-        timerStartedAt = saved;
-        elapsed = getElapsed(timerStartedAt);
-        intervalId = setInterval(() => { elapsed = getElapsed(timerStartedAt); }, 1000);
-      }
+      intervalId = setInterval(() => { elapsed = getElapsed(session.started_at); }, 1000);
     }
     loading = false;
   });
@@ -227,13 +221,6 @@
       doneIds = new Set(doneIds);
       api.sessions.updateSet(session.id, setId, { is_done: true }).catch(() => showToast("Couldn't save — check connection", 'error'));
       showToast('✓ Set logged', 'success', 1500);
-      if (!timerStartedAt) {
-        timerStartedAt = new Date().toISOString().slice(0, -1);
-        sessionStorage.setItem(`lf_timer_${session.id}`, timerStartedAt);
-        clearInterval(intervalId);
-        elapsed = getElapsed(timerStartedAt);
-        intervalId = setInterval(() => { elapsed = getElapsed(timerStartedAt); }, 1000);
-      }
       if (weight && reps) {
         const derivedRest = restSeconds ?? (exerciseId ? restSecondsForExercise(exerciseId) : defaultRestSeconds);
         startRestTimer(exerciseName, derivedRest);
@@ -249,8 +236,8 @@
     await refreshActiveSession();
     session = $activeSession;
     await loadSession();
-    timerStartedAt = null;
-    elapsed = '0:00';
+    clearInterval(intervalId);
+    intervalId = setInterval(() => { elapsed = getElapsed(session.started_at); }, 1000);
     pendingSessionCreate = false;
   }
 
@@ -271,8 +258,8 @@
     session = $activeSession;
     exercises = [];
     sessionName = session.name || '';
-    timerStartedAt = null;
-    elapsed = '0:00';
+    clearInterval(intervalId);
+    intervalId = setInterval(() => { elapsed = getElapsed(session.started_at); }, 1000);
     pendingSessionCreate = false;
   }
 
@@ -285,8 +272,6 @@
     try { const prResult = await api.prs.checkSession(sid); newPrs = prResult.new_prs || []; } catch {}
     await refreshActiveSession();
     dismissRestTimer();
-    sessionStorage.removeItem(`lf_timer_${sid}`);
-    timerStartedAt = null;
     clearInterval(intervalId);
     session = null;
     exercises = [];
