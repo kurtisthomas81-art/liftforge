@@ -59,7 +59,7 @@ def strength_ratio_history(session: Session = Depends(get_session)):
                 select(BodyMeasurement)
                 .where(
                     BodyMeasurement.user_id == USER_ID,
-                    BodyMeasurement.body_weight != None,
+                    BodyMeasurement.body_weight.isnot(None),
                     BodyMeasurement.date <= pr_date_str,
                 )
                 .order_by(BodyMeasurement.date.desc())
@@ -115,7 +115,7 @@ def volume_sweet_spot(session: Session = Depends(get_session)):
             window_sessions = session.exec(
                 select(WorkoutSession)
                 .where(
-                    WorkoutSession.completed_at != None,
+                    WorkoutSession.completed_at.isnot(None),
                     WorkoutSession.completed_at >= window_start,
                     WorkoutSession.completed_at <= anchor,
                 )

@@ -48,7 +48,7 @@ def grade_strength_level(session: Session) -> dict:
 
     bm = session.exec(
         select(BodyMeasurement)
-        .where(BodyMeasurement.user_id == USER_ID, BodyMeasurement.body_weight != None)
+        .where(BodyMeasurement.user_id == USER_ID, BodyMeasurement.body_weight.isnot(None))
         .order_by(BodyMeasurement.date.desc())
     ).first()
     body_weight = bm.body_weight if bm else None

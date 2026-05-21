@@ -5,16 +5,11 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 from database import get_session
 from models import Goal, Exercise, WorkoutSet
+from utils import epley_1rm
 
 router = APIRouter(prefix="/api/goals", tags=["goals"])
 
 USER_ID = 1
-
-
-def _epley_1rm(weight: float, reps: int) -> float:
-    if reps == 1:
-        return weight
-    return weight * (1 + reps / 30.0)
 
 
 def _serialize_goal(goal: Goal, exercise_name: str, current_value: float | None) -> dict:
@@ -67,7 +62,7 @@ def check_goals_for_session(session_id: int, db: Session) -> list[dict]:
             by_exercise[s.exercise_id] = {"e1rm": 0.0, "weight": 0.0, "reps": 0}
         vals = by_exercise[s.exercise_id]
         if s.weight and s.reps:
-            vals["e1rm"] = max(vals["e1rm"], _epley_1rm(s.weight, s.reps))
+            vals["e1rm"] = max(vals["e1rm"], epley_1rm(s.weight, s.reps))
             vals["weight"] = max(vals["weight"], s.weight)
         if s.reps:
             vals["reps"] = max(vals["reps"], s.reps)

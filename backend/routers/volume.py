@@ -1,10 +1,10 @@
-import json
 from datetime import date, timedelta, datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 from database import get_session
 from models import WorkoutSet, WorkoutSession, Exercise, MuscleVolumeLandmark, MesocycleWeek, PlannedSession, WeeklyCheckin, Mesocycle
+from utils import parse_muscle_list as _parse_muscles
 
 router = APIRouter(prefix="/api/volume", tags=["volume"])
 
@@ -28,13 +28,6 @@ def _get_landmarks(session: Session, goal: str = "hypertrophy") -> dict:
         landmarks = session.exec(stmt).all()
     return {lm.muscle: {"mev": lm.mev, "mav_low": lm.mav_low, "mav_high": lm.mav_high, "mrv": lm.mrv}
             for lm in landmarks}
-
-
-def _parse_muscles(raw: str) -> list[str]:
-    try:
-        return json.loads(raw)
-    except Exception:
-        return []
 
 
 def _volume_status(sets: int, lm: dict | None) -> str:
@@ -118,14 +111,14 @@ def volume_for_session(session_id: int, session: Session = Depends(get_session))
 
 @router.get("/week")
 def volume_for_week(
-    date: Optional[str] = Query(default=None, description="Any date in the desired Mon-Sun week (YYYY-MM-DD)"),
+    date_str: Optional[str] = Query(default=None, alias="date", description="Any date in the desired Mon-Sun week (YYYY-MM-DD)"),
     session: Session = Depends(get_session),
 ):
     """Sets per muscle for the Mon-Sun week containing the given date."""
-    if date:
-        target = __import__("datetime").date.fromisoformat(date)
+    if date_str:
+        target = date.fromisoformat(date_str)
     else:
-        target = __import__("datetime").date.today()
+        target = date.today()
 
     monday = target - timedelta(days=target.weekday())
     sunday = monday + timedelta(days=6)
@@ -241,7 +234,7 @@ def volume_alltime(
     session: Session = Depends(get_session),
 ):
     """Weekly sets per muscle for the last N weeks."""
-    today = __import__("datetime").date.today()
+    today = date.today()
     monday = today - timedelta(days=today.weekday())
     start = monday - timedelta(weeks=weeks - 1)
 
@@ -296,7 +289,7 @@ def fatigue_report(session: Session = Depends(get_session)):
     stmt = (
         select(WorkoutSession)
         .where(WorkoutSession.user_id == USER_ID)
-        .where(WorkoutSession.completed_at != None)
+        .where(WorkoutSession.completed_at.isnot(None))
         .order_by(WorkoutSession.started_at.desc())
         .limit(10)
     )
@@ -372,7 +365,7 @@ def fatigue_report(session: Session = Depends(get_session)):
         # Find a planned session in that week that was completed
         ps_stmt = select(PlannedSession).where(
             PlannedSession.mesocycle_week_id == last_deload_week.id,
-            PlannedSession.session_id != None,
+            PlannedSession.session_id.isnot(None),
         )
         deload_ps = session.exec(ps_stmt).first()
         if deload_ps and deload_ps.session_id:

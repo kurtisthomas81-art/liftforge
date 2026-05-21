@@ -92,11 +92,11 @@ def affected_exercises(session: Session = Depends(get_session)):
     for ex in all_exercises:
         try:
             pm = json.loads(ex.primary_muscles)
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             pm = []
         try:
             sm = json.loads(ex.secondary_muscles)
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             sm = []
         hit_parts: list[str] = []
         for m in pm + sm:

@@ -14,6 +14,7 @@ Improvements over v1:
 import json
 import math
 from typing import Optional
+from utils import parse_muscle_list as _parse_list
 
 
 # ── Time / rest constants ──────────────────────────────────────────────────────
@@ -179,15 +180,6 @@ def _block_phase(week_number: int, weeks_total: int) -> str:
 
 
 # ── Movement / fatigue helpers ─────────────────────────────────────────────────
-
-def _parse_list(value) -> list:
-    if isinstance(value, list):
-        return value
-    try:
-        return json.loads(value) if value else []
-    except Exception:
-        return []
-
 
 def _movement_fatigue(movement_pattern: str) -> str:
     """Classify CNS demand: high (axial), medium (push/pull), low (other)."""

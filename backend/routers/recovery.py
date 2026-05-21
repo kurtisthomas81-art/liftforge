@@ -22,7 +22,7 @@ def recovery_map(session: Session = Depends(get_session)):
     stmt = (
         select(WorkoutSession.id, WorkoutSession.started_at)
         .where(WorkoutSession.user_id == USER_ID)
-        .where(WorkoutSession.completed_at != None)
+        .where(WorkoutSession.completed_at.isnot(None))
         .order_by(WorkoutSession.started_at.desc())
         .limit(10)
     )

@@ -12,6 +12,7 @@ from models import (
 )
 from routers.profile import grade_strength_level
 from routers.volume import fatigue_report
+from utils import parse_muscle_list as _parse_muscles
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -64,17 +65,6 @@ RULES — follow these exactly, without exception:
 """.strip()
 
 # ── Context builders ───────────────────────────────────────────────────────────
-
-def _parse_muscles(raw) -> list[str]:
-    if not raw:
-        return []
-    if isinstance(raw, list):
-        return raw
-    try:
-        return json.loads(raw)
-    except Exception:
-        return []
-
 
 def _get_profile_context(session: Session) -> tuple[str, str]:
     """Returns (context_text, units)."""
@@ -204,7 +194,7 @@ def _get_injury_context(session: Session) -> tuple[str, int]:
 def _get_last_session_context(session: Session) -> str:
     last = session.exec(
         select(WorkoutSession)
-        .where(WorkoutSession.user_id == USER_ID, WorkoutSession.completed_at != None)
+        .where(WorkoutSession.user_id == USER_ID, WorkoutSession.completed_at.isnot(None))
         .order_by(WorkoutSession.completed_at.desc())
     ).first()
 
@@ -258,7 +248,7 @@ def _get_recovery_context(session: Session) -> str:
 
     recent = session.exec(
         select(WorkoutSession)
-        .where(WorkoutSession.user_id == USER_ID, WorkoutSession.completed_at != None)
+        .where(WorkoutSession.user_id == USER_ID, WorkoutSession.completed_at.isnot(None))
         .order_by(WorkoutSession.completed_at.desc())
         .limit(10)
     ).all()

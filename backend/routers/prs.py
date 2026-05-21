@@ -5,16 +5,11 @@ from sqlmodel import Session, select
 from database import get_session
 from models import PersonalRecord, WorkoutSet, WorkoutSession, Exercise
 from routers.profile import grade_strength_level
+from utils import epley_1rm
 
 router = APIRouter(prefix="/api/prs", tags=["prs"])
 
 USER_ID = 1
-
-
-def _epley_1rm(weight: float, reps: int) -> float:
-    if reps == 1:
-        return weight
-    return weight * (1 + reps / 30.0)
 
 
 def _serialize_pr(pr: PersonalRecord, exercise_name: str = "") -> dict:
@@ -115,7 +110,7 @@ def check_session_prs(session_id: int, session: Session = Depends(get_session)):
             w = ws.weight or 0
             r = ws.reps or 0
             if w and r:
-                e1rm = _epley_1rm(w, r)
+                e1rm = epley_1rm(w, r)
                 if e1rm > session_best_e1rm:
                     session_best_e1rm = e1rm
             if w > session_best_weight:

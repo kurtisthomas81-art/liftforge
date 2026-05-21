@@ -1,6 +1,7 @@
 import csv
 import json
 import io
+from datetime import datetime
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
@@ -9,16 +10,11 @@ from models import (
     WorkoutSession, WorkoutSet, Exercise, BodyMeasurement,
     PersonalRecord, Mesocycle, WorkoutTemplate, TemplateExercise
 )
+from utils import epley_1rm
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 USER_ID = 1
-
-
-def _epley_1rm(weight: float, reps: int) -> float:
-    if reps == 1:
-        return weight
-    return weight * (1 + reps / 30.0)
 
 
 @router.get("/workouts.csv")
@@ -26,7 +22,7 @@ def export_workouts_csv(session: Session = Depends(get_session)):
     stmt = (
         select(WorkoutSession)
         .where(WorkoutSession.user_id == USER_ID)
-        .where(WorkoutSession.completed_at != None)
+        .where(WorkoutSession.completed_at.isnot(None))
         .order_by(WorkoutSession.started_at.asc())
     )
     sessions = session.exec(stmt).all()
@@ -60,7 +56,7 @@ def export_workouts_csv(session: Session = Depends(get_session)):
 
             e1rm = ""
             if ws.weight and ws.reps:
-                e1rm = round(_epley_1rm(ws.weight, ws.reps), 1)
+                e1rm = round(epley_1rm(ws.weight, ws.reps), 1)
 
             writer.writerow([
                 date_str,
@@ -243,7 +239,7 @@ def export_backup_json(session: Session = Depends(get_session)):
         })
 
     backup = {
-        "exported_at": __import__("datetime").datetime.utcnow().isoformat(),
+        "exported_at": datetime.utcnow().isoformat(),
         "version": "3.0",
         "sessions": sessions_data,
         "sets": sets_data,

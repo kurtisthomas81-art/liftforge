@@ -64,7 +64,7 @@ def _serialize_template(t: SplitTemplate, days: list[SplitDay] = None) -> dict:
 def _serialize_split_day(day: SplitDay) -> dict:
     try:
         muscles = json.loads(day.muscle_focus)
-    except Exception:
+    except (json.JSONDecodeError, TypeError):
         muscles = []
     return {
         "id": day.id,
@@ -118,7 +118,7 @@ def _serialize_planned_exercise(pe: PlannedExercise, exercise_name: str = "") ->
         "target_rir": pe.target_rir,
         "notes": pe.notes,
         "superset_group": pe.superset_group,
-        "set_technique": getattr(pe, "set_technique", "straight"),
+        "set_technique": pe.set_technique or "straight",
     }
 
 
@@ -309,15 +309,15 @@ def _resolve_meso_resources(payload: MesocycleCreate, session: Session) -> tuple
     for ex in all_exercises:
         try:
             pm = json.loads(ex.primary_muscles)
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             pm = []
         try:
             sm = json.loads(ex.secondary_muscles) if ex.secondary_muscles else []
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             sm = []
         try:
             eq = json.loads(ex.equipment_required)
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             eq = []
         exercises_db.append({
             "id": ex.id,
@@ -328,7 +328,7 @@ def _resolve_meso_resources(payload: MesocycleCreate, session: Session) -> tuple
             "equipment_required": eq,
             "movement_pattern": ex.movement_pattern or "",
             "force": ex.force or "",
-            "sub_pattern": getattr(ex, "sub_pattern", "") or "",
+            "sub_pattern": ex.sub_pattern or "",
         })
 
     if template:
@@ -452,21 +452,21 @@ def preview_custom_slots(payload: CustomSlotPreviewPayload, session: Session = D
     for ex in all_exercises:
         try:
             pm = json.loads(ex.primary_muscles)
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             pm = []
         try:
             sm = json.loads(ex.secondary_muscles) if ex.secondary_muscles else []
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             sm = []
         try:
             eq = json.loads(ex.equipment_required)
-        except Exception:
+        except (json.JSONDecodeError, TypeError):
             eq = []
         exercises_db.append({
             "id": ex.id, "name": ex.name, "primary_muscles": pm, "secondary_muscles": sm,
             "mechanics": ex.mechanics, "equipment_required": eq,
             "movement_pattern": ex.movement_pattern or "",
-            "force": ex.force or "", "sub_pattern": getattr(ex, "sub_pattern", "") or "",
+            "force": ex.force or "", "sub_pattern": ex.sub_pattern or "",
         })
 
     ex_by_id = {ex["id"]: ex for ex in exercises_db}
@@ -1004,8 +1004,8 @@ def _compute_ar(exercise_id: int, db: Session) -> dict:
         .where(
             WorkoutSet.exercise_id == exercise_id,
             WorkoutSet.set_type == "straight",
-            WorkoutSet.rir != None,
-            WorkoutSession.completed_at != None,
+            WorkoutSet.rir.isnot(None),
+            WorkoutSession.completed_at.isnot(None),
         )
         .order_by(WorkoutSession.id.desc())
     )
@@ -1057,7 +1057,7 @@ def get_planned_session(id: int, session: Session = Depends(get_session)):
             split_day_name = sd.name
             try:
                 muscles = json.loads(sd.muscle_focus)
-            except Exception:
+            except (json.JSONDecodeError, TypeError):
                 muscles = []
 
     # Get mesocycle info

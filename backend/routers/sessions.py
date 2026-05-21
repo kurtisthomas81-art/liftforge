@@ -1,4 +1,3 @@
-import json
 from typing import Optional
 from datetime import datetime, date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -85,7 +84,7 @@ def _get_last_working_weight(exercise_id: int, db: Session) -> Optional[float]:
         .join(WorkoutSession, WorkoutSet.session_id == WorkoutSession.id)
         .where(WorkoutSet.exercise_id == exercise_id)
         .where(WorkoutSet.set_type == "straight")
-        .where(WorkoutSet.weight != None)
+        .where(WorkoutSet.weight.isnot(None))
         .order_by(WorkoutSession.started_at.desc())
         .limit(1)
     ).first()

@@ -5,16 +5,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 from database import get_session
 from models import WorkoutSession, WorkoutSet, Exercise, Mesocycle, MesocycleWeek, PlannedSession, SplitDay
+from utils import epley_1rm
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 
 USER_ID = 1
-
-
-def _epley_1rm(weight: float, reps: int) -> float:
-    if reps == 1:
-        return weight
-    return weight * (1 + reps / 30.0)
 
 
 @router.get("")
@@ -23,7 +18,7 @@ def recent_history(session: Session = Depends(get_session)):
     stmt = (
         select(WorkoutSession)
         .where(WorkoutSession.user_id == USER_ID)
-        .where(WorkoutSession.completed_at != None)
+        .where(WorkoutSession.completed_at.isnot(None))
         .order_by(WorkoutSession.started_at.desc())
         .limit(30)
     )
@@ -87,7 +82,7 @@ def exercise_progression(exercise_id: int, session: Session = Depends(get_sessio
         max_weight = max((s.weight or 0) for s in working_sets) if working_sets else 0
         total_volume = sum((s.weight or 0) * s.reps for s in working_sets)
         best_1rm = max(
-            _epley_1rm(s.weight, s.reps)
+            epley_1rm(s.weight, s.reps)
             for s in working_sets
             if s.weight and s.reps
         ) if any(s.weight and s.reps for s in working_sets) else 0
@@ -128,7 +123,7 @@ def calendar_data(
     stmt = (
         select(WorkoutSession)
         .where(WorkoutSession.user_id == USER_ID)
-        .where(WorkoutSession.completed_at != None)
+        .where(WorkoutSession.completed_at.isnot(None))
         .where(WorkoutSession.started_at >= start_str)
         .where(WorkoutSession.started_at <= end_str)
         .order_by(WorkoutSession.started_at.asc())
@@ -160,14 +155,14 @@ def calendar_data(
         select(Mesocycle)
         .where(Mesocycle.user_id == USER_ID)
         .where(Mesocycle.status == "active")
-        .where(Mesocycle.start_date != None)
+        .where(Mesocycle.start_date.isnot(None))
     )
     active_mesos = session.exec(active_meso_stmt).all()
 
     for meso in active_mesos:
         try:
             meso_start = date.fromisoformat(meso.start_date)
-        except Exception:
+        except (ValueError, TypeError):
             continue
 
         weeks_stmt = select(MesocycleWeek).where(
@@ -201,7 +196,7 @@ def calendar_data(
                         split_day_name = sd.name
                         try:
                             muscle_focus = json.loads(sd.muscle_focus)
-                        except Exception:
+                        except (json.JSONDecodeError, TypeError):
                             muscle_focus = []
 
                 _vm = re.match(r'^(.*?)\s+([A-C])$', split_day_name)
@@ -276,7 +271,7 @@ def search_notes(q: str = Query("", min_length=1), session: Session = Depends(ge
     all_sessions_stmt = (
         select(WorkoutSession)
         .where(WorkoutSession.user_id == USER_ID)
-        .where(WorkoutSession.completed_at != None)
+        .where(WorkoutSession.completed_at.isnot(None))
         .order_by(WorkoutSession.started_at.desc())
     )
     all_sessions = session.exec(all_sessions_stmt).all()
